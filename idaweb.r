@@ -40,14 +40,18 @@ plot_ida <- function(x) {
     nt <- sum(ch[, mget(nms1)] > 0)
     nr <- floor(sqrt(nt))
     nc <- ceiling(nt / nr)
+    pars <- attr(x, 'parameters')
+    rownames(pars) <- pars[, 1]
     par(mfrow = c(nr, nc))
     x[, {
         y <- as.ibts(mget(nms1), st = st, et = et, tz = 'UTC')
         for (nm in nms1) {
-            if (ch[id %in% .BY$id, get(nm) > 0]) plot(y[, nm], main = .BY$id,
+            if (ch[id %in% .BY$id, get(nm) > 0]) plot(y[, nm], 
+                main = paste(.BY$stn, pars[nm, 3], sep = ' - '),
+                ylab = paste0(nm, ' (', pars[nm, 2], ')'),
                 xlab_fmt = '%y-%m-%d')
         }
-        }, by = id]
+        }, by = .(id, stn, name)]
     invisible(NULL)
 }
 

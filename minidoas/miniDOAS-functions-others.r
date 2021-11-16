@@ -2686,7 +2686,6 @@ evalOffline <- function(
   )
 
 
-    straylight.window
     ### save results
     ### ******************************************************************************
     if(any(c(save.results,plot.cal,!isFALSE(plot.results)))){

@@ -1995,7 +1995,7 @@ evalOffline <- function(
 	correct.straylight=c("avg","linear","none"),
 	correct.dark=TRUE,
 	use.ref = TRUE,
-	plot.results=FALSE,,
+	plot.results=FALSE,
 	avg.period=1,
 	plot.cal=FALSE,
 	tau.shift=NULL,

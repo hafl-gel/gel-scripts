@@ -1018,10 +1018,10 @@ getSpecSet <- function(
   return(
     list(
       DOAS.model = DOAS.model,
-      if (!is.null(ref.spec)) {
-          ### lamp reference spectrum
-          dat.ref = getSpec(ref.spec,DOASmodel=DOAS.model,lite=TRUE),
-      }
+      ### lamp reference spectrum
+      dat.ref = if (!is.null(ref.spec)) {
+          getSpec(ref.spec,DOASmodel=DOAS.model,lite=TRUE)
+      },
       ### lamp reference dark spectrum
       dat.ref.dark = getSpec(ref.dark.spec,DOASmodel=DOAS.model,lite=TRUE),
       ### actual dark spectrum

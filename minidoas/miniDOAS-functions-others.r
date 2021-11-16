@@ -957,6 +957,14 @@ getSpec <- function(spec,DOASmodel=NULL,lite=FALSE){
       }
     } else {
       ind <- grepl(SpecName_new,dir.spec,fixed=TRUE)
+      if (all(!ind)) {
+        if (type %in% 'dark') {
+            ind[grep('dark', dir.spec)[1]] <- TRUE
+        }
+        if (all(!ind)) {
+            stop('Calibration file for ', tracer, '/', type, ' is missing')
+        }
+      }
       info.spec <- read.table(dir.spec[which(ind)], sep="\t", stringsAsFactors=FALSE, fill=TRUE, colClasses="character",nrows=25)[,1]
       dat.spec <- read.table(dir.spec[which(ind)], sep=",", stringsAsFactors=FALSE, fill=TRUE, skip=25,colClasses="numeric")[,2]
       suppressWarnings(ambient <- list(

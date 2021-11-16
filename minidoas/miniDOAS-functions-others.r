@@ -1975,17 +1975,17 @@ if(FALSE){
 }
 
 evalOffline <- function(
-	DOAS.model=DOASmodel,
-	evalperiod=evalPeriod,
-	tz.DOAS=tzDOAS,
-	path.length=pathLength,
-	tz.Output=tzOutput,
+	DOAS.model=NULL,
+	evalperiod=NULL,
+	tz.DOAS='Etc/GMT-1',
+	path.length=NULL,
+	tz.Output='Etc/GMT-1',
 	filter.type="BmHarris",
-	use.arima=useArima,
-	use.robust=useRobust,
+	use.arima=FALSE,
+	use.robust=TRUE,
 	filter.window=NULL, 
 	filter.strength=NULL,
-  double.AVG=TRUE,
+    double.AVG=TRUE,
 	fit.window=NULL,
 	straylight.window=NULL,
 	skip.check.daily=FALSE,
@@ -1995,22 +1995,22 @@ evalOffline <- function(
 	correct.straylight=c("avg","linear","none"),
 	correct.dark=TRUE,
 	use.ref = TRUE,
-	plot.results=plotResults,
-	avg.period=avgPeriod,
-	plot.cal=plotCal,
-	tau.shift=tauShift,
-	save.dir=saveDir,
-	rawdata.dir=rawdataDir,
-  reference.dir=referenceDir,
-	save.results=saveResults,
+	plot.results=FALSE,,
+	avg.period=1,
+	plot.cal=FALSE,
+	tau.shift=NULL,
+	save.dir=NULL,
+	rawdata.dir=NULL,
+    reference.dir=NULL,
+	save.results=FALSE,
 	arima.Order=NULL,
 	arima.Order.FP=NULL,
 	special.Args = list(b=3.5
-    ,Scale=function(r) median(abs(r))/0.6745
-    ,delta=0
-    ,filter.strength_multiplication=1.25 
-    ,filter.strength_loess=0.2
-    ,fam="gaussian"),
+        ,Scale=function(r) median(abs(r))/0.6745
+        ,delta=0
+        ,filter.strength_multiplication=1.25 
+        ,filter.strength_loess=0.2
+        ,fam="gaussian"),
 	ref.spec=NULL,
 	ref.dark.spec=NULL,
 	dark.spec=NULL,
@@ -2026,14 +2026,14 @@ evalOffline <- function(
 	lite=TRUE,
 	return.AICcTab=FALSE,
 	return.specData=FALSE,
-  return.fitData=FALSE,
-	ncores=1,
-	add.name="",
-  RawData = NULL,
-  CalRefSpecs = NULL,
-  Edinburgh_correction = FALSE,
-  Serial = NULL,
-  ...
+    return.fitData=FALSE,
+    ncores=1,
+    add.name="",
+    RawData = NULL,
+    CalRefSpecs = NULL,
+    Edinburgh_correction = FALSE,
+    Serial = NULL,
+    ...
   ){
 
   specialArgs <- list(b=3.5

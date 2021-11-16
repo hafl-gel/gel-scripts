@@ -691,7 +691,7 @@ avgSpec <- function(rawdat,type=c("raw","cal","ref","dark"),tracer=c("ambient","
     ,"-----")
 
   if(saveToFile){
-    filename <- paste0("miniDOAS_",rawdat$DOASinfo$DOASmodel,"_",paste(tracer,type,"spec",sep="_"),"_",paste(format(c(rawdat[[2]][1,"st"],rev(rawdat[[2]][,"et"])[1]),"%y%m%d%M%H%S"),collapse="-"),"_",format(Now,"%Y%m%d%H%M"),".txt")
+    filename <- paste0("miniDOAS_",rawdat$DOASinfo$DOASmodel,"_",paste(tracer,type,"spec",sep="_"),"_",paste(format(c(rawdat[[2]][1,"st"],rev(rawdat[[2]][,"et"])[1]),"%y%m%d%H%M%S"),collapse="-"),".txt")
     write.table(txt,paste(Dirname,filename,sep="/"),quote=FALSE,sep="\n",row.names=FALSE,col.names=FALSE)
     write.table(data.frame(rawdat$DOASinfo$Spectrometer$wavelength,SpecAvg),paste(Dirname,filename,sep="/"),quote=FALSE,sep=",",row.names=FALSE,col.names=FALSE,append=TRUE)
     cat("Averaged spectra saved to",paste(Dirname,filename,sep="/"),"\n")

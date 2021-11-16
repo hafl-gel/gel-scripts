@@ -1002,7 +1002,7 @@ getSpecSet <- function(
   N2.cal.spec=NULL,
   DOAS.model=NULL){
 
-  if(is.null(ref.spec))ref.spec <- spec.dir
+  # if(is.null(ref.spec))ref.spec <- spec.dir
   if(is.null(ref.dark.spec))ref.dark.spec <- spec.dir
   if(is.null(dark.spec))dark.spec <- spec.dir
   if(is.null(NH3.cal.spec))NH3.cal.spec <- spec.dir
@@ -1018,8 +1018,10 @@ getSpecSet <- function(
   return(
     list(
       DOAS.model = DOAS.model,
-      ### lamp reference spectrum
-      dat.ref = getSpec(ref.spec,DOASmodel=DOAS.model,lite=TRUE),
+      if (!is.null(ref.spec)) {
+          ### lamp reference spectrum
+          dat.ref = getSpec(ref.spec,DOASmodel=DOAS.model,lite=TRUE),
+      }
       ### lamp reference dark spectrum
       dat.ref.dark = getSpec(ref.dark.spec,DOASmodel=DOAS.model,lite=TRUE),
       ### actual dark spectrum

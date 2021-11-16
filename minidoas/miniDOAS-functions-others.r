@@ -1230,7 +1230,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
       filter.strength_multiplication = 1.25, filter.strength_loess = 0.2, 
       fam = "gaussian"),correct.dark = TRUE, correct.linearity = TRUE, 
   correct.straylight = c("avg", "linear", "none"), use.ref = TRUE,
-  Edinburgh_correction = FALSE){
+  Edinburgh_correction = TRUE){
   require(shiny)
   
   # # cal/ref specs:
@@ -2031,7 +2031,7 @@ evalOffline <- function(
     add.name="",
     RawData = NULL,
     CalRefSpecs = NULL,
-    Edinburgh_correction = FALSE,
+    Edinburgh_correction = TRUE,
     Serial = NULL,
     ...
   ){

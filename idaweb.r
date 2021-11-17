@@ -107,8 +107,8 @@ read_ida <- function(File) {
             st := et - 3600]
     } else if (nc == 12L) {
         # 10-minute data
-        Data[, st := fast_strptime(time, '%Y%m%d%H%M', tz = 'UTC', lt = FALSE)][,
-            et := st + 600]
+        Data[, et := fast_strptime(time, '%Y%m%d%H%M', tz = 'UTC', lt = FALSE)][,
+            st := et - 600]
     } else {
         # other granularity
         stop('granularity not yet implemented!')

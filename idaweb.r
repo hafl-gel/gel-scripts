@@ -96,23 +96,27 @@ read_ida <- function(File) {
     # read different chunks
     Data <- rbindlist(
         lapply(seq_len(length(iEmpty) - 1), 
-            function(x) fread(text = dat[iEmpty[x]:iEmpty[x + 1]], na.strings = '-', colClasses = c(time = 'character')))
-        , use.names = TRUE, fill = TRUE)
+            function(x) {
+                out <- fread(text = dat[iEmpty[x]:iEmpty[x + 1]], na.strings = '-', colClasses = c(time = 'character'))
+                # fix time
+                nc <- out[1, nchar(time)]
+                if (nc == 10L) {
+                    # hourly data
+                    out[, granularity := '1hours']
+                    out[, et := fast_strptime(time, '%Y%m%d%H', tz = 'UTC', lt = FALSE)][,
+                        st := et - 3600]
+                } else if (nc == 12L) {
+                    # 10-minute data
+                    out[, granularity := '10mins']
+                    out[, et := fast_strptime(time, '%Y%m%d%H%M', tz = 'UTC', lt = FALSE)][,
+                        st := et - 600]
+                } else {
+                    # other granularity
+                    stop('granularity not yet implemented!')
+                }
 
-    # fix time
-    nc <- Data[1, nchar(time)]
-    if (nc == 10L) {
-        # hourly data
-        Data[, et := fast_strptime(time, '%Y%m%d%H', tz = 'UTC', lt = FALSE)][,
-            st := et - 3600]
-    } else if (nc == 12L) {
-        # 10-minute data
-        Data[, et := fast_strptime(time, '%Y%m%d%H%M', tz = 'UTC', lt = FALSE)][,
-            st := et - 600]
-    } else {
-        # other granularity
-        stop('granularity not yet implemented!')
-    }
+            })
+        , use.names = TRUE, fill = TRUE)
 
     # merge Data and Stats
     Stat2 <- Stats[, .(stn, name = Name, 

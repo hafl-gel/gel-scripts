@@ -2576,7 +2576,7 @@ evalOffline <- function(
     }else if(lite) {
         # reduce results and simplify names
 		results <- as.data.frame(matrix(nrow=files, ncol=11, dimnames=list(1:files,
-            c('st', 'et', 'nh3', 'so2', 'no', 'nh3_se', 'so2_se', 'no_se', 'Imax', 'n', 'tau'))))
+            c('st', 'et', 'nh3', 'so2', 'no', 'nh3_se', 'so2_se', 'no_se', 'Imax', 'n', 'tau', 'shutter', 'revolver'))))
 		results[,1] <- st
 		results[,2] <- et
 		results[,3] <- coeffs[1,] * NH3cor
@@ -2588,6 +2588,8 @@ evalOffline <- function(
 		results[,9] <- apply(RawData$RawData, 2, max, na.rm=TRUE)
 		results[,10] <- n
 		results[,11] <- best.tau
+		results[,12] <- ShuPos
+		results[,13] <- RevPos
     } else {
 		results <- as.data.frame(matrix(nrow=files, ncol=42, dimnames=list(1:files,c(paste0("date time start (",tz.Output,")"),paste0("date time end (",tz.Output,")"),"millisec start","millisec end","no of acc.","tau [pixel]","deltaAICc(tau0-tau)","order","NH3 [ug/m3]","NH3 SE [ug/m3]","SO2 [ug/m3]","SO2 SE [ug/m3]","NO [ug/m3]","NO SE [ug/m3]", "I.max","I.avg(fit)","I.min(fit)","resid SSE","fp SSE","dark avg offset [counts]","TEC T [degC]","panel T [degC]","ambient T [degC]","ambient RH [perc]","shutter position","revolver position","min I/I0"
 		        ,"No. intervals","SAE","SRE","SAF","SAT","SRT","SRE/SAE","SAE/SAF","SAE/SAT"

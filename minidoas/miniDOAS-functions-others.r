@@ -2575,7 +2575,7 @@ evalOffline <- function(
 
     }else if(lite) {
         # reduce results and simplify names
-		results <- as.data.frame(matrix(nrow=files, ncol=11, dimnames=list(1:files,
+		results <- as.data.frame(matrix(nrow=files, ncol=13, dimnames=list(1:files,
             c('st', 'et', 'nh3', 'so2', 'no', 'nh3_se', 'so2_se', 'no_se', 'Imax', 'n', 'tau', 'shutter', 'revolver'))))
 		results[,1] <- st
 		results[,2] <- et

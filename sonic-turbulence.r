@@ -699,6 +699,11 @@ evalSonic <- function(
 	Data[, Hz := NULL]
 	Data <- Data[findI_st(Time,start_time,end_time) > 0,]
 
+    # return null if no data within time range
+    if (nrow(Data) == 0L) {
+        return(NULL)
+    }
+
 	# raw data quality control I, i.e. hard flags = physical range
 	# --------------------------------------------------------------------------
 	cat("~~~\nchecking hard flags...\n")

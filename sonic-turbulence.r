@@ -701,6 +701,7 @@ evalSonic <- function(
 
     # return null if no data within time range
     if (nrow(Data) == 0L) {
+        cat('No data within given timerange\n')
         return(NULL)
     }
 

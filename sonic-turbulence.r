@@ -613,12 +613,12 @@ evalSonic <- function(
 	}
 	########################### daily files:
 	if(deparse(substitute(rawdata_function)) %in% c("readWindMaster_ascii", "readWindMaster_old_ascii")){
-		dailyfiles <- dir(file_directory, pattern="(^...|^data_.*)_[0-9]{6,8}_[0-9]{4,6}$")
+		dailyfiles <- dir(file_directory, pattern="(^...|^data_.*)_[0-9]{6,8}_[0-9]{4,6}([.]gz)?$")
 		if(length(dailyfiles) == 0){
 			stop("Directory '",file_directory,"' doesn't have any sonic files with correct name formatting!")
 		}
 		if(grepl("^data", dailyfiles[1])){
-			starttimes <- fast_strptime(gsub("^data_.*_([0-9]{8}_[0-9]{6})", "\\1", dailyfiles),format="%Y%m%d_%H%M%S", tz=tz_sonic, lt=FALSE)
+			starttimes <- fast_strptime(gsub("^data_.*_([0-9]{8}_[0-9]{6})([.]gz)", "\\1", dailyfiles),format="%Y%m%d_%H%M%S", tz=tz_sonic, lt=FALSE)
 		} else {
 			starttimes <- fast_strptime(gsub("^..._","",dailyfiles),format="%y%m%d_%H%M", tz=tz_sonic, lt=FALSE)
 		}

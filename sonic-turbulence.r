@@ -15,63 +15,45 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 		# run old script
 		return(readWindMaster_old_ascii(FilePath, tz))
 	}
+    if (grepl('[.]gz$', bn)) {
+        require(R.utils)
+    }
+    # be verbose
+    cat("File:", path.expand(FilePath), "- ")
 	Date <- gsub("^data_.*_([0-9]{8})_.*", "\\1", bn)
 	### read File
-    if (grepl('[.]gz$', bn)) {
-        # check if zgrep is available
-        if (as.logical(suppressWarnings(
-            system('zgrep --help', ignore.stdout = TRUE, ignore.stderr = TRUE)
-            ))) {
-            require(R.utils)
-            # zgrep not available
-            out <- fread(FilePath, select = 1:7, encoding = 'UTF-8', header = FALSE, 
-                skip = 2, fill = TRUE, blank.lines.skip = TRUE)
-            # clean
-            out[, V2 := gsub('[\x01-\x1A]', '', V2)]
-            # grep & remove ',,'
-            # TODO: check removing ',,'!!!
-        } else {
-            # zgrep available
-            suppressWarnings(out <- fread(
-                cmd = paste0("zgrep -a -v -e ',,' '", path.expand(FilePath), "' | sed s/[\x01-\x1A]//g"), 
-                select = 1:7,
-                encoding = "UTF-8",
-                header = FALSE,
-                skip = 1,
-                # colClasses = list("character" = c(1, 2, 6, 9), "numeric" = c(3, 4, 5, 7, 8)),
-                fill = TRUE,
-                blank.lines.skip = TRUE
-            ))
-        }
-    } else {
-        suppressWarnings(out <- fread(
-            cmd = paste0("grep -a -v -e ',,' '", path.expand(FilePath), "' | sed s/[\x01-\x1A]//g"), 
-            select = 1:7,
-            encoding = "UTF-8",
-            header = FALSE,
-            skip = 1,
-            # colClasses = list("character" = c(1, 2, 6, 9), "numeric" = c(3, 4, 5, 7, 8)),
-            fill = TRUE,
-            blank.lines.skip = TRUE
-		))
-    }
+    out <- try(
+        fread(FilePath, select = 1:7, encoding = 'UTF-8', header = FALSE, 
+            skip = 0, fill = TRUE, blank.lines.skip = TRUE), 
+        silent = TRUE)
     # check if file is empty
-	if(nrow(out) == 0){
-		cat("File empty:", path.expand(FilePath), "\n")
+	if(inherits(out, 'try-error')){
+        if (grep('File is empty', out)) {
+            cat('empty\n')
+        } else {
+            cat('error reading file\n')
+            cat(out)
+        }
 		return(NULL)
 	} else {
-		cat("File:", path.expand(FilePath), "-")
-        # convert to numeric!
-        out[, ":="(
-                V3 = as.numeric(V3),
-                V4 = as.numeric(V4),
-                V5 = as.numeric(V5),
-                V7 = as.numeric(V7)
-             )]
-        # remove NA lines
+        # check and convert columns if necessary
+        vnums <- paste0('V', c(3, 4, 5, 7))
+        is.char <- out[, sapply(.SD, is.character), .SDcols = vnums]
+        for (col in vnums[is.char]) {
+            if (!all(ind <- out[, grepl('^[+|-][0-9]{3}[.][0-9]{2}[0-9]?$', get(col))])) {
+                # subset for valid entries
+                out <- out[ind, ]
+            }
+            # convert to numeric
+            out[, (col) := as.numeric(get(col))]
+        }
+        # remove NA lines that come from conversion
         out <- na.omit(out)
+        if (out[, '' %in% V1]) browser()
         # be verbose and print sonic names:
-        sonic <- out[, V2[1]]
+        sonic <- out[, sub('[\x01-\x1A]', '', V2[1])]
+        # replace sonic name
+        out[, V2 := sonic]
         cat(paste0("data recorded by sonic-", tolower(sonic), "\n"))
         sonic_file <- sub("data_(.*)_[0-9]{8}_[0-9]{6}([.]gz)?$", "\\1", bn)
         if(sonic != toupper(sub("sonic-", "", sonic_file))){

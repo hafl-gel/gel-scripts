@@ -24,7 +24,7 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	### read File
     out <- try(
         fread(FilePath, encoding = 'UTF-8', header = FALSE, fill = TRUE, 
-            blank.lines.skip = TRUE, na.strings = '999.99',
+            blank.lines.skip = TRUE, na.strings = '999.99', select = 1:9,
             showProgress = FALSE), 
         silent = TRUE)
     # check if file is empty
@@ -37,7 +37,7 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
         }
 		return(NULL)
 	} else {
-        out <- out[!(V9 %chin% '')]
+        out <- out[grepl('^[\x01-\x1A]', V9)]
         # check which columns to convert columns if necessary
         vnums <- paste0('V', c(3, 4, 5, 7))
         is.char <- out[, sapply(.SD, is.character), .SDcols = vnums]

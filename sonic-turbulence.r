@@ -9,7 +9,6 @@ library(ibts)
 # - Plotting & anderes Gheu aufräumen
 
 readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
-	# browser()
 	### get Date
 	bn <- basename(FilePath)
 	if(!grepl("^data_", bn)){
@@ -20,17 +19,22 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	### read File
     if (grepl('[.]gz$', bn)) {
         # check if zgrep is available
-            browser()
         if (as.logical(suppressWarnings(
             system('zgrep --help', ignore.stdout = TRUE, ignore.stderr = TRUE)
             ))) {
+            require(R.utils)
             # zgrep not available
-
+            out <- fread(FilePath, select = 1:7, encoding = 'UTF-8', header = FALSE, 
+                skip = 2, fill = TRUE, blank.lines.skip = TRUE)
+            # clean
+            out[, V2 := gsub('[\x01-\x1A]', '', V2)]
+            # grep & remove ',,'
+            # TODO: check removing ',,'!!!
         } else {
             # zgrep available
             suppressWarnings(out <- fread(
                 cmd = paste0("zgrep -a -v -e ',,' '", path.expand(FilePath), "' | sed s/[\x01-\x1A]//g"), 
-                select = 1:9,
+                select = 1:7,
                 encoding = "UTF-8",
                 header = FALSE,
                 skip = 1,
@@ -42,7 +46,7 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     } else {
         suppressWarnings(out <- fread(
             cmd = paste0("grep -a -v -e ',,' '", path.expand(FilePath), "' | sed s/[\x01-\x1A]//g"), 
-            select = 1:9,
+            select = 1:7,
             encoding = "UTF-8",
             header = FALSE,
             skip = 1,
@@ -57,8 +61,6 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 		return(NULL)
 	} else {
 		cat("File:", path.expand(FilePath), "-")
-        # remove unwanted rows
-        out <- out[!grepl('^$', V9)]
         # convert to numeric!
         out[, ":="(
                 V3 = as.numeric(V3),
@@ -80,7 +82,7 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
             stop("Units of recorded data not compatible with evaluation script! Column 6 should contain 'M' for m/s!")
         }
         # remove columns
-        out[, c("V6", "V8", "V9") := NULL]
+        out[, V6 := NULL]
         ### set times correctly
         out[, st.dec := fast_strptime(paste(Date, V1), lt = FALSE, format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")]
         # browser()

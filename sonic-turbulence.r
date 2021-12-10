@@ -3,6 +3,7 @@
 library(data.table)
 library(ibts)
 
+
 #### To Do:
 # - neue readWindMaster Routine
 # - Plotting & anderes Gheu aufräumen
@@ -18,16 +19,26 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	Date <- gsub("^data_.*_([0-9]{8})_.*", "\\1", bn)
 	### read File
     if (grepl('[.]gz$', bn)) {
-        suppressWarnings(out <- fread(
-            cmd = paste0("zgrep -a -v -e ',,' '", path.expand(FilePath), "' | sed s/[\x01-\x1A]//g"), 
-            select = 1:9,
-            encoding = "UTF-8",
-            header = FALSE,
-            skip = 1,
-            # colClasses = list("character" = c(1, 2, 6, 9), "numeric" = c(3, 4, 5, 7, 8)),
-            fill = TRUE,
-            blank.lines.skip = TRUE
-		))
+        # check if zgrep is available
+            browser()
+        if (as.logical(suppressWarnings(
+            system('zgrep --help', ignore.stdout = TRUE, ignore.stderr = TRUE)
+            ))) {
+            # zgrep not available
+
+        } else {
+            # zgrep available
+            suppressWarnings(out <- fread(
+                cmd = paste0("zgrep -a -v -e ',,' '", path.expand(FilePath), "' | sed s/[\x01-\x1A]//g"), 
+                select = 1:9,
+                encoding = "UTF-8",
+                header = FALSE,
+                skip = 1,
+                # colClasses = list("character" = c(1, 2, 6, 9), "numeric" = c(3, 4, 5, 7, 8)),
+                fill = TRUE,
+                blank.lines.skip = TRUE
+            ))
+        }
     } else {
         suppressWarnings(out <- fread(
             cmd = paste0("grep -a -v -e ',,' '", path.expand(FilePath), "' | sed s/[\x01-\x1A]//g"), 
@@ -618,7 +629,7 @@ evalSonic <- function(
 			stop("Directory '",file_directory,"' doesn't have any sonic files with correct name formatting!")
 		}
 		if(grepl("^data", dailyfiles[1])){
-			starttimes <- fast_strptime(gsub("^data_.*_([0-9]{8}_[0-9]{6})([.]gz)", "\\1", dailyfiles),format="%Y%m%d_%H%M%S", tz=tz_sonic, lt=FALSE)
+			starttimes <- fast_strptime(gsub("^data_.*_([0-9]{8}_[0-9]{6})([.]gz)?", "\\1", dailyfiles),format="%Y%m%d_%H%M%S", tz=tz_sonic, lt=FALSE)
 		} else {
 			starttimes <- fast_strptime(gsub("^..._","",dailyfiles),format="%y%m%d_%H%M", tz=tz_sonic, lt=FALSE)
 		}
@@ -666,7 +677,9 @@ evalSonic <- function(
 	filerange <- unique(unlist(lapply(cutIntervals(starttimes,endtimes,start_time,end_time),function(x)x[,1])))
 
 	########################### pick correct files:
-	if(length(filerange)==0)cat("***********\nNo sonic data available for dates:\n\t",paste(format(dayrange[l0],"%d.%m.%Y"),collapse="\n\t "),"\n***********\n")
+	if(length(filerange)==0){
+        cat("***********\nNo sonic data available between",paste(start_time, end_time, sep =" and "),"\n***********\n")
+    }
 	read_Files <- dailyfiles[filerange]
 
 	########################### complete argument 'rotation_args'

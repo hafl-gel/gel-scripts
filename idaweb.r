@@ -123,7 +123,8 @@ read_ida <- function(File) {
         id = paste0('id', seq_len(.N)),
         ch.x = as.numeric(sub('([0-9]{6})[/].*', '\\1', Koordinaten..km.)),
         ch.y = as.numeric(sub('[0-9]{6}[/]([0-9]{6})', '\\1', Koordinaten..km.)),
-        m.asl = Höhe.ü..M...m.
+        # m.asl = Höhe.ü..M...m.
+        m.asl = get('H\u00f6he.\u00fc..M...m.')
         )]
     out <- merge(Data, Stat2, all = TRUE)[, time := NULL]
 

@@ -77,541 +77,382 @@ linearity.func <- function(x, cfs){
 # timerange=DOASinfo$timerange
 # timezone=""
 # ncores=ncores
-readDOASdata <- function(DOASinfo,dataDir,rawdataOnly=FALSE,skip.check.daily=FALSE,force.write.daily=FALSE,timerange=DOASinfo$timerange,timezone="",ncores=1){
+write_daily <- function(files, obj, path) {
+    # open connection
+    con <- gzfile(paste0(path, '.bin'), 'wb')
+    on.exit({
+        close(con)
+        unlink(paste0(path, '.bin'))
+    })
+    # write # files
+    writeBin(length(files), con, endian = 'big')
+    # write files
+    writeBin(files, con, endian = 'big')
+    # serialize object
+    ser <- serialize(obj, NULL, TRUE)
+    # write length of ser
+    writeBin(length(ser), con, endian = 'big')
+    # write list
+    writeBin(ser, con, endian = 'big')
+    # close connection
+    close(con)
+    on.exit()
+}
 
-  if(parl <- (ncores>1&!rawdataOnly)){
-    require(snowfall)
-    if(!sfIsRunning()){     
-      on.exit(sfStop())
-      sfInit(TRUE,ncores)
+read_daily <- function(path, files = FALSE) {
+    # open connection
+    con <- gzfile(path, 'rb')
+    on.exit(close(con))
+    # read # files
+    N1 <- readBin(con, 'int', 1L, endian = 'big')
+    # read files
+    out <- readBin(con, 'character', N1, endian = 'big')
+    if (!files) {
+        # read length of serialized data
+        N2 <- readBin(con, 'int', 1L, endian = 'big')
+        # read serialized data and unserialize
+        out <- unserialize(readBin(con, 'raw', N2, endian = 'big'))
     }
-    cl <- sfGetCluster()
-    sfLibrary(lubridate)
-  }
+    # close connection
+    close(con)
+    on.exit()
+    # return result
+    out
+}
 
-  if(inherits(DOASinfo,"character")){
-    timerange <- prepTimeRange(timerange,timezone)
-    DOASinfo <- getDOASinfo(DOASinfo,timerange)
-  }
-  
-  tz.DOAS <- tz(timerange)
-
-  tr.to <- trunc(timerange[2],"days")
-  if(as.numeric(tr.to - timerange[2]) == 0) tr.to <- tr.to - as.difftime(1,units="days")
-  rawdatfolder <- format(seq(from=trunc(timerange[1],"days"), to=tr.to, by=as.difftime(1, units="days")), "%Y%m%d") 
-  lf.raw.dir <- list.files(dataDir)
-  if(!length(lf.raw.dir)){
-    if(!dir.exists(dirname(dataDir))){
-      stop("Folder \"",dirname(dataDir),"\" does not exist!")
-    } else if(!dir.exists(dataDir)){
-      stop("Folder \"",dataDir,"\" does not exist!")
-    } else {
-      stop("Folder \"",dataDir,"\" is empty...")
-    }
-  } else if(!any(rawdatfolder %in% lf.raw.dir)){
-    stop("No data available for specified timerange!")
-  }
-  RawData <- vector(length(rawdatfolder),mode="list")
-  names(RawData) <- rawdatfolder
-
-  if(parl&!rawdataOnly){
-
-    dailyfu <- function(ind,checkdf,checkdf_createdf,skip.check.daily,dataDir,DOASinfo,tz.DOAS,csvcheck){
-	    checkfu <- function(ind,checkdf,skip.check.daily,dataDir,DOASinfo,tz.DOAS,csvcheck){
-	      i <- checkdf[ind]
-		  RD <- read.table(paste0(dataDir,"/",csvcheck[ind]), sep=";", header=FALSE, as.is=TRUE,quote="",comment.char="",na.strings="#NV")
-	      if(!skip.check.daily){
-	        csvtime <- RD[6,-1]
-	        csvmax <- parse_date_time(gsub("^.*_","",csvtime),DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS) 
-	        folder <- paste0(dataDir,"/",i)
-	        rawfiles <- list.files(folder,pattern=".txt")
-	        fT1 <- gsub("^.*_","",rawfiles)
-	        fT2 <- gsub(".txt$","",fT1)
-	        txtmax <- parse_date_time(fT2,c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz=tz.DOAS)
-	        if(DOASinfo$DOASmodel == "S1" && (as.numeric(i) - 20170101)<0)txtmax <- txtmax - 2    
-	        if(length(csvmax)!=length(txtmax)||any((txtmax-csvmax)>2)){
-	          unlink(paste0(dataDir,"/",csvcheck[ind]))
-	          rawdat.all <- list.files(paste0(dataDir,"/",i), pattern=".txt", full.names=TRUE)
-	          rawdatSize <- file.size(rawdat.all)
-	          rawdat <- rawdat.all[rawdatSize > 4000]
-	          if(sum(rawdatSize <= 4000)){
-	            cat(paste0(sum(rawdatSize <= 4000)," invalid files (< 4000 bytes)!\n"))
-	            file.rename(rawdat.all[rawdatSize <= 4000],gsub(".txt$",".invalid",rawdat.all[rawdatSize <= 4000]))
-	          }
-
-	          if(length(rawdat)){
-	            if(DOASinfo$DOASmodel == "S1"&&(as.numeric(i)-20160101)>=0 &&(as.numeric(i)-20170101)<0){
-	              dat <- data.frame(
-	                wavelength=c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength[10:1021]),
-	                lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines"-9,sep="\n",as.is=TRUE,quote="",comment.char=""))
-	                )
-	              input <- data.frame(wavelength=DOASinfo$Spectrometer$wavelength[1:9],matrix(NA,nrow=9,ncol=ncol(dat)-1))
-	              names(input) <- names(dat)
-	              dat <- rbind(dat[1:8,],
-	                input,
-	                dat[9:1020,],make.row.names=FALSE)
-	            } else {
-	              dat <- data.frame(
-	                wavelength=c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength),
-	                lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines",sep="\n",as.is=TRUE,quote="",comment.char=""))
-	                )         
-	            }
-
-	            st <- parse_date_time(gsub("^.*_","",dat[DOASinfo$rawdata.structure$"Acquisition start time",-1]), DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS)
-	            et <- parse_date_time(gsub("^.*_","",dat[DOASinfo$rawdata.structure$"Acquisition stop time",-1]), DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS)
-	            RevPos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Revolver Position",-1])
-	            ShuPos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Shutter Position",-1])
-	            ststr <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Acquisition start time",-1])
-	            etstr <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Acquisition stop time",-1])
-	            TECTemp <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"TEC-Temp (degC)",-1])
-	            Klima <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Board- / Ambient-T (degC) / ambient-RH (perc)",-1])
-	            Expos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Exposure Time (ms)",-1])
-	            AccNum <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Number of accumulations",-1])
-
-	            head.csv <- cbind(c(
-	                'DOAS model:',
-	                'Spectrometer:',
-	                'Revolver position:',
-	                'Shutter position:',
-	                'Acquisition start time:',
-	                'Acquisition stop time:',
-	                'TEC temperature (deg C):',
-	                'DOAS board temperature (deg C, deg C, %):',
-	                'Spectrometer exposure time (ms):',
-	                'Number of accumulations:',
-	                'Acquisition duration (sec):',
-	                '---',
-	                'Spectrometer wavelengths (nm)'
-	              ),t(data.frame(
-	                DOASmodel=DOASinfo$DOASmodel,
-	                Spectrometer=DOASinfo$Spectrometer$"Spectrometer Name",
-	                RevPos=RevPos,
-	                ShuPos=ShuPos,
-	                ststr=ststr,
-	                etstr=etstr,
-	                TECTemp=TECTemp,
-	                Klima=Klima,
-	                Expos=as.numeric(Expos),
-	                AccNum=as.numeric(AccNum),
-	                AccTime=round(as.numeric(difftime(et, st, units="secs")),3),
-	                "---",
-	                "I_sum",
-	                stringsAsFactors=FALSE
-	              )))
-	            colnames(head.csv) <- colnames(dat)
-	            RD <- rbind(head.csv,dat[-seq.int(DOASinfo$rawdata.structure$"Header Lines"),],stringsAsFactors=FALSE)
-	            head.csv[is.na(head.csv)] <- "#NV"
-	            write.table(rbind(head.csv,dat[-seq.int(DOASinfo$rawdata.structure$"Header Lines"),],stringsAsFactors=FALSE), paste0(dataDir,"/",i,".csv"), sep=";", quote=FALSE, na="#NV", dec=".", row.names=FALSE, col.names=FALSE)
-	          } else {
-	            RD <- NULL
-	            # cat("Folder",i,"is empty...\n")
-	          }
-	        }
-	      }
-	      RD
-	    }
-
-	    createfu <- function(ind,createdf,dataDir,DOASinfo,tz.DOAS){
-	      i <- createdf[ind]
-		  rawdat.all <- list.files(paste0(dataDir,"/",i), pattern=".txt", full.names=TRUE)
-	      rawdatSize <- file.size(rawdat.all)
-	      rawdat <- rawdat.all[rawdatSize > 4000]
-	      if(sum(rawdatSize <= 4000)){
-	        cat(paste0(sum(rawdatSize <= 4000)," invalid files (< 4000 bytes)!\n"))
-	        file.rename(rawdat.all[rawdatSize <= 4000],gsub(".txt$",".invalid",rawdat.all[rawdatSize <= 4000]))
-	      }
-
-	      if(length(rawdat)){
-	        if(DOASinfo$DOASmodel == "S1"&&(as.numeric(i)-20160101)>=0&&(as.numeric(i)-20170101)<0){
-	          dat <- data.frame(
-	            wavelength=c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength[10:1021]),
-	            lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines"-9,sep="\n",as.is=TRUE,quote="",comment.char=""))
-	            )
-	          input <- data.frame(wavelength=DOASinfo$Spectrometer$wavelength[1:9],matrix(NA,nrow=9,ncol=ncol(dat)-1))
-	          names(input) <- names(dat)
-	          dat <- rbind(dat[1:8,],
-	            input,
-	            dat[9:1020,],make.row.names=FALSE)
-	        } else {
-	          dat <- data.frame(
-	            wavelength=c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength),
-	            lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines",sep="\n",as.is=TRUE,quote="",comment.char=""))
-	            )         
-	        }
-
-	        st <- parse_date_time(gsub("^.*_","",dat[DOASinfo$rawdata.structure$"Acquisition start time",-1]), DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS)
-	        et <- parse_date_time(gsub("^.*_","",dat[DOASinfo$rawdata.structure$"Acquisition stop time",-1]), DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS)
-	        RevPos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Revolver Position",-1])
-	        ShuPos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Shutter Position",-1])
-	        ststr <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Acquisition start time",-1])
-	        etstr <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Acquisition stop time",-1])
-	        TECTemp <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"TEC-Temp (degC)",-1])
-	        Klima <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Board- / Ambient-T (degC) / ambient-RH (perc)",-1])
-	        Expos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Exposure Time (ms)",-1])
-	        AccNum <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Number of accumulations",-1])
-
-	        head.csv <- cbind(c(
-	            'DOAS model:',
-	            'Spectrometer:',
-	            'Revolver position:',
-	            'Shutter position:',
-	            'Acquisition start time:',
-	            'Acquisition stop time:',
-	            'TEC temperature (deg C):',
-	            'DOAS board temperature (deg C, deg C, %):',
-	            'Spectrometer exposure time (ms):',
-	            'Number of accumulations:',
-	            'Acquisition duration (sec):',
-	            '---',
-	            'Spectrometer wavelengths (nm)'
-	          ),t(data.frame(
-	            DOASmodel=DOASinfo$DOASmodel,
-	            Spectrometer=DOASinfo$Spectrometer$"Spectrometer Name",
-	            RevPos=RevPos,
-	            ShuPos=ShuPos,
-	            ststr=ststr,
-	            etstr=etstr,
-	            TECTemp=TECTemp,
-	            Klima=Klima,
-	            Expos=as.numeric(Expos),
-	            AccNum=as.numeric(AccNum),
-	            AccTime=round(as.numeric(difftime(et, st, units="secs")),3),
-	            "---",
-	            "I_sum",
-	            stringsAsFactors=FALSE
-	          )))
-	        colnames(head.csv) <- colnames(dat)
-	        RD <- rbind(head.csv,dat[-seq.int(DOASinfo$rawdata.structure$"Header Lines"),],stringsAsFactors=FALSE)
-	        head.csv[is.na(head.csv)] <- "#NV"
-	        write.table(rbind(head.csv,dat[-seq.int(DOASinfo$rawdata.structure$"Header Lines"),],stringsAsFactors=FALSE), paste0(dataDir,"/",i,".csv"), sep=";", quote=FALSE, na="#NV", dec=".", row.names=FALSE, col.names=FALSE)
-	      } else {
-	        RD <- NULL
-	        # cat("Folder",i,"is empty...\n")
-	      }
-	      RD
-	    }
-
-		if(checkdf[ind]){
-			Out <- checkfu(ind,checkdf_createdf,skip.check.daily,dataDir,DOASinfo,tz.DOAS,csvcheck)
-		} else {
-			Out <- createfu(ind,checkdf_createdf,dataDir,DOASinfo,tz.DOAS)
-		}
-		Out
-    }
-    #### daily files:
-    rawcsv <- paste0(rawdatfolder,".csv")
-    csvcheck <- rawcsv[csv.exist <- rawcsv %in% lf.raw.dir]
-    if(force.write.daily) csv.exist[] <- FALSE
-    checkdf <- rawdatfolder[csv.exist]
-    # if(!length(csvcheck)&!force.write.daily&skip.check.daily){
-    #   stop("No daily files available for specified time range!")
-    # }
-    createdf <- rawdatfolder[!csv.exist]
-    # #### check existing
-    # if(length(checkdf)){
-    # 	cat("Checking existing daily files...\n")
-    #   RawData[checkdf] <- clusterApplyLB(cl,seq_along(checkdf),checkfu,checkdf,skip.check.daily,dataDir,DOASinfo,tz.DOAS,csvcheck)
-    # }
-    # #### create non-existing
-    # if(length(createdf)){
-    # 	cat("Create non-existing daily files...\n")
-    #   RawData[createdf] <- clusterApplyLB(cl,seq_along(createdf),createfu,createdf,dataDir,DOASinfo,tz.DOAS)  
-    # }
-    checkdf_createdf <- c(checkdf,createdf)
-    #### process daily files
-    if(length(checkdf_createdf)){
-    	is_checkdf <- c(rep(TRUE,length(checkdf)),rep(FALSE,length(createdf)))
-    	cat("Processing daily files...\n")
-    	RawData[checkdf_createdf] <- clusterApplyLB(cl,seq_along(checkdf),dailyfu,is_checkdf,checkdf_createdf,skip.check.daily,dataDir,DOASinfo,tz.DOAS,csvcheck)
-    } else {
-    	stop("No daily files available for specified time range!")
-    }
-
-  } else {
-    if(!rawdataOnly){
-      #### daily files:
-      rawcsv <- paste0(rawdatfolder,".csv")
-      csvcheck <- rawcsv[csv.exist <- rawcsv %in% lf.raw.dir]
-      if(force.write.daily) csv.exist[] <- FALSE
-      checkdf <- rawdatfolder[csv.exist]
-      # if(!length(csvcheck)&!force.write.daily&skip.check.daily){
-      #   stop("No daily files available for specified time range!")
-      # }
-
-      if(!skip.check.daily){
-        cat("checking daily files...\n")
-        for (i in seq_along(checkdf)) {
-          RawData[[checkdf[i]]] <- read.table(paste0(dataDir,"/",csvcheck[i]), sep=";", header=FALSE, as.is=TRUE,quote="",comment.char="",na.strings="#NV")
-          csvtime <- RawData[[checkdf[i]]][6,-1]
-          csvmax <- parse_date_time(gsub("^.*_","",csvtime),DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS) 
-          folder <- paste0(dataDir,"/",checkdf[i])
-          rawfiles <- list.files(folder,pattern=".txt")
-          fT1 <- gsub("^.*_","",rawfiles)
-          fT2 <- gsub(".txt$","",fT1)
-          txtmax <- parse_date_time(fT2,c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz=tz.DOAS)
-          if(DOASinfo$DOASmodel == "S1" && (as.numeric(i)-20170101)<0)txtmax <- txtmax - 2    
-          if (length(csvmax)!=length(txtmax)||any((txtmax-csvmax)>2)){
-            unlink(paste0(dataDir,"/",csvcheck[i]))
-            csv.exist[i] <- FALSE
-          } else {
-            cat(paste0("..daily file ",checkdf[i],".csv exists and is ok...\n"))
-          }
-        }   
-      } else {
-        for (i in seq_along(checkdf)) {
-          cat("reading daily file",csvcheck[i],"...\n")
-          RawData[[checkdf[i]]] <- read.table(paste0(dataDir,"/",csvcheck[i]), sep=";", header=FALSE, as.is=TRUE,quote="",comment.char="",na.strings="#NV")
-            }     
-      }
-
-      for (i in rawdatfolder[!csv.exist]) {
-        cat(paste0("..processing daily file ",i,".csv\n"))
-        rawdat.all <- list.files(paste0(dataDir,"/",i), pattern=".txt", full.names=TRUE)
-        rawdatSize <- file.size(rawdat.all)
-        rawdat <- rawdat.all[rawdatSize > 4000]
+process_dailyfiles <- function(folders, path_data, doas_info, RawData) {
+    # loop over folders
+    lapply(folders, function(i) {
+        cat(paste0("..processing daily file ", i, ".bin\n"))
+        # get text files
+        rawdat_all <- list.files(file.path(path_data, i), pattern = ".txt", full.names = TRUE)
+        # check invalid files
+        rawdatSize <- file.size(rawdat_all)
+        rawdat <- rawdat_all[rawdatSize > 4000]
         if(sum(rawdatSize <= 4000)){
-          cat(paste0(sum(rawdatSize <= 4000)," invalid files (< 4000 bytes)!\n"))
-          file.rename(rawdat.all[rawdatSize <= 4000],gsub(".txt$",".invalid",rawdat.all[rawdatSize <= 4000]))
+            cat(paste0(sum(rawdatSize <= 4000), " invalid files (< 4000 bytes)!\n"))
+            file.copy(rawdat_all[rawdatSize <= 4000], sub(".txt$", ".invalid", rawdat_all[rawdatSize <= 4000]), overwrite = TRUE)
         }
-
+        # read raw data
         if(length(rawdat)){
-          # browser()
-          if(DOASinfo$DOASmodel == "S1"&&(as.numeric(i)-20160101)>=0&&(as.numeric(i)-20170101)<0){
-            dat <- data.frame(
-              wavelength=c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength[10:1021]),
-              lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines"-9,sep="\n",as.is=TRUE,quote="",comment.char=""))
-            )
-            input <- data.frame(wavelength=DOASinfo$Spectrometer$wavelength[1:9],matrix(NA,nrow=9,ncol=ncol(dat)-1))
-            names(input) <- names(dat)
-            dat <- rbind(dat[1:8,],
-              input,
-              dat[9:1020,],make.row.names=FALSE)
-          } else {
-            firstRow <- c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength)
-            fls <- lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines",sep="\n",as.is=TRUE,quote="",comment.char=""))
-            # temporary solution to missing Klima entries:
-            if(nrow(fls[[1]]) == (length(firstRow) - 1)){
-              fls <- lapply(fls, function(x) rbind(x[1:5,, drop = FALSE], 
-                "Board- / Ambient-T (degC) / ambient-RH (perc)= NA, NA, NA,", 
-                x[6:1051,, drop = FALSE]))
-            } else if(any(check_fls <- sapply(fls,nrow) != length(firstRow))){
-              stop("check files:\n",paste(rawdat[check_fls],collapse="\n"))
-            }
-            dat <- data.frame(
-              wavelength=firstRow,
-              fls
-            )         
-          }
-
-          st <- parse_date_time(gsub("^.*_","",dat[DOASinfo$rawdata.structure$"Acquisition start time",-1]), DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS)
-          et <- parse_date_time(gsub("^.*_","",dat[DOASinfo$rawdata.structure$"Acquisition stop time",-1]), DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS)
-          RevPos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Revolver Position",-1])
-          ShuPos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Shutter Position",-1])
-          ststr <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Acquisition start time",-1])
-          etstr <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Acquisition stop time",-1])
-          TECTemp <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"TEC-Temp (degC)",-1])
-          Klima <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Board- / Ambient-T (degC) / ambient-RH (perc)",-1])
-          Expos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Exposure Time (ms)",-1])
-          AccNum <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Number of accumulations",-1])
-
-          head.csv <- cbind(c(
-            'DOAS model:',
-            'Spectrometer:',
-            'Revolver position:',
-            'Shutter position:',
-            'Acquisition start time:',
-            'Acquisition stop time:',
-            'TEC temperature (deg C):',
-            'DOAS board temperature (deg C, deg C, %):',
-            'Spectrometer exposure time (ms):',
-            'Number of accumulations:',
-            'Acquisition duration (sec):',
-            '---',
-            'Spectrometer wavelengths (nm)'
-          ),t(data.frame(
-            DOASmodel=DOASinfo$DOASmodel,
-            Spectrometer=DOASinfo$Spectrometer$"Spectrometer Name",
-            RevPos=RevPos,
-            ShuPos=ShuPos,
-            ststr=ststr,
-            etstr=etstr,
-            TECTemp=TECTemp,
-            Klima=Klima,
-            Expos=as.numeric(Expos),
-            AccNum=as.numeric(AccNum),
-            AccTime=round(as.numeric(difftime(et, st, units="secs")),3),
-            "---",
-            "I_sum",
-            stringsAsFactors=FALSE
-            )))
-          colnames(head.csv) <- colnames(dat)
-          RawData[[i]] <- rbind(head.csv,dat[-seq.int(DOASinfo$rawdata.structure$"Header Lines"),],stringsAsFactors=FALSE)
-          head.csv[is.na(head.csv)] <- "#NV"
-          write.table(rbind(head.csv,dat[-seq.int(DOASinfo$rawdata.structure$"Header Lines"),],stringsAsFactors=FALSE), paste0(dataDir,"/",i,".csv"), sep=";", quote=FALSE, na="#NV", dec=".", row.names=FALSE, col.names=FALSE)
-        } else {
-          RawData <- RawData[-match(i,names(RawData))]
-          cat("Folder",i,"is empty...\n")
-        }
-      }     
-    } else {
-      # rawdataOnly:
-      if(all(!(rawdatfolder %in% lf.raw.dir))){
-        stop("No raw data available for specified time range!")
-      }
-      for (i in rawdatfolder) {
-        cat(paste0("..reading raw data from folder ",i,"\n"))
-        rawdat.all <- list.files(paste0(dataDir,"/",i), pattern=".txt", full.names=TRUE)
-        if(length(rawdat.all)){
-          if(DOASinfo$DOASmodel=="S1" && DOASinfo$timerange[1]>strptime("20160101","%Y%m%d") && DOASinfo$timerange[1]<strptime("20170101","%Y%m%d")){
-            rawdat.et <- parse_date_time(gsub("^.*/(.*).txt","\\1",rawdat.all),c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz=tz.DOAS)
-          } else {
-            rawdat.et <- parse_date_time(gsub("^.*_(.*).txt","\\1",rawdat.all),c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz=tz.DOAS)
-          }
-          rawdat.st <- rawdat.et - median(diff(rawdat.et))
-          takeme <- (rawdat.et>=timerange[1])&(rawdat.st<=timerange[2])
-          rawdat.all <- rawdat.all[takeme]
-          rawdatSize <- file.size(rawdat.all)
-          rawdat <- rawdat.all[rawdatSize > 4000]
-          if(sum(rawdatSize <= 4000)){
-            cat(paste0(sum(rawdatSize <= 4000)," invalid files (< 4000 bytes)!\n"))
-            file.rename(rawdat.all[rawdatSize <= 4000],gsub(".txt$",".invalid",rawdat.all[rawdatSize <= 4000]))
-          }
-          if(length(rawdat)){
-            if(DOASinfo$DOASmodel == "S1"&&(as.numeric(i)-20160101)>=0&&(as.numeric(i)-20170101)<0){
-              dat <- data.frame(
-                wavelength=c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength[10:1021]),
-                lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines"-9,sep="\n",as.is=TRUE,quote="",comment.char=""))
-              )
-              input <- data.frame(wavelength=DOASinfo$Spectrometer$wavelength[1:9],matrix(NA,nrow=9,ncol=ncol(dat)-1))
-              names(input) <- names(dat)
-              dat <- rbind(dat[1:8,],
-                input,
-                dat[9:1020,],make.row.names=FALSE)
+            if(doas_info$DOASmodel == "S1"&&(as.numeric(i)-20160101)>=0&&(as.numeric(i)-20170101)<0){
+                # S1 data between 2016 and 2017
+                dat <- data.frame(
+                    wavelength=c(seq.int(doas_info$rawdata.structure$"Header Lines"),doas_info$Spectrometer$wavelength[10:1021]),
+                    lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=doas_info$Spectrometer$"Pixel Number"+doas_info$rawdata.structure$"Header Lines"-9,sep="\n",as.is=TRUE,quote="",comment.char=""))
+                )
+                input <- data.frame(wavelength=doas_info$Spectrometer$wavelength[1:9],matrix(NA,nrow=9,ncol=ncol(dat)-1))
+                names(input) <- names(dat)
+                dat <- rbind(dat[1:8,],
+                    input,
+                    dat[9:1020,],make.row.names=FALSE)
             } else {
-              # browser()
-              firstRow <- c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength)
-              fls <- lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines",sep="\n",as.is=TRUE,quote="",comment.char=""))
-              # temporary solution to missing Klima entries:
-              if(nrow(fls[[1]]) == (length(firstRow) - 1)){
-                fls <- lapply(fls, function(x) rbind(x[1:5,, drop = FALSE], 
-                  "Board- / Ambient-T (degC) / ambient-RH (perc)= NA, NA, NA,", 
-                  x[6:1051,, drop = FALSE]))
-              } else if(any(check_fls <- sapply(fls,nrow) != length(firstRow))){
-                stop("check files:\n",paste(rawdat[check_fls],collapse="\n"))
-              }
-              dat <- data.frame(
-                wavelength=c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength),
-                fls)
+                # define first row
+                firstRow <- c(seq.int(doas_info$rawdata.structure$"Header Lines"), doas_info$Spectrometer$wavelength)
+                # read data
+                fls <- lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=doas_info$Spectrometer$"Pixel Number"+doas_info$rawdata.structure$"Header Lines",sep="\n",as.is=TRUE,quote="",comment.char=""))
+                # temporary solution to missing Klima entries:
+                if (nrow(fls[[1]]) == (length(firstRow) - 1)) {
+                    fls <- lapply(fls, function(x) rbind(x[1:5,, drop = FALSE], 
+                            "Board- / Ambient-T (degC) / ambient-RH (perc)= NA, NA, NA,", 
+                            x[6:1051,, drop = FALSE]))
+                } else if (any(check_fls <- sapply(fls,nrow) != length(firstRow))) {
+                    stop("check files:\n", paste(rawdat[check_fls], collapse = "\n"))
+                }
+                # cbind
+                dat <- data.frame(
+                    wavelength=firstRow,
+                    fls
+                )
             }
-
-            st <- parse_date_time(gsub("^.*_","",dat[DOASinfo$rawdata.structure$"Acquisition start time",-1]), DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS)
-            et <- parse_date_time(gsub("^.*_","",dat[DOASinfo$rawdata.structure$"Acquisition stop time",-1]), DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS)
-            RevPos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Revolver Position",-1])
-            ShuPos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Shutter Position",-1])
-            ststr <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Acquisition start time",-1])
-            etstr <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Acquisition stop time",-1])
-            TECTemp <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"TEC-Temp (degC)",-1])
-            Klima <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Board- / Ambient-T (degC) / ambient-RH (perc)",-1])
-            Expos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Exposure Time (ms)",-1])
-            AccNum <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Number of accumulations",-1])
-
-            head.csv <- cbind(c(
-              'DOAS model:',
-              'Spectrometer:',
-              'Revolver position:',
-              'Shutter position:',
-              'Acquisition start time:',
-              'Acquisition stop time:',
-              'TEC temperature (deg C):',
-              'DOAS board temperature (deg C, deg C, %):',
-              'Spectrometer exposure time (ms):',
-              'Number of accumulations:',
-              'Acquisition duration (sec):',
-              '---',
-              'Spectrometer wavelengths (nm)'
-            ),t(data.frame(
-              DOASmodel=DOASinfo$DOASmodel,
-              Spectrometer=DOASinfo$Spectrometer$"Spectrometer Name",
-              RevPos=RevPos,
-              ShuPos=ShuPos,
-              ststr=ststr,
-              etstr=etstr,
-              TECTemp=TECTemp,
-              Klima=Klima,
-              Expos=as.numeric(Expos),
-              AccNum=as.numeric(AccNum),
-              AccTime=round(as.numeric(difftime(et, st, units="secs")),3),
-              "---",
-              "I_sum",
-              stringsAsFactors=FALSE
-              )))
-            colnames(head.csv) <- colnames(dat)
-            RawData[[i]] <- rbind(head.csv,dat[-seq.int(DOASinfo$rawdata.structure$"Header Lines"),],stringsAsFactors=FALSE)
-          } else {
-            RawData <- RawData[-match(i,names(RawData))]
-          } 
+            # prepare header
+            header <- list(
+                RevPos = sub("^.*[=]", "", dat[doas_info$rawdata.structure$"Revolver Position", -1]),
+                ShuPos = sub("^.*[=]", "", dat[doas_info$rawdata.structure$"Shutter Position", -1]),
+                ststr = sub("^.*_", "", dat[doas_info$rawdata.structure$"Acquisition start time", -1]),
+                etstr = sub("^.*_", "", dat[doas_info$rawdata.structure$"Acquisition stop time", -1]),
+                TECTemp = sub("^.*[=]", "", dat[doas_info$rawdata.structure$"TEC-Temp (degC)", -1]),
+                Klima = sub("^.*[=]", "", dat[doas_info$rawdata.structure$"Board- / Ambient-T (degC) / ambient-RH (perc)", -1]),
+                Expos = as.numeric(sub("^.*[=]", "", dat[doas_info$rawdata.structure$"Exposure Time (ms)", -1])),
+                AccNum = as.numeric(sub("^.*[=]", "", dat[doas_info$rawdata.structure$"Number of accumulations", -1])),
+                st = parse_date_time(sub("^.*_", "", dat[doas_info$rawdata.structure$"Acquisition start time", -1]), doas_info$rawdata.structure$"Time Format", tz = tz(doas_info$timerange)),
+                et = parse_date_time(sub("^.*_", "", dat[doas_info$rawdata.structure$"Acquisition stop time", -1]), doas_info$rawdata.structure$"Time Format", tz = tz(doas_info$timerange))
+                )
+            # prepare raw data as list
+            out <- list(intensity = apply(dat[-seq.int(doas_info$rawdata.structure$'Header Lines'), ], 2, as.numeric), header = header)
+            # write daily file (files, data, path)
+            write_daily(basename(rawdat), out, file.path(path_data, i))
+            # return list
+            out
         } else {
-          RawData <- RawData[-match(i,names(RawData))]
-          cat("No data in folder",i,"\n")
+            # no data
+            cat("Folder", i, "is empty...\n")
+            # return null
+            NULL
         }
-      }
-    }   
-  }
-  if(!length(RawData))stop("No data available for specified time range!")
-  isnull <- sapply(RawData,is.null) 
-  if(all(isnull)){
-    stop("No valid raw data files for specified time range!\n")
-  } else if(length(unique(sapply(RawData[!isnull],nrow)))!=1){
-  	stop("Daily Files have differing number of rows! Setting 'force.write.daily = TRUE' might solve the problem.")
-  }
-  RawData <- do.call(cbind,lapply(RawData[!isnull],"[",-1))
+    })
+}
 
-  st <- parse_date_time(gsub("^.*_","",RawData[5,]), DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS)
-  et <- parse_date_time(gsub("^.*_","",RawData[6,]), DOASinfo$rawdata.structure$"Time Format", tz=tz.DOAS)
-  RevPos <- gsub("^.*[=]","",RawData[3,])
-  ShuPos <- gsub("^.*[=]","",RawData[4,])
-  ststr <- gsub("^.*[=]","",RawData[5,])
-  etstr <- gsub("^.*[=]","",RawData[6,])
-  TECTemp <- gsub("^.*[=]","",RawData[7,])
-  Klima <- gsub("^.*[=]","",RawData[8,])
-  Expos <- gsub("^.*[=]","",RawData[9,])
-  AccNum <- gsub("^.*[=]","",RawData[10,])
+check_dailyfiles <- function(rawdat_folder, skip.check.daily, force.write.daily, 
+    lf_raw_dir, path_data, doas_info, raw_data) {
+    # target daily files
+    target_daily <- paste0(rawdat_folder, ".bin")
+    # check existing daily files
+    if (force.write.daily) {
+        # "no daily files exist"
+        daily_exist <- rep(FALSE, length(target_daily))
+    } else {
+        # get existing daily files
+        daily_exist <- target_daily %in% lf_raw_dir
+        # check daily files
+        if(!skip.check.daily){
+            cat("checking daily files...\n")
+            for (i in which(daily_exist)) {
+                # read 'old' files
+                files_daily <- try(read_daily(file.path(path_data, target_daily[i]), files = TRUE), silent = TRUE)
+                # read present files
+                files_now <- list.files(file.path(path_data, rawdat_folder[i]), pattern = '[.]txt')
+                # check for changes
+                if (identical(files_daily, files_now)){
+                    cat(paste0("..daily file ", target_daily[i], " exists and is ok...\n"))
+                    # read data from daily file
+                    raw_data[[rawdat_folder[i]]] <- read_daily(file.path(path_data, target_daily[i]))
+                } else {
+                    # delete daily file (and re-create it later)
+                    unlink(file.path(path_data, target_daily[i]))
+                    daily_exist[i] <- FALSE
+                }
+            }   
+        } else {
+            # read existing daily files
+            for (i in which(daily_exist)) {
+                cat("reading daily file", target_daily[i], "...\n")
+                raw_data[[rawdat_folder[i]]] <- read_daily(file.path(path_data, target_daily[i]))
+            }     
+        }
+    }
+    # process daily files
+    raw_data[!daily_exist] <- process_dailyfiles(rawdat_folder[!daily_exist], path_data, doas_info, raw_data)
+    # return
+    raw_data[!is.null(raw_data)]
+}
 
-  # get timerange:
-  takeme <- (et>=timerange[1])&(st<=timerange[2])
-  RawData <- apply(RawData[-(1:13),takeme,drop=FALSE],2,as.numeric)
-  if(!length(RawData))cat("No data available for specified time range!\n")
+readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.daily = FALSE, 
+    force.write.daily = FALSE, timerange = DOASinfo$timerange, timezone = "", ncores = 1) {
 
-  if(DOASinfo$DOASmodel=="S1" && DOASinfo$timerange[1] < as.POSIXct("2016-01-01", tz=tz(DOASinfo$timerange[1]))){
-    RawData <- RawData[1:1021,,drop=FALSE]
-    DOASinfo$Spectrometer$"Pixel Number" <- 1021
-    # wavelength
-    DOASinfo$Spectrometer$pixel <- seq.int(1021)
-    DOASinfo$Spectrometer$wavelength <- DOASinfo$Spectrometer$"Calibration Coefficients"[1] + DOASinfo$Spectrometer$"Calibration Coefficients"[2]*DOASinfo$Spectrometer$pixel + DOASinfo$Spectrometer$"Calibration Coefficients"[3]*DOASinfo$Spectrometer$pixel^2 + DOASinfo$Spectrometer$"Calibration Coefficients"[4]*DOASinfo$Spectrometer$pixel^3
-    warning("S1: old data structure. Cut high end data!")
-  }
+    if(parl <- (ncores > 1 & !rawdataOnly)) {
+        require(snowfall)
+        if(!sfIsRunning()){     
+            on.exit(sfStop())
+            sfInit(TRUE, ncores)
+        }
+        cl <- sfGetCluster()
+        sfLibrary(lubridate)
+    }
 
-  Header <- data.frame(
-    DOASmodel=DOASinfo$DOASmodel,
-    Spectrometer=DOASinfo$Spectrometer$"Spectrometer Name",
-    RevPos=RevPos,
-    ShuPos=ShuPos,
-    ststr=ststr,
-    etstr=etstr,
-    TECTemp=TECTemp,
-    Klima=Klima,
-    Expos=as.numeric(Expos),
-    AccNum=as.numeric(AccNum),
-    AccTime=round(as.numeric(difftime(et, st, units="secs")),3),
-    st=st,
-    et=et,
-    stringsAsFactors=FALSE
-    )  
+    if(inherits(DOASinfo, "character")){
+        timerange <- prepTimeRange(timerange, timezone)
+        DOASinfo <- getDOASinfo(DOASinfo, timerange)
+    }
 
-  Header <- Header[takeme,]
-  RawData <- sweep(RawData,2,Header[,"AccNum"],"/")
-  
-  return(list(RawData=RawData,Header=Header,DOASinfo=DOASinfo))
+    # correct folder for last day 
+    tr.to <- trunc(timerange[2], "days")
+    if(as.numeric(tr.to - timerange[2]) == 0) tr.to <- tr.to - as.difftime(1,units="days")
+
+    # target folders
+    rawdatfolder <- format(seq(from=trunc(timerange[1],"days"), to=tr.to, 
+            by=as.difftime(1, units="days")), "%Y%m%d") 
+
+    # get existing files/folders
+    lf.raw.dir <- list.files(dataDir, pattern = '[0-9]{8}([.]bin)?$')
+    if(!length(lf.raw.dir)){
+        if(!dir.exists(dirname(dataDir))){
+            stop("Folder \"",dirname(dataDir),"\" does not exist!")
+        } else if(!dir.exists(dataDir)){
+            stop("Folder \"",dataDir,"\" does not exist!")
+        } else {
+            stop("Folder \"",dataDir,"\" does not contain any doas data!")
+        }
+    } else if(!any(rawdatfolder %in% lf.raw.dir)){
+        stop("No data available for specified timerange!")
+    }
+
+    # prepare raw data output
+    RawData <- vector(length(rawdatfolder), mode = "list")
+    names(RawData) <- rawdatfolder
+
+    # if rawdataOnly else daily files
+    if (rawdataOnly) {
+
+        # loop over folders
+        for (i in rawdatfolder) {
+            cat(paste0("..reading raw data from folder ",i,"\n"))
+            rawdat_all <- list.files(paste0(dataDir,"/",i), pattern=".txt", full.names=TRUE)
+            if(length(rawdat_all)){
+                if(DOASinfo$DOASmodel=="S1" && DOASinfo$timerange[1]>strptime("20160101","%Y%m%d") && DOASinfo$timerange[1]<strptime("20170101","%Y%m%d")){
+                    rawdat.et <- parse_date_time(gsub("^.*/(.*).txt","\\1",rawdat_all),c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz=tz(DOASinfo$timerange))
+                } else {
+                    rawdat.et <- parse_date_time(gsub("^.*_(.*).txt","\\1",rawdat_all),c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz=tz(DOASinfo$timerange))
+                }
+                rawdat.st <- rawdat.et - median(diff(rawdat.et))
+                takeme <- (rawdat.et>=timerange[1])&(rawdat.st<=timerange[2])
+                rawdat_all <- rawdat_all[takeme]
+                rawdatSize <- file.size(rawdat_all)
+                rawdat <- rawdat_all[rawdatSize > 4000]
+                if(sum(rawdatSize <= 4000)){
+                    cat(paste0(sum(rawdatSize <= 4000)," invalid files (< 4000 bytes)!\n"))
+                    file.rename(rawdat_all[rawdatSize <= 4000],gsub(".txt$",".invalid",rawdat_all[rawdatSize <= 4000]))
+                }
+                if(length(rawdat)){
+                    if(DOASinfo$DOASmodel == "S1"&&(as.numeric(i)-20160101)>=0&&(as.numeric(i)-20170101)<0){
+                        dat <- data.frame(
+                            wavelength=c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength[10:1021]),
+                            lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines"-9,sep="\n",as.is=TRUE,quote="",comment.char=""))
+                        )
+                        input <- data.frame(wavelength=DOASinfo$Spectrometer$wavelength[1:9],matrix(NA,nrow=9,ncol=ncol(dat)-1))
+                        names(input) <- names(dat)
+                        dat <- rbind(dat[1:8,],
+                            input,
+                            dat[9:1020,],make.row.names=FALSE)
+                    } else {
+                        # browser()
+                        firstRow <- c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength)
+                        fls <- lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines",sep="\n",as.is=TRUE,quote="",comment.char=""))
+                        # temporary solution to missing Klima entries:
+                        if(nrow(fls[[1]]) == (length(firstRow) - 1)){
+                            fls <- lapply(fls, function(x) rbind(x[1:5,, drop = FALSE], 
+                                    "Board- / Ambient-T (degC) / ambient-RH (perc)= NA, NA, NA,", 
+                                    x[6:1051,, drop = FALSE]))
+                        } else if(any(check_fls <- sapply(fls,nrow) != length(firstRow))){
+                            stop("check files:\n",paste(rawdat[check_fls],collapse="\n"))
+                        }
+                        dat <- data.frame(
+                            wavelength=c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength),
+                            fls)
+                    }
+
+                    st <- parse_date_time(gsub("^.*_","",dat[DOASinfo$rawdata.structure$"Acquisition start time",-1]), DOASinfo$rawdata.structure$"Time Format", tz=tz(DOASinfo$timerange))
+                    et <- parse_date_time(gsub("^.*_","",dat[DOASinfo$rawdata.structure$"Acquisition stop time",-1]), DOASinfo$rawdata.structure$"Time Format", tz=tz(DOASinfo$timerange))
+                    RevPos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Revolver Position",-1])
+                    ShuPos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Shutter Position",-1])
+                    ststr <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Acquisition start time",-1])
+                    etstr <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Acquisition stop time",-1])
+                    TECTemp <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"TEC-Temp (degC)",-1])
+                    Klima <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Board- / Ambient-T (degC) / ambient-RH (perc)",-1])
+                    Expos <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Exposure Time (ms)",-1])
+                    AccNum <- gsub("^.*[=]","",dat[DOASinfo$rawdata.structure$"Number of accumulations",-1])
+
+                    head.csv <- cbind(c(
+                            'DOAS model:',
+                            'Spectrometer:',
+                            'Revolver position:',
+                            'Shutter position:',
+                            'Acquisition start time:',
+                            'Acquisition stop time:',
+                            'TEC temperature (deg C):',
+                            'DOAS board temperature (deg C, deg C, %):',
+                            'Spectrometer exposure time (ms):',
+                            'Number of accumulations:',
+                            'Acquisition duration (sec):',
+                            '---',
+                            'Spectrometer wavelengths (nm)'
+                            ),t(data.frame(
+                                DOASmodel=DOASinfo$DOASmodel,
+                                Spectrometer=DOASinfo$Spectrometer$"Spectrometer Name",
+                                RevPos=RevPos,
+                                ShuPos=ShuPos,
+                                ststr=ststr,
+                                etstr=etstr,
+                                TECTemp=TECTemp,
+                                Klima=Klima,
+                                Expos=as.numeric(Expos),
+                                AccNum=as.numeric(AccNum),
+                                AccTime=round(as.numeric(difftime(et, st, units="secs")),3),
+                                "---",
+                                "I_sum",
+                                stringsAsFactors=FALSE
+                                )))
+                    colnames(head.csv) <- colnames(dat)
+                    RawData[[i]] <- rbind(head.csv,dat[-seq.int(DOASinfo$rawdata.structure$"Header Lines"),],stringsAsFactors=FALSE)
+                } else {
+                    RawData <- RawData[-match(i,names(RawData))]
+                } 
+            } else {
+                RawData <- RawData[-match(i,names(RawData))]
+                cat("No data in folder",i,"\n")
+            }
+        }
+    } else if (parl) {
+
+        # export functions
+        clusterExport(cl, list('process_dailyfiles', 'write_daily', 'read_daily'))
+
+        # call check daily in parallel
+        cat("checking daily files in parallel...\n")
+        raw_data <- clusterApplyLB(cl, seq_along(RawData), function(i, check_fu, rdf, rd, ...) {
+            unlist(
+                check_fu(rdf[[i]], raw_data = rd[[i]], ...),
+                recursive = FALSE)
+                            }, 
+            check_fu = check_dailyfiles, rdf = rawdatfolder, rd = RawData, skip.check.daily, force.write.daily,
+            lf.raw.dir, dataDir, DOASinfo)
+
+    } else {
+
+        raw_data <- check_dailyfiles(rawdatfolder, skip.check.daily, force.write.daily, 
+            lf.raw.dir, dataDir, DOASinfo, RawData)
+
+    }
+
+    # is this still necessary?
+    raw_data <- raw_data[!is.null(raw_data)]
+
+    if (!length(raw_data)) {
+        stop("No data available for specified time range!")
+    } else if (length(unique(sapply(raw_data, nrow))) != 1) {
+        stop("Daily Files have differing number of rows! Setting 'force.write.daily = TRUE' might solve the problem.")
+    }
+
+    # read header
+    header <- do.call(rbind, lapply(raw_data, function(x) data.frame(x[[2]])))
+
+    # get eval period subset
+    takeme <- (header$et >= timerange[1]) & (header$st <= timerange[2])
+
+    # bind raw data
+    RawData <- data.frame(lapply(raw_data, function(x) x[[1]][, -1]))[, takeme, drop = FALSE]
+
+    # get timerange:
+    if (!length(RawData)) stop("No data available for specified time range!\n")
+
+    # subset header
+    header <- header[takeme, ]
+
+    # stupid S1
+    if(DOASinfo$DOASmodel=="S1" && DOASinfo$timerange[1] < as.POSIXct("2016-01-01", tz=tz(DOASinfo$timerange[1]))){
+        RawData <- RawData[1:1021,,drop=FALSE]
+        DOASinfo$Spectrometer$"Pixel Number" <- 1021
+        # wavelength
+        DOASinfo$Spectrometer$pixel <- seq.int(1021)
+        DOASinfo$Spectrometer$wavelength <- DOASinfo$Spectrometer$"Calibration Coefficients"[1] + DOASinfo$Spectrometer$"Calibration Coefficients"[2]*DOASinfo$Spectrometer$pixel + DOASinfo$Spectrometer$"Calibration Coefficients"[3]*DOASinfo$Spectrometer$pixel^2 + DOASinfo$Spectrometer$"Calibration Coefficients"[4]*DOASinfo$Spectrometer$pixel^3
+        warning("S1: old data structure. Cut high end data!")
+    }
+
+    # write header
+    Header <- data.frame(
+        DOASmodel = DOASinfo$DOASmodel,
+        Spectrometer = DOASinfo$Spectrometer$"Spectrometer Name",
+        header[, 1:8],
+        AccTime = round(as.numeric(difftime(header$et, header$st, units = "secs")), 3),
+        st = header$st,
+        et = header$et,
+        stringsAsFactors = FALSE
+    )
+
+    # devide total counts by # of accumulations
+    RawData <- sweep(RawData, 2, Header[, "AccNum"], "/")
+
+    return(list(RawData=RawData,Header=Header,DOASinfo=DOASinfo))
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

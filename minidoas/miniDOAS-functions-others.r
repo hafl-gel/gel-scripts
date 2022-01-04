@@ -212,14 +212,15 @@ check_dailyfiles <- function(rawdat_folder, skip.check.daily, force.write.daily,
 readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.daily = FALSE, 
     force.write.daily = FALSE, timerange = DOASinfo$timerange, timezone = "", ncores = 1) {
 
-    if(parl <- (ncores > 1 & !rawdataOnly)) {
-        require(snowfall)
-        if(!sfIsRunning()){     
-            on.exit(sfStop())
-            sfInit(TRUE, ncores)
+    if(parl <- ((is.list(ncores) || ncores > 1) && !rawdataOnly)) {
+        require(parallel)
+        if (cl_was_up <- is.list(ncores)) {     
+            cl <- ncores
+        } else {
+            cl <- parallel::makePSOCKcluster(rep('localhost', ncores))
+            on.exit(parallel::stopCluster(cl))
         }
-        cl <- sfGetCluster()
-        sfLibrary(lubridate)
+        parallel::clusterCall(cl, library, 'lubridate')
     }
 
     if(inherits(DOASinfo, "character")){
@@ -334,17 +335,23 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
     } else if (parl) {
 
         # export functions
-        clusterExport(cl, list('process_dailyfiles', 'write_daily', 'read_daily'))
+        parallel::clusterExport(cl, list('process_dailyfiles', 'write_daily', 'read_daily'))
 
         # call check daily in parallel
         cat("checking daily files in parallel...\n")
-        raw_data <- clusterApplyLB(cl, seq_along(RawData), function(i, check_fu, rdf, rd, ...) {
+        raw_data <- parallel::clusterApplyLB(cl, seq_along(RawData), function(i, check_fu, rdf, rd, ...) {
             unlist(
                 check_fu(rdf[[i]], rd_list = rd[[i]], ...),
                 recursive = FALSE)
                             }, 
             check_fu = check_dailyfiles, rdf = rawdatfolder, rd = RawData, skip.check.daily, force.write.daily,
             lf.raw.dir, dataDir, DOASinfo)
+
+        # close cluster connection
+        if (!cl_was_up) {
+            parallel::stopCluster(cl)
+            on.exit()
+        }
 
     } else {
 
@@ -965,7 +972,7 @@ getCalCurves <- function(diffspec,DOAS.win,calrefspec,warn=TRUE,...) {
 
 fitConc <- function(meas.doascurve, DOAS.win, path.length, Cal.dc, robust=FALSE, fit.weights=NULL) {
     rob <- ".rob"[robust]
-    fitcurve <- get(paste0("fit.curves.",rob),mode="function")
+    fitcurve <- get(paste0("fit.curves",rob),mode="function")
     return(fitcurve(meas.doascurve,DOAS.win$pixel_dc,Cal.dc$Xreg[DOAS.win$pixel_dc,],fit.weights,DOAS.win$tau.shift,path.length))
 }
 
@@ -1592,13 +1599,14 @@ evalOffline <- function(
     DOAS.info <- getDOASinfo(DOAS.model,timerange, Serial = Serial)
 
     ### initialize parallelism:
-    if (parl <- ncores>1) {
-        require(snowfall)
-        if (!(wasrunning <- sfIsRunning())) {
-            on.exit(sfStop())
-            sfInit(TRUE,ncores)
+    if (parl <- (is.list(ncores) || ncores > 1)) {
+        require(parallel)
+        if (cl_was_up <- is.list(ncores)) {
+            cl <- ncores
+        } else {
+            cl <- parallel::makePSOCKcluster(rep('localhost', ncores))
+            on.exit(parallel::stopCluster(cl))
         }
-        cl <- sfGetCluster()
     }
 
     ### Read raw data:
@@ -1782,7 +1790,7 @@ evalOffline <- function(
 
     # get correct function:
     rob <- ".rob"[use.robust]
-    fitcurve <- get(paste0("fit.curves.",rob),mode="function")
+    fitcurve <- get(paste0("fit.curves",rob),mode="function")
 
     # create a 'lighter' highpass filter
     winFUN <- switch(DOAS.win$filter.type,
@@ -1842,13 +1850,13 @@ evalOffline <- function(
     if (parl) {
 
         cat("Parallel computing doascurve and fit...\n\n")
-        pindex <- clusterSplit(cl,seq(files))
+        pindex <- parallel::clusterSplit(cl,seq(files))
 
         if (use.robust) sfLibrary(robustbase)
         sfExport("highpass.filter2","fitcurve","AICc","fitparallel")
 
         cat("This might take a while...\n\n")
-        p <- clusterApply(cl,pindex,fitparallel,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
+        p <- parallel::clusterApply(cl,pindex,fitparallel,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
             isna,best.tau,delta.AICc.zero,coeffs,se,fitted.doascurve,residual.best)
 
         for(i in seq_along(p)) {

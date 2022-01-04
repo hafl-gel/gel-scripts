@@ -10,7 +10,7 @@ fit.curves <- function(meas.doascurve, ind_fit, Xreg, fit.weights, tau.shift, pa
         delta.AICc.zero <- AICc(lm(as.numeric(meas.doascurve[ind_fit]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights)) - aicc[index]
         fitcurves <- fitcurves[[index]]
     } else {
-        fitcurves <- lm(as.numeric(meas.doascurve[ind_fit]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], weights=fit.weights, model=FALSE))
+        fitcurves <- lm(as.numeric(meas.doascurve[ind_fit]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], weights=fit.weights, model=FALSE)
         tau.best <- tau.shift
         delta.AICc.zero <- 0
     }

@@ -963,21 +963,16 @@ getCalCurves <- function(diffspec,DOAS.win,calrefspec,warn=TRUE,...) {
             ))
 }
 
-fitConc <- function(meas.doascurve, DOAS.win, path.length, Cal.dc, fit.type="ARIMA", robust=FALSE, 
-    ARIMA.order=rbind(expand.grid(0:2,0,0,KEEP.OUT.ATTRS = FALSE),expand.grid(0,0,1:2,KEEP.OUT.ATTRS = FALSE)), fit.weights=NULL) {
-    ord <- as.character(as.numeric(NROW(ARIMA.order) > 1) + 1)[fit.type %in% "ARIMA"]
+fitConc <- function(meas.doascurve, DOAS.win, path.length, Cal.dc, robust=FALSE, fit.weights=NULL) {
     rob <- ".rob"[robust]
-    fitcurve <- get(paste0("fit.curves.",fit.type,ord,rob),mode="function")
-    return(fitcurve(meas.doascurve,DOAS.win$pixel_dc,Cal.dc$Xreg[DOAS.win$pixel_dc,],fit.weights,DOAS.win$tau.shift,ARIMA.order,path.length))
+    fitcurve <- get(paste0("fit.curves.",rob),mode="function")
+    return(fitcurve(meas.doascurve,DOAS.win$pixel_dc,Cal.dc$Xreg[DOAS.win$pixel_dc,],fit.weights,DOAS.win$tau.shift,path.length))
 }
 
 
 inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
-    filter.type = "BmHarris", fit.type = c("OLS","ARIMA"),doubleAVG=TRUE, robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
-    filter.strength = NULL, tau.shift = NULL, special.control = list(b = 3.5, 
-        Scale = function(r) median(abs(r))/0.6745, delta = 0, 
-        filter.strength_multiplication = 1.25, filter.strength_loess = 0.2, 
-        fam = "gaussian"),correct.dark = TRUE, correct.linearity = TRUE, 
+    filter.type = "BmHarris", fit.type = "OLS",doubleAVG=TRUE, robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
+    filter.strength = NULL, tau.shift = NULL, correct.dark = TRUE, correct.linearity = TRUE, 
     correct.straylight = c("avg", "linear", "none"), use.ref = TRUE,
     Edinburgh_correction = TRUE) {
     require(shiny)
@@ -997,7 +992,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
     # windows first time:
     DOASwindows <- getWindows(rawdat$DOASinfo,filter.type = filter.type, straylight.window = straylight.window, 
         filter.window = filter.window, fit.window = fit.window, filter.strength = filter.strength, double = doubleAVG,
-        tau.shift = tau.shift, special.control = special.control)
+        tau.shift = tau.shift)
 
     # correct cal/ref specs:
     # CalRefCorr <- correctSpectra(CalRefSpecs)
@@ -1068,7 +1063,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             ,selectInput("filter.type", 
                                 label = "filter.type:",
                                 choices = c("Hamming","Rect","Hann","Blackman","BmNuttall","Sin"
-                                    ,"Gauss","FlatTop","Kaiser","DolphChebyshev","BmHarris","Tukey","Poisson","Exp","ExpHamming","special","loess"),
+                                    ,"Gauss","Kaiser","DolphChebyshev","BmHarris","Tukey","Poisson","Exp","ExpHamming"),
                                 selected = DOASwindows$filter.type
                             )
                             ,selectInput("double", 
@@ -1091,11 +1086,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             #          step = 0.1, 
                             #   value = DOASwindows$fit.window
                             # )
-                            ,selectInput("fit.type", 
-                                label = "fit.type:",
-                                choices = c("OLS","ARIMA"),
-                                selected = fit.type
-                            )
                             ,checkboxInput("robust", 
                                 label = "robust:",
                                 value = robust
@@ -1107,10 +1097,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                                 min = -20L,
                                 max = 20L
                             )
-                            # ,textInput("Scale", 
-                            #   label = "Scale:", 
-                            #   value = paste0(deparse(DOASwindows$special.control$Scale,width.cutoff=500),collapse=" ")
-                            # )
                             ,uiOutput("filterArgs")
                             ,checkboxInput("correct.dark", 
                                 label = "correct.dark:",
@@ -1164,24 +1150,12 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         } else {
                             filter.strength <- input$filter.strength
                         }
-                        if (is.null(input$filter.strength_multiplication)) {
-                            filter.strength_multiplication <- DOASwindows$special.control$filter.strength_multiplication
-                        } else {
-                            filter.strength_multiplication <- input$filter.strength_multiplication
-                        }
-                        if (is.null(input$filter.strength_loess)) {
-                            filter.strength_loess <- DOASwindows$special.control$filter.strength_loess
-                        } else {
-                            filter.strength_loess <- input$filter.strength_loess
-                        }
-                        if (!(input$filter.type %in% c("special","loess")) & filter.strength < 3) {
+                        if (filter.strength < 3) {
                             if (rawdat$DOASinfo$DOASmodel=="S1" & rawdat$DOASinfo$timerange < parse_date_time("20170101","Ymd")) {
                                 filter_strength <- 41
                             } else {
                                 filter_strength <- 25
                             }
-                        } else if (input$filter.type %in% c("special","loess") & filter.strength > 1) {
-                            filter_strength <- 0.17
                         } else {
                             filter_strength <- filter.strength
                         }
@@ -1207,30 +1181,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                     # })
                     output$filterArgs <- renderUI({
                         DOASwindows <- DOASwindows_reactive()
-                        if (is.null(input$filter.strength_multiplication)) {
-                            filter.strength_multiplication <- DOASwindows$special.control$filter.strength_multiplication
-                        } else {
-                            filter.strength_multiplication <- input$filter.strength_multiplication
-                        }
-                        if (is.null(input$filter.strength_loess)) {
-                            filter.strength_loess <- DOASwindows$special.control$filter.strength_loess
-                        } else {
-                            filter.strength_loess <- input$filter.strength_loess
-                        }
-                        if (DOASwindows$filter.type %in% c("special","loess")) {
-                            tagList(
-                                numericInput("filter.strength_multiplication", 
-                                    label = "filter.strength_multiplication:",
-                                    step = 0.05,
-                                    value = filter.strength_multiplication
-                                )
-                                ,numericInput("filter.strength_loess", 
-                                    label = "filter.strength_loess:",
-                                    step = 0.01,
-                                    value = filter.strength_loess
-                                )
-                            )
-                        } else {
                             if (is.null(input$filter.strength)) {
                                 filter.strength <- DOASwindows$filter.strength
                             } else {
@@ -1242,7 +1192,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                                 "Hamming" = formals(winHamming),
                                 "Blackman" = formals(winBlackman),
                                 "BmNuttall" = formals(winBmNuttall),
-                                "FlatTop" = formals(winFlatTop),
                                 "Sin" = formals(winSin),
                                 "Gauss" = formals(winGauss),
                                 "Kaiser" = formals(winKaiser),
@@ -1283,24 +1232,16 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                                 )
                             )
                         }            
-                    })
+                    )
 
                     output$filter_strength <- renderUI({
                         DOASwindows <- DOASwindows_reactive()
 
-                        if (DOASwindows$filter.type %in% c("special","loess")) {
-                            numericInput("filter.strength", 
-                                label = "filter.strength:",
-                                step = 0.01,
-                                value = DOASwindows$filter.strength
-                            )
-                        } else {
-                            numericInput("filter.strength", 
-                                label = "filter.strength:",
-                                step = 2,
-                                value = DOASwindows$filter.strength
-                            )
-                        }
+                        numericInput("filter.strength", 
+                            label = "filter.strength:",
+                            step = 2,
+                            value = DOASwindows$filter.strength
+                        )
                     })
 
                     output$fit_window <- renderUI({
@@ -1316,12 +1257,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
 
 
                     plot_reactive <- reactive({
-                        # DOASwindows <- getWindows(rawdat$DOASinfo, filter.type = input$filter.type, straylight.window = straylight.window, 
-                        #   filter.window = filter_window, fit.window = input$fit.window, filter.strength = filter_strength, 
-                        #   tau.shift = input$tau.shift, special.control = list(b = special.control$b, Scale = special.control$Scale, 
-                        #     filter.strength_multiplication = input$filter.strength_multiplication, filter.strength_loess = input$filter.strength_loess, 
-                        #     fam = special.control$fam)
-                        # )
                         i <- input$index
                         RawDat <- rawdat
                         RawDat[[1]] <- rawdat[[1]][,i,drop=FALSE]
@@ -1362,7 +1297,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.meas/I.ref)",xlab="",main="diffspec")
                         lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,] - meas.dc,lwd=2,col="orange")
                         lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,],col="black")
-                        fit <- fitConc(meas.dc, DOASwindows, path.length, Cal.dc, fit.type=input$fit.type, robust=input$robust)
+                        fit <- fitConc(meas.dc, DOASwindows, path.length, Cal.dc, robust=input$robust)
 
                         cfs <- fit[[5]]
                         fit.SO2 <- cfs[2]*path.length*Cal.dc$SO2.dc
@@ -1421,45 +1356,15 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         lines(wavelength,Cal.dc$Xreg[,2],lwd=2,col="green")
                         lines(wavelength,Cal.dc$Xreg[,1],lwd=2,col="blue")
 
-                        ## test stats:
-                        nh3wts <- abs(Cal.dc$NH3.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$NH3.dc[DOASwindows$pixel_dc]))
-                        so2wts <- abs(Cal.dc$SO2.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$SO2.dc[DOASwindows$pixel_dc]))
-                        nowts <- abs(Cal.dc$NO.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$NO.dc[DOASwindows$pixel_dc]))
-                        gof.NH3 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*nh3wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nh3wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nh3wts),2)
-                        gof.SO2 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*so2wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*so2wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*so2wts),2)
-                        gof.NO <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*nowts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nowts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nowts),2)
-                        gof.perc <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*(nh3wts+so2wts+nowts)/3)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*(nh3wts+so2wts+nowts)/3)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*(nh3wts+so2wts+nowts)/3),2)
-
-                        SAE <- sum(abs(fit[[8]]))
-                        SAT <- sum(abs(fit[[7]]+fit[[8]]))
-                        SAF <- sum(abs(fit[[7]]))
-
-                        SRE <- sum(fit[[8]])
-                        STAT1 <- round(SRE/SAE,2)
-                        STAT2 <- round(SAE/SAT,2)
-                        STAT3 <- round(SAE/SAF,2)
-
-                        OLS <- if (input$fit.type=="ARIMA") {
-                            fit[[4]][grep("0/0/0",fit[[4]][,1]),2]
-                        } else {
-                            NA
-                        }
-
                         if (Edinburgh_correction) {
                             cfs <- cfs * 1.16
                         }
 
-                        # titel:
-                        # title(paste0(format(rawdat$Header[i,"st"]),sprintf("  index: %i/%i  -  NH3: %1.1f +/- %1.1f, SO2: %1.1f +/- %1.1f, NO: %1.1f +/- %1.1f",i,index.max,cfs[1],fit[[6]][1],cfs[2],fit[[6]][2],cfs[3],fit[[6]][3])),outer=TRUE,line=-1)          
-                        # title(paste0(format(rawdat$Header[i,"st"]),sprintf("  index: %i/%i  -  NH3: %1.1f +/- %1.1f, SO2: %1.1f +/- %1.1f, NO: %1.1f +/- %1.1f  SRE/SAE: %1.2f, SAE/SAF: %1.2f, SAE/SAT: %1.2f, NH3-NH3_000: %1.2f, (NH3-NH3_000)/NH3: %1.2f",i,index.max,cfs[1],fit[[6]][1],cfs[2],fit[[6]][2],cfs[3],fit[[6]][3],STAT1,STAT2,STAT3,cfs[1]-OLS,(cfs[1]-OLS)/cfs[1])),outer=TRUE,line=-1)          
-
                         msg1 <- sprintf("index %i/%i:  %s  --  NH3: %1.1f +/- %1.1f  --  SO2: %1.1f +/- %1.1f  --  NO: %1.1f +/- %1.1f",i,index.max,format(rawdat$Header[i,"st"]),cfs[1],fit[[6]][1],cfs[2],fit[[6]][2],cfs[3],fit[[6]][3])
-                        msg2 <- sprintf("NH3-NH3_000: %1.2f, (NH3-NH3_000)/NH3: %1.2f -- pseudo GOF: -total: %1.2f -NH3: %1.2f -SO2: %1.2f -NO: %1.2f -- SRE/SAE: %1.2f, SAE/SAF: %1.2f, SAE/SAT: %1.2f",cfs[1]-OLS,(cfs[1]-OLS)/cfs[1],gof.perc,gof.NH3,gof.SO2,gof.NO,STAT1,STAT2,STAT3)
                         # mtext(as.expression(substitute(italic(msg), list(msg=msg))), line=-1.25, outer=TRUE, cex=0.5)
                         # mtext(substitute(italic(msg), list(msg=msg1)), line=1, outer=TRUE, cex=0.75)
                         # mtext(substitute(italic(msg), list(msg=msg2)), line=-0.5, outer=TRUE, cex=0.75)
                         mtext(msg1, line=0, outer=TRUE)#, cex=0.75)
-                        mtext(msg2, line=-1.5, outer=TRUE, cex=0.75)
 
                     })
 
@@ -1474,13 +1379,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             on.exit(dev.off())
 
                             par(mfrow=c(3,2),oma=c(0,0,1.5,0))
-                            # plot_reactive()
-                            # DOASwindows <- getWindows(rawdat$DOASinfo, filter.type = input$filter.type, straylight.window = straylight.window, 
-                            #   filter.window = filter_window, fit.window = input$fit.window, filter.strength = filter_strength, 
-                            #   tau.shift = input$tau.shift, special.control = list(b = special.control$b, Scale = special.control$Scale, 
-                            #     filter.strength_multiplication = input$filter.strength_multiplication, filter.strength_loess = input$filter.strength_loess, 
-                            #     fam = special.control$fam)
-                            # )
                             i <- input$index
                             RawDat <- rawdat
                             RawDat[[1]] <- rawdat[[1]][,i,drop=FALSE]
@@ -1580,41 +1478,11 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             lines(wavelength,Cal.dc$Xreg[,2],lwd=2,col="green")
                             lines(wavelength,Cal.dc$Xreg[,1],lwd=2,col="blue")
 
-                            ## test stats:
-                            nh3wts <- abs(Cal.dc$NH3.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$NH3.dc[DOASwindows$pixel_dc]))
-                            so2wts <- abs(Cal.dc$SO2.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$SO2.dc[DOASwindows$pixel_dc]))
-                            nowts <- abs(Cal.dc$NO.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$NO.dc[DOASwindows$pixel_dc]))
-                            gof.NH3 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*nh3wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nh3wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nh3wts),2)
-                            gof.SO2 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*so2wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*so2wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*so2wts),2)
-                            gof.NO <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*nowts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nowts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nowts),2)
-                            gof.perc <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*(nh3wts+so2wts+nowts)/3)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*(nh3wts+so2wts+nowts)/3)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*(nh3wts+so2wts+nowts)/3),2)
-
-                            SAE <- sum(abs(fit[[8]]))
-                            SAT <- sum(abs(fit[[7]]+fit[[8]]))
-                            SAF <- sum(abs(fit[[7]]))
-
-                            SRE <- sum(fit[[8]])
-                            STAT1 <- round(SRE/SAE,2)
-                            STAT2 <- round(SAE/SAT,2)
-                            STAT3 <- round(SAE/SAF,2)
-
-                            OLS <- if (input$fit.type=="ARIMA") {
-                                fit[[4]][grep("0/0/0",fit[[4]][,1]),2]
-                            } else {
-                                NA
-                            }
-
-                            # titel:
-                            # title(paste0(format(rawdat$Header[i,"st"]),sprintf("  index: %i/%i  -  NH3: %1.1f +/- %1.1f, SO2: %1.1f +/- %1.1f, NO: %1.1f +/- %1.1f",i,index.max,cfs[1],fit[[6]][1],cfs[2],fit[[6]][2],cfs[3],fit[[6]][3])),outer=TRUE,line=-1)          
-                            # title(paste0(format(rawdat$Header[i,"st"]),sprintf("  index: %i/%i  -  NH3: %1.1f +/- %1.1f, SO2: %1.1f +/- %1.1f, NO: %1.1f +/- %1.1f  SRE/SAE: %1.2f, SAE/SAF: %1.2f, SAE/SAT: %1.2f, NH3-NH3_000: %1.2f, (NH3-NH3_000)/NH3: %1.2f",i,index.max,cfs[1],fit[[6]][1],cfs[2],fit[[6]][2],cfs[3],fit[[6]][3],STAT1,STAT2,STAT3,cfs[1]-OLS,(cfs[1]-OLS)/cfs[1])),outer=TRUE,line=-1)          
-
                             msg1 <- sprintf("index %i/%i:  %s  --  NH3: %1.1f +/- %1.1f  --  SO2: %1.1f +/- %1.1f  --  NO: %1.1f +/- %1.1f",i,index.max,format(rawdat$Header[i,"st"]),cfs[1],fit[[6]][1],cfs[2],fit[[6]][2],cfs[3],fit[[6]][3])
-                            msg2 <- sprintf("NH3-NH3_000: %1.2f, (NH3-NH3_000)/NH3: %1.2f -- pseudo GOF: -total: %1.2f -NH3: %1.2f -SO2: %1.2f -NO: %1.2f -- SRE/SAE: %1.2f, SAE/SAF: %1.2f, SAE/SAT: %1.2f",cfs[1]-OLS,(cfs[1]-OLS)/cfs[1],gof.perc,gof.NH3,gof.SO2,gof.NO,STAT1,STAT2,STAT3)
                             # mtext(as.expression(substitute(italic(msg), list(msg=msg))), line=-1.25, outer=TRUE, cex=0.5)
                             # mtext(substitute(italic(msg), list(msg=msg1)), line=1, outer=TRUE, cex=0.75)
                             # mtext(substitute(italic(msg), list(msg=msg2)), line=-0.5, outer=TRUE, cex=0.75)
                             mtext(msg1, line=0, outer=TRUE)#, cex=0.75)
-                            mtext(msg2, line=-1.5, outer=TRUE, cex=0.75)
 
                         },
                         contentType="image/png"
@@ -1627,7 +1495,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
 
 
 fitparallel <- function(index,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
-    isna,best.tau,delta.AICc.zero,best.order,aicctab,coeffs,se,fitted.doascurve,residual.best) {
+    isna,best.tau,delta.AICc.zero,coeffs,se,fitted.doascurve,residual.best) {
 
     for(i in index) {
 
@@ -1644,80 +1512,23 @@ fitparallel <- function(index,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.lengt
             } else {
                 best.tau[i] <- fitted[[1]]
                 delta.AICc.zero[i] <- fitted[[2]]
-                best.order[i] <- fitted[[3]]
-                aicctab[[i]] <- fitted[[4]]
-                coeffs[,i] <- fitted[[5]]
-                se[,i] <- fitted[[6]]
-                fitted.doascurve[,i] <- fitted[[7]]
-                residual.best[,i] <- fitted[[8]]
+                coeffs[,i] <- fitted[[3]]
+                se[,i] <- fitted[[4]]
+                fitted.doascurve[,i] <- fitted[[5]]
+                residual.best[,i] <- fitted[[6]]
             }
         } else {
             isna[i] <- TRUE
         }
     }
 
-    out <- list(meas.doascurve,isna,best.tau,delta.AICc.zero,best.order,aicctab,coeffs,se,fitted.doascurve,residual.best)
+    out <- list(meas.doascurve,isna,best.tau,delta.AICc.zero,coeffs,se,fitted.doascurve,residual.best)
     return(out)
 }
 
 
 
 
-
-if (FALSE) {  
-    DOAS.model=DOASmodel
-    evalperiod=evalPeriod
-    tz.DOAS=tzDOAS
-    path.length=pathLength[DOASmodel]
-    tz.Output=tzOutput
-    filter.type="BmHarris"
-    use.arima=useArima
-    use.robust=useRobust
-    filter.window=NULL 
-    filter.strength=NULL
-    double.AVG=TRUE
-    fit.window=NULL
-    straylight.window=NULL
-    skip.check.daily=FALSE
-    corr.fixed.pattern=FALSE
-    fixed.pattern.length=60*24-1
-    correct.linearity=TRUE
-    correct.straylight=c("avg","linear","none")
-    correct.dark=TRUE
-    use.ref = TRUE
-    plot.results=FALSE
-    avg.period=1
-    plot.cal=FALSE
-    tau.shift=tauShift[DOASmodel]
-    save.dir=saveDir
-    rawdata.dir=rawdataDir[DOASmodel]
-    reference.dir=referenceDir[DOASmodel]
-    save.results=FALSE
-    arima.Order.FP=NULL
-    special.Args = list(b=3.5
-        ,Scale=function(r) median(abs(r))/0.6745
-        ,delta=0
-        ,filter.strength_multiplication=1.25 
-        ,filter.strength_loess=0.2
-        ,fam="gaussian")
-    ref.spec=NULL
-    ref.dark.spec=NULL
-    dark.spec=NULL
-    NH3.cal.spec=NULL
-    SO2.cal.spec=NULL
-    NO.cal.spec=NULL
-    N2.cal.spec=NULL
-    N2.NH3.cal.spec=N2.cal.spec
-    N2.SO2.cal.spec=N2.cal.spec
-    N2.NO.cal.spec=N2.cal.spec
-    N2.dark.cal.spec=NULL
-    force.write.daily=FALSE
-    lite=TRUE
-    return.AICcTab=FALSE
-    return.specData=FALSE
-    ncores=1
-    add.name=""
-}
 
 evalOffline <- function(
     DOAS.model=NULL,
@@ -1734,27 +1545,14 @@ evalOffline <- function(
     fit.window=NULL,
     straylight.window=NULL,
     skip.check.daily=FALSE,
-    corr.fixed.pattern=FALSE,
-    fixed.pattern.length=60*24-1,
     correct.linearity=TRUE,
     correct.straylight=c("avg","linear","none"),
     correct.dark=TRUE,
     use.ref = TRUE,
-    plot.results=FALSE,
     avg.period=1,
-    plot.cal=FALSE,
     tau.shift=NULL,
-    save.dir=NULL,
     rawdata.dir=NULL,
     reference.dir=NULL,
-    save.results=FALSE,
-    arima.Order.FP=NULL,
-    special.Args = list(b=3.5
-        ,Scale=function(r) median(abs(r))/0.6745
-        ,delta=0
-        ,filter.strength_multiplication=1.25 
-        ,filter.strength_loess=0.2
-        ,fam="gaussian"),
     ref.spec=NULL,
     ref.dark.spec=NULL,
     dark.spec=NULL,
@@ -1768,7 +1566,6 @@ evalOffline <- function(
     N2.cal.spec=NULL,
     force.write.daily=FALSE,
     lite=TRUE,
-    return.AICcTab=FALSE,
     return.specData=FALSE,
     return.fitData=FALSE,
     ncores=1,
@@ -1780,18 +1577,6 @@ evalOffline <- function(
     ...
     ) {
 
-    specialArgs <- list(b=3.5
-        ,Scale=function(r) median(abs(r))/0.6745
-        ,delta=0
-        ,filter.strength_multiplication=1.25 
-        ,filter.strength_loess=0.2
-        ,fam="gaussian")
-    specialArgs[names(special.Args)] <- special.Args
-    b <- specialArgs$b
-    Scale  <- specialArgs$Scale
-    delta <- specialArgs$delta
-    filter.strength_multiplication <- specialArgs$filter.strength_multiplication
-    filter.strength_loess <- specialArgs$filter.strength_loess
 
     program.version <- programVersion
     tau.fix <- length(tau.shift)==1 
@@ -2059,30 +1844,23 @@ evalOffline <- function(
         cat("Parallel computing doascurve and fit...\n\n")
         pindex <- clusterSplit(cl,seq(files))
 
-        if ("special" %in% DOAS.win$filter.type) {
-            sfLibrary(IDPmisc)
-            sfExport("b","Scale","delta","b","filter.strength_multiplication","filter.strength_loess","fam")
-        }
         if (use.robust) sfLibrary(robustbase)
-        sfExport("highpass.filter2","fitcurve","AICc","fitparallel","forecastArima")
+        sfExport("highpass.filter2","fitcurve","AICc","fitparallel")
 
         cat("This might take a while...\n\n")
         p <- clusterApply(cl,pindex,fitparallel,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
-            isna,best.tau,delta.AICc.zero,best.order,aicctab,coeffs,se,fitted.doascurve,residual.best)
+            isna,best.tau,delta.AICc.zero,coeffs,se,fitted.doascurve,residual.best)
 
         for(i in seq_along(p)) {
             meas.doascurve[,pindex[[i]]] <- p[[i]][[1]][,pindex[[i]]]
             isna[pindex[[i]]] <- p[[i]][[2]][pindex[[i]]]
             best.tau[pindex[[i]]] <- p[[i]][[3]][pindex[[i]]]
             delta.AICc.zero[pindex[[i]]] <- p[[i]][[4]][pindex[[i]]]
-            best.order[pindex[[i]]] <- p[[i]][[5]][pindex[[i]]]
-            aicctab[pindex[[i]]] <- p[[i]][[6]][pindex[[i]]]
-            coeffs[,pindex[[i]]] <- p[[i]][[7]][,pindex[[i]]]
-            se[,pindex[[i]]] <- p[[i]][[8]][,pindex[[i]]]
-            fitted.doascurve[,pindex[[i]]] <- p[[i]][[9]][,pindex[[i]]]
-            residual.best[,pindex[[i]]] <- p[[i]][[10]][,pindex[[i]]]
+            coeffs[,pindex[[i]]] <- p[[i]][[5]][,pindex[[i]]]
+            se[,pindex[[i]]] <- p[[i]][[6]][,pindex[[i]]]
+            fitted.doascurve[,pindex[[i]]] <- p[[i]][[7]][,pindex[[i]]]
+            residual.best[,pindex[[i]]] <- p[[i]][[8]][,pindex[[i]]]
         }
-        # if (!corr.fixed.pattern) {sfStop();on.exit()}
         if (!wasrunning) {
             sfStop();on.exit()
         }
@@ -2114,191 +1892,8 @@ evalOffline <- function(
         }
     }
 
-    # broadband:
-    meas.diffspec.broadband <- DiffSpec$diffspec[DOAS.win$pixel_filter,] - meas.doascurve
-
-
-    ## test stats:
-    nh3wts <- abs(Cal.dc$NH3.dc[DOAS.win$pixel_dc])/sum(abs(Cal.dc$NH3.dc[DOAS.win$pixel_dc]))
-    so2wts <- abs(Cal.dc$SO2.dc[DOAS.win$pixel_dc])/sum(abs(Cal.dc$SO2.dc[DOAS.win$pixel_dc]))
-    nowts <- abs(Cal.dc$NO.dc[DOAS.win$pixel_dc])/sum(abs(Cal.dc$NO.dc[DOAS.win$pixel_dc]))
-    gof.NH3 <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel_dc,]-1)*nh3wts)*(colSums(meas.doascurve[DOAS.win$pixel_dc,]*nh3wts)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel_dc,]*nh3wts),2)
-    gof.SO2 <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel_dc,]-1)*so2wts)*(colSums(meas.doascurve[DOAS.win$pixel_dc,]*so2wts)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel_dc,]*so2wts),2)
-    gof.NO <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel_dc,]-1)*nowts)*(colSums(meas.doascurve[DOAS.win$pixel_dc,]*nowts)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel_dc,]*nowts),2)
-    gof.perc <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel_dc,]-1)*(nh3wts+so2wts+nowts)/3)*(colSums(meas.doascurve[DOAS.win$pixel_dc,]*(nh3wts+so2wts+nowts)/3)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel_dc,]*(nh3wts+so2wts+nowts)/3),2)
-
-
-    SAE <- apply(residual.best,2,function(x)sum(abs(x)))
-    SAT <- apply(fitted.doascurve+residual.best,2,function(x)sum(abs(x)))
-    SRT <- apply(fitted.doascurve+residual.best,2,function(x)sum(x))
-    SAF <- apply(fitted.doascurve,2,function(x)sum(abs(x)))
-
-    SRE <- apply(residual.best,2,function(x)sum(x))
-    # STAT1 <- round(SRE/SAE,2)
-    OLS <- if (use.arima)sapply(aicctab,function(x) {i <- grep("0/0/0",x[,1]);out <- x[i,2];if(is.null(out))out <- NA;return(out)}) else seq_along(aicctab)*NA
-    # STAT2 <- SAE/SAT
-    # STAT3 <- SAE/SAF
-
     cat("\n")
 
-    # ### running median residual patterns
-    # cat("\n"); cat("creating median residual pattern\n")
-    # if (files <= fixed.pattern.length) {
-    #   fp.avg <- matrix(rep(apply(residual.best, 1, median, na.rm=TRUE),files), nrow=files, ncol=length(DOAS.win$pixel_dc), byrow=TRUE)
-    # } else {      
-    #   if (!(fixed.pattern.length%%2))fixed.pattern.length <- fixed.pattern.length + 1
-    #   xin <- 1:ncol(residual.best)
-    #   r.b <- apply(residual.best,1,function(x) {y<-x[!isna];approx(c(0,xin[!isna],length(x)+1),c(y[1],y,rev(y)[1]),xout=1:length(x))$y})
-    #   fp.avg <- apply(r.b, 2, runmed, k=fixed.pattern.length, endrule="constant")
-    # }
-
-
-    ### step 3: optionally subtract averaged fixed residual pattern from measurement data and re-evaluate (using parallel computing on OS other than Windows)
-    ### ******************************************************************************
-    if (corr.fixed.pattern) {
-        stop("fixed.pattern not yet available.")
-
-        # fp.best.order <- fp.delta.AICc.zero <- fp.best.tau <- numeric(files)*NA
-        # fp.aicctab <- vector(mode="list", length=files)
-        # fp.se <- fp.coeffs <- matrix(nrow=3, ncol=files)
-        # fp.residual.best <- fp.fitted.doascurve <- matrix(nrow=dim2, ncol=files)
-
-        # fp.isna <- isna
-        # if (use.arima) {
-        #   if (is.null(dim(arima.Order.FP))) {
-        #     fitcurve <- fit.curves.ARIMA1
-        #   } else {
-        #     fitcurve <- if (use.robust) fit.curves.ARIMA2.rob else fit.curves.ARIMA2
-        #   }
-        # }      
-        # cat("\n"); cat("re-evaluate considering fixed residual pattern:\n")
-        # if (ncores>1) {
-        #   sfExport("fp.avg")
-        #   cat("Parallel computing fix pattern corrected fit...\nThis might take a while...\n\n")
-        #   p <- clusterApply(cl,pindex,fitpWrapper,x4,fp.avg,X,fit.weights,log.meas.diffspec,tau.shift,arima.Order,meas.doascurve,filter.type,filter.strength,m.d,fp.isna,fp.best.tau,fp.delta.AICc.zero,fp.best.order,fp.aicctab,fp.coeffs,fp.se,fp.fitted.doascurve,fp.residual.best,path.length,b,Scale,delta,iter.lims,use.iter,postproc,filter.type_post,filter.strength_post,b,Scale_post,zeta, filter.strength_multiplication, filter.strength_loess,fam,FP=TRUE)
-        #   for(i in seq_along(p)) {
-        #     fp.isna[pindex[[i]]] <- p[[i]][[2]][pindex[[i]]]
-        #     fp.best.tau[pindex[[i]]] <- p[[i]][[3]][pindex[[i]]]
-        #     fp.delta.AICc.zero[pindex[[i]]] <- p[[i]][[4]][pindex[[i]]]
-        #     fp.best.order[pindex[[i]]] <- p[[i]][[5]][pindex[[i]]]
-        #     fp.aicctab[pindex[[i]]] <- p[[i]][[6]][pindex[[i]]]
-        #     fp.coeffs[,pindex[[i]]] <- p[[i]][[7]][,pindex[[i]]]
-        #     fp.se[,pindex[[i]]] <- p[[i]][[8]][,pindex[[i]]]
-        #     fp.fitted.doascurve[,pindex[[i]]] <- p[[i]][[9]][,pindex[[i]]]
-        #     fp.residual.best[,pindex[[i]]] <- p[[i]][[10]][,pindex[[i]]]
-        #   }
-        #   sfStop()
-        #   on.exit()
-        # } else {     
-        #   for(i in seq(files)) {
-        #     cat("\rFP corrected... ",i,"/",files)
-
-        #     if (!isna[i]) {
-        #         ### fit calibration curves to measured DOAS curve (see Stutz & Platt, 1996, Applied Optics 30), determine best fit after shifting over given tau range, no fixed pattern considered
-        #         ### ******************************************************************************#
-        #       fitted <- fitcurve(meas.doascurve[,i], x4, fp.avg[i,], X, fit.weights, tau.shift, arima.Order.FP, path.length)
-
-        #       if (is.null(fitted)) {
-        #         fp.isna[i] <- TRUE
-        #       } else {
-        #         fp.best.tau[i] <- fitted[[1]]
-        #         fp.delta.AICc.zero[i] <- fitted[[2]]
-        #         fp.best.order[i] <- fitted[[3]]
-        #         fp.aicctab[[i]] <- fitted[[4]]
-        #         fp.coeffs[,i] <- fitted[[5]]
-        #         fp.se[,i] <- fitted[[6]]
-        #         fp.fitted.doascurve[,i] <- fitted[[7]]
-        #         fp.residual.best[,i] <- fitted[[8]]
-        #       }
-        #     }
-        #   }
-        # cat("\n \n")   
-        # }
-    }
-    if (Edinburgh_correction) {
-        NH3cor <- 1.16
-    } else {
-        NH3cor <- 1
-    }
-
-    ### write to result matrix
-    ### ******************************************************************************
-    if (corr.fixed.pattern) {
-        # # results <- as.data.frame(matrix(nrow=files, ncol=37, dimnames=list(1:files,c("date time start","date time end","millisec start","millisec end","no of acc.","fpc tau [pixel]","fpc deltaAICc(tau0-tau)","fpc order","fpc NH3 [ug/m3]","fpc NH3 SE [ug/m3]", "fpc SO2 [ug/m3]","fpc SO2 SE [ug/m3]", "fpc NO [ug/m3]","fpc NO SE [ug/m3]", "I.max","I.avg","fpc resid SSE","fp SSE","dark avg offset [counts]","TEC T [degC]","panel T [degC]","ambient T [degC]","ambient RH [perc]","shutter position","revolver position","min I/I0","threshold NH3 [ug/m3]"
-        # #   ,"tau [pixel]","deltaAICc(tau0-tau)","order","NH3 [ug/m3]","NH3 SE [ug/m3]","SO2 [ug/m3]","SO2 SE [ug/m3]","NO [ug/m3]","NO SE [ug/m3]","resid SSE"
-        # #   ))))#,"NH3 alternative [ug/m3]"))))
-        # results <- as.data.frame(matrix(nrow=files, ncol=57, dimnames=list(1:files,c(paste0("date time start (",tz.Output,")"),paste0("date time end (",tz.Output,")"),"millisec start","millisec end","no of acc.","fpc tau [pixel]","fpc deltaAICc(tau0-tau)","fpc order","fpc NH3 [ug/m3]","fpc NH3 SE [ug/m3]", "fpc SO2 [ug/m3]","fpc SO2 SE [ug/m3]", "fpc NO [ug/m3]","fpc NO SE [ug/m3]", "I.max","I.avg","fpc resid SSE","fp SSE","dark avg offset [counts]","TEC T [degC]","panel T [degC]","ambient T [degC]","ambient RH [perc]","shutter position","revolver position","min I/I0"
-        #   ,"tau [pixel]","deltaAICc(tau0-tau)","order","NH3 [ug/m3]","NH3 SE [ug/m3]","SO2 [ug/m3]","SO2 SE [ug/m3]","NO [ug/m3]","NO SE [ug/m3]","resid SSE"
-        #   ,"SAE","SRE","SRE/SAE","SAF","SAT","SRT","SAE/SAF","SRE/SAF","SRE/SAT"
-        #   ,"sign changes 25","sign changes 75","sign changes 125","perc fit","perc NH3","perc SO2","perc NO","dev diffspec","No. Intervals"
-        #   ,"NH3-NH3_000","(NH3-NH3_000)/NH3"
-        #   ))))#,"NH3 alternative [ug/m3]"))))
-        # results[,1] <- format(datetime.start,"%d.%m.%Y %H:%M:%S",tz=tz.Output)
-        # results[,2] <- format(datetime.end,"%d.%m.%Y %H:%M:%S",tz=tz.Output)
-        # results[,3] <- as.numeric(substring(datetime.start.frac,nchar(datetime.start.frac)-2,nchar(datetime.start.frac)))
-        # results[,4] <- as.numeric(substring(datetime.end.frac,nchar(datetime.end.frac)-2,nchar(datetime.end.frac)))
-        # results[,5] <- n
-        # results[,6] <- fp.best.tau
-        # results[,7] <- fp.delta.AICc.zero
-        # results[,8] <- fp.best.order
-        # results[,9] <- fp.coeffs[1,]
-        # results[,10] <- fp.se[1,]
-        # results[,11] <- fp.coeffs[2,]  
-        # results[,12] <- fp.se[2,]
-        # results[,13] <- fp.coeffs[3,]
-        # results[,14] <- fp.se[3,]  
-        # results[,15] <- apply(I.meas, 2, max, na.rm=TRUE)
-        # results[,16] <- apply(I.meas[x2,], 2, mean)
-        # results[,17] <- apply(fp.residual.best^2, 2, sum)
-        # results[,18] <- apply(fp.avg^2, 1, sum)
-        # results[,19] <- dark.offset
-        # results[,20] <- TEC.Temp
-        # bT <- strsplit(board.Temp,",")
-        # if (DOAS.model!="S1"&&!TwoFourTeen)results[,21] <- as.numeric(sapply(bT,"[[",1))
-        # if (DOAS.model!="S1"&&!TwoFourTeen)results[,22] <- as.numeric(sapply(bT,"[[",2))
-        # if (DOAS.model!="S1"&&!TwoFourTeen)results[,23] <- as.numeric(sapply(bT,"[[",3))
-        # if (DOAS.model!="S1")results[,24] <- ShuPos
-        # if (DOAS.model!="S1")results[,25] <- RevPos
-        # results[,26] <- apply(meas.diffspec[x4,], 2, min)
-        # # suppressWarnings(results[,27] <- theoretical.conc(I.attenuation.min[2], I.meas[x1[ind.max.crosssect],], path.length, 1013, 293, 17, NH3.ccd.crossec[ind.max.crosssect]))
-
-        # results[,28] <- best.tau
-        # results[,29] <- delta.AICc.zero
-        # results[,30] <- best.order
-        # results[,31] <- coeffs[1,]
-        # results[,32] <- se[1,]
-        # results[,33] <- coeffs[2,]  
-        # results[,34] <- se[2,]
-        # results[,35] <- coeffs[3,]
-        # results[,36] <- se[3,]  
-        # results[,37] <- apply(residual.best^2, 2, sum)
-
-        # results[,38] <- SAE
-        # results[,39] <- SRE
-        # results[,40] <- STAT1
-
-        # results[,41] <- SAF
-        # results[,42] <- SAT
-        # results[,43] <- SRT
-
-        # results[,44] <- round(SAE/SAF,2)
-        # results[,45] <- round(SRE/SAF,2)
-        # results[,46] <- round(SRE/SAT,2)
-
-        # results[,47] <- sc1
-        # results[,48] <- sc2
-        # results[,49] <- sc3
-        # results[,50] <- gof.perc
-        # results[,51] <- gof.NH3
-        # results[,52] <- gof.SO2
-        # results[,53] <- gof.NO
-        # results[,54] <- MAX
-        # results[,55] <- NoAvgInt
-        # results[,56] <- coeffs[1,] - OLS
-        # results[,57] <- (coeffs[1,] - OLS)/coeffs[1,]
-
-
-    }else if (lite) {
         # reduce results and simplify names
         results <- as.data.frame(matrix(nrow=files, ncol=13, dimnames=list(1:files,
                     c('st', 'et', 'nh3', 'so2', 'no', 'nh3_se', 'so2_se', 'no_se', 'Imax', 'n', 'tau', 'shutter', 'revolver'))))
@@ -2315,422 +1910,13 @@ evalOffline <- function(
         results[,11] <- best.tau
         results[,12] <- ShuPos
         results[,13] <- RevPos
-    } else {
-        results <- as.data.frame(matrix(nrow=files, ncol=42, dimnames=list(1:files,c(paste0("date time start (",tz.Output,")"),paste0("date time end (",tz.Output,")"),"millisec start","millisec end","no of acc.","tau [pixel]","deltaAICc(tau0-tau)","order","NH3 [ug/m3]","NH3 SE [ug/m3]","SO2 [ug/m3]","SO2 SE [ug/m3]","NO [ug/m3]","NO SE [ug/m3]", "I.max","I.avg(fit)","I.min(fit)","resid SSE","fp SSE","dark avg offset [counts]","TEC T [degC]","panel T [degC]","ambient T [degC]","ambient RH [perc]","shutter position","revolver position","min I/I0"
-                        ,"No. intervals","SAE","SRE","SAF","SAT","SRT","SRE/SAE","SAE/SAF","SAE/SAT"
-                        ,"perc fit","perc NH3","perc SO2","perc NO","NH3-NH3_000","(NH3-NH3_000)/NH3"
-                        ))))
-        results[,1] <- format(st,"%d.%m.%Y %H:%M:%S",tz=tz.Output)
-        results[,2] <- format(et,"%d.%m.%Y %H:%M:%S",tz=tz.Output)
-        results[,3] <- round(as.numeric(st)-floor(as.numeric(st)),3)
-        results[,4] <- round(as.numeric(et)-floor(as.numeric(et)),3)
-        results[,5] <- n
-        results[,6] <- best.tau
-        results[,7] <- delta.AICc.zero
-        results[,8] <- best.order
-        results[,9] <- coeffs[1,] * NH3cor
-        results[,10] <- se[1,] * NH3cor
-        results[,11] <- coeffs[2,]  
-        results[,12] <- se[2,]
-        results[,13] <- coeffs[3,]
-        results[,14] <- se[3,]  
-        results[,15] <- apply(RawData$RawData, 2, max, na.rm=TRUE)
-        results[,16] <- apply(RawData$RawData[DOAS.win$pixel_fit,], 2, mean)
-        results[,17] <- apply(RawData$RawData[DOAS.win$pixel_fit,], 2, min)
-        results[,18] <- apply(residual.best^2, 2, sum)
-        # results[,19] <- apply(fp.avg^2, 1, sum)
-        results[,20] <- apply(RawData$RawData[DOAS.win$pixel_straylight,], 2, mean)
-        results[,21] <- TEC.Temp
-        results[,22] <- board.Temp
-        results[,23] <- ambient.Temp
-        results[,24] <- ambient.RH
-        results[,25] <- ShuPos
-        results[,26] <- RevPos
-        results[,27] <- exp(apply(DiffSpec$diffspec[DOAS.win$pixel_fit,], 2, min))
-
-        results[,28] <- NoAvgInt
-        results[,29] <- SAE
-        results[,30] <- SRE
-        results[,31] <- SAF
-        results[,32] <- SAT
-        results[,33] <- SRT
-
-        results[,34] <- round(SRE/SAE,2)
-        results[,35] <- round(SAE/SAF,2)
-        results[,36] <- round(SAE/SAT,2)
-
-        results[,37] <- gof.perc
-        results[,38] <- gof.NH3
-        results[,39] <- gof.SO2
-        results[,40] <- gof.NO
-
-        results[,41] <- coeffs[1,] - OLS
-        results[,42] <- (coeffs[1,] - OLS)/coeffs[1,]
-
-        colnames(results) <- paste(colnames(results),DOAS.model)
-    } 
-
 
     if (lite) {
-        return.AICcTab <- FALSE
         return.specData <- FALSE
     } 
 
-    InputList <- list(
-        program.version=program.version,
-        DOAS.model=DOAS.model,
-        evalperiod=evalperiod,
-        tz.DOAS=tz.DOAS,
-        path.length=path.length,
-        tz.Output=tz.Output,
-        filter.type=filter.type,
-        use.arima=use.arima,
-        use.robust=use.robust,
-        filter.window=filter.window, 
-        filter.strength=filter.strength,
-        fit.window=fit.window,
-        straylight.window=straylight.window,
-        skip.check.daily=skip.check.daily,
-        corr.fixed.pattern=corr.fixed.pattern,
-        fixed.pattern.length=fixed.pattern.length,
-        correct.linearity=correct.linearity,
-        correct.straylight=correct.straylight,
-        correct.dark=correct.dark,
-        use.ref = use.ref,
-        plot.results=plot.results,
-        avg.period=avg.period,
-        plot.cal=plot.cal,
-        tau.shift=tau.shift,
-        save.dir=save.dir,
-        rawdata.dir=rawdata.dir,
-        reference.dir=reference.dir,
-        save.results=save.results,
-        arima.Order.FP=arima.Order.FP,
-        special.Args=special.Args,
-        ref.spec=ref.spec,
-        ref.dark.spec=ref.dark.spec,
-        dark.spec=dark.spec,
-        NH3.cal.spec=NH3.cal.spec,
-        SO2.cal.spec=SO2.cal.spec,
-        NO.cal.spec=NO.cal.spec,
-        N2.NH3.cal.spec=N2.NH3.cal.spec,
-        N2.SO2.cal.spec=N2.SO2.cal.spec,
-        N2.NO.cal.spec=N2.NO.cal.spec,
-        N2.dark.cal.spec=N2.dark.cal.spec,
-        N2.cal.spec=N2.cal.spec,
-        force.write.daily=force.write.daily,
-        lite=lite,
-        return.AICcTab=return.AICcTab,
-        return.specData=return.specData,
-        ncores=ncores,
-        add.name=add.name,
-        ...=...
-    )
-
-
-    ### save results
-    ### ******************************************************************************
-    if (any(c(save.results,plot.cal,!isFALSE(plot.results)))) {
-        ### create result folder
-        ### ******************************************************************************
-        cat("create result directory\n")
-        now <- format(now1 <- Sys.time(),"%Y%m%d%H%M")
-        meas.date <- paste(format(timerange,"%y%m%d%H%M"),collapse="-")
-        if (add.name!="") {add.name <- paste0("_",add.name)}
-        folder <- paste(c("miniDOAS_",DOAS.model,"_", meas.date,"_Eval",now,add.name),collapse="")
-        dir.create(paste(c(save.dir,"/",folder),collapse=""),recursive=TRUE)
-        ### create and save log file
-        ### ******************************************************************************
-        cat("\n"); cat("create and save log file\n")
-        cat("to do: logfile!\n")
-        time.res2 <- paste(unique(round(time.res/1000, 0)),collapse="/")
-        logfile <- c(
-            paste0("miniDOAS evaluation program version: ",program.version),
-            "*****************************************************************************",
-            paste0("calculation performed on: ",format(now1,format="%d.%m.%Y %H:%M")),
-            paste0("raw data file path: ",rawdata.dir),
-            paste0("evaluated ",ncol(RawData$RawData)," raw data files"),
-            paste0("results saved at: ",save.dir,"/",folder),
-            "",
-            paste0("reference files directory: ",reference.dir),
-            if (is.list(ref.spec)) {
-                paste0("\"in-calculation\" lamp reference spectrum chosen between: ",paste(CalRefSpecs$dat.ref$timerange,collapse=" - ")," (",tz(CalRefSpecs$dat.ref$timerange),")\nfrom the raw data located at: ",ref.spec$dir)
-            } else {
-                paste0("lamp reference spectrum recorded on: ",paste(CalRefSpecs$dat.ref$timerange,collapse=" - "))
-            },
-            # if (!any(is.na(ref.dark.spec)))paste(c("\"in-calculation\" dark reference spectrum chosen between: ",paste(ref.dark.spec[[2]],collapse=" - "),"\nfrom the data located at: ",ref.dark.spec[[1]]),collapse=""),
-            paste0("NH3 calibration conditions: NH3 conc = ",round(CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg,2)," mg/m3 in a cuvette of ",CalRefSpecs$dat.NH3$cuvette$cuvetteLength," m length"),
-            paste0("SO2 calibration conditions: SO2 conc = ",round(CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg,2)," mg/m3 in a cuvette of ",CalRefSpecs$dat.SO2$cuvette$cuvetteLength," m length"),
-            paste0("NO calibration conditions: NO conc = ",round(CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg,2)," mg/m3 in a cuvette of ",CalRefSpecs$dat.NO$cuvette$cuvetteLength," m length"),
-            "",
-            sprintf("total light path = %1.2f m",path.length),
-            paste0("spectrometer: ",DOAS.info$Spectrometer$"Spectrometer Name"),
-            paste0(round(mean(n),0)," spectra were accumulated on average over ",time.res2," seconds for one data file"),    
-            "",
-            paste0("data evaluated from ",format(st[1],format="%d.%m.%Y %H:%M:%S")," to ",format(et[length(et)],format="%d.%m.%Y %H:%M:%S")," (",tz(st),")"),
-            paste0("spectra were filtered over ",DOAS.win$filter.window[1]," to ",DOAS.win$filter.window[2]," nm"),
-            paste0("... using ",if (DOAS.win$filter.type %in% "special") {
-                paste0("the 'special' filter by Sintermann et al. (2016) with the following control settings:\n",
-                    paste(names(DOAS.win$special.control),gsub("\n","",DOAS.win$special.control),sep=": ",collapse=", ")
-                )
-                } else if (DOAS.win$filter.type %in% "loess") {
-                    paste0("a loess filter with span: ",DOAS.win$filter.strength," and family: ",DOAS.win$special.control$fam)
-                } else {
-                    paste0("a ",if (DOAS.win$double) "double " else "",sub("Rect","rectangular",DOAS.win$filter.type)," moving average")
-                }),
-            paste0("spectra were ",ifelse(!tau.fix,"","not "),"allowed to be shifted",
-                ifelse(!tau.fix,
-                    if (all(diff(tau.shift)==1)) {
-                        paste0(" between ",paste(range(tau.shift),collapse=" to ")," pixel")
-                    }else{
-                        paste0(" at c(",paste(tau.shift,collapse=","),") pixel")
-                    },
-                    ""
-                )
-                ),
-            if (tau.fix)paste0("pixel shift was fixed at ",tau.shift),
-            if (corr.fixed.pattern)paste0("a dynamically pre-evaluated fixed residual pattern calculated by runmed over ",fixed.pattern.length," datapoints was subtracted"),
-            if (use.arima) {
-                paste0("the multiple linear fit was performed using",if (use.robust) " robust " else " ","ARIMA with",ifelse(is.null(dim(arima.Order)),"out "," "),"AICc model averaging",if(is.null(dim(arima.Order))) {c(", given ARIMA order ",paste(arima.Order,collapse="/"))})
-            }else{
-                paste0("the multiple linear fit was performed using",if (use.robust) " robust " else " ","OLS")
-            },
-            paste0("the fit was performed between ",DOAS.win$fit.window[1]," and ",DOAS.win$fit.window[2]," nm"),
-            if (corr.fixed.pattern&&use.arima)paste(c("the multiple linear fit of the fix pattern corrected data was performed using ARIMA with",ifelse(is.null(dim(arima.Order.FP)),"out "," "),"AICc model averaging",if(is.null(dim(arima.Order.FP))) {c(", given ARIMA order ",paste(arima.Order.FP,collapse="/"))}),collapse=""),
-            paste0("(potential) dark-count/straylight logging from ",DOAS.win$straylight.window[1]," to ",DOAS.win$straylight.window[2]," nm"),
-            # paste(c( "NH3 concentrations were calculated based on ",ifelse(use.calibration, "calibrated", "published"), " absorption-crosssections"),collapse=""),
-            # if (DOAS.model!="S1") { 
-            #   paste(c( "... the respective NH3 DOAS-curves differ roughly by a factor of ", theory.NH3.factor, " (calibration vs. published)\n"),
-            #   c( "theoretically, the spectrum I will be attenuated by ",round(theoretical.conc(I.attenuation.min[1], 1, path.length, 1000, 293, 17, NH3.ccd.crossec[ind.max.crosssect]),0)," ug/m3 NH3 down to ", I.attenuation.min[1]*100, "% I at wavelength of ",round(f[x1[ind.max.crosssect]],2)," nm (= location of maximum absorption cross-section)"),collapse="")
-            # },
-            if (use.arima&&!is.null(dim(arima.Order))) {
-                paste("*****************************************************************************\nSupplied Orders:\n",
-                    paste(apply(arima.Order,1,paste,collapse="/"),collapse="\n"),
-                    "\n*****************************************************************************")
-            }
-
-        )
-
-        write(logfile, file=paste0(save.dir,"/",folder,"/",folder,"_log.txt"))    
-    } else {
-        folder <- NULL
-    }
-
-    if (save.results) {
-        cat("\n"); cat("write results\n")
-        write.table(results, file=paste(c(save.dir,"/",folder,"/",folder,"_avg",avg.period,".csv"),collapse=""), sep=";", na="#N/A", dec=".", row.names=FALSE, col.names=TRUE)
-
-    }
-
-
-    ### plot calibration spectra and DOAS curves
-    ### ******************************************************************************
-    if (plot.cal) {
-        cat("\n"); cat("plot calibration spectra and DOAS curves")
-        calref.cols <- c("blue", "green", "orange", "cyan")                                                                                                                                                                                        
-        f <- DOAS.info$Spectrometer$wavelength
-        x1 <- DOAS.win$pixel_filter
-        x2 <- DOAS.win$pixel_fit
-        x4 <- DOAS.win$pixel_dc
-        NH3.cal.ug <- CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg * 1000 * CalRefSpecs$dat.NH3$cuvette$cuvetteLength
-        SO2.cal.ug <- CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg * 1000 * CalRefSpecs$dat.SO2$cuvette$cuvetteLength
-        NO.cal.ug <- CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg * 1000 * CalRefSpecs$dat.NO$cuvette$cuvetteLength
-        NH3.doascurve <- Cal.dc$NH3.dc
-        SO2.doascurve <- Cal.dc$SO2.dc
-        NO.doascurve <- Cal.dc$NO.dc
-        pdf(file=paste(c(save.dir,"/",folder,"/",folder,"_cal.pdf"),collapse=""), width=0.8*7, height=1.25*7)
-        par(mfcol=c(3,1))
-        plot.calibration.spectra(calref.cols, f[x1], CalRefSpecs$dat.ref$dat.spec[x1], CalRefSpecs$dat.dark$dat.spec[x1], CalRefSpecs$dat.N2.NH3$dat.spec[x1], CalRefSpecs$dat.N2.dark$dat.spec[x1], CalRefSpecs$dat.NH3$dat.spec[x1], CalRefSpecs$dat.SO2$dat.spec[x1], CalRefSpecs$dat.NO$dat.spec[x1])
-        plot.calibration.diffspecs(calref.cols, f[x1], exp(DiffSpec$NH3.diffspec[x1]), exp(DiffSpec$SO2.diffspec[x1]), exp(DiffSpec$NO.diffspec[x1]), NH3.doascurve * NH3.cal.ug, SO2.doascurve * SO2.cal.ug, NO.doascurve * NO.cal.ug)
-        plot.calibration.DOAScurves(calref.cols, f[x1], f[x2], NH3.doascurve[x4], SO2.doascurve[x4], NO.doascurve[x4])
-        # if (DOAS.model!="S1")lines(f[x2], NH3.doascurve.theor[x4], col="gray")
-        #lines(f[x2], SO2.doascurve.theor[x4], col="gray")
-        graphics.off()
-    }   
-
-    ### plot evaluation steps, and optionally merge individual plots into one pdf animation (via LaTex)
-    ### ******************************************************************************
-    if (!isFALSE(plot.results)) {
-        cat("\nplot results evaluation details\n")
-        plot.name <- paste0(folder,"_avg",avg.period)
-        gwd <- getwd()
-        on.exit(setwd(gwd))
-        setwd(paste0(save.dir,"/",folder))
-        if (isTRUE(plot.results) || !(tolower(plot.results) %in% "html")) {
-            if (isTRUE(plot.results)) plot.results <- "pdf"
-            plotfu <- get(plot.results,mode="function")
-            if (plot.results %in% "pdf") pdf(file=paste0(plot.name,".pdf"),onefile=TRUE)
-            for (i in 1:nrow(results)) {
-
-                cat(paste("\r saving plots... ",format(x=round(i/nrow(results)*100,1),nsmall=1),"%",sep=""))
-
-                if (corr.fixed.pattern) {
-                    avg.fixed.pattern <- fp.avg[i,]
-                } else {
-                    avg.fixed.pattern <- rep(0, dim2)
-                }
-
-                best.tau <- results[i,6]
-
-                m.diffspec <- DiffSpec$diffspec[DOAS.win$pixel_filter,i]
-                m.diffspec.broadband <- meas.diffspec.broadband[,i]
-                m.meas.doascurve <- meas.doascurve[,i]
-                f <- DOAS.info$Spectrometer$wavelength
-                x1 <- DOAS.win$pixel_filter
-                x2 <- DOAS.win$pixel_fit
-                x4 <- DOAS.win$pixel_dc
-
-                if (corr.fixed.pattern) {
-                    m.fitted.doascurve.best <- fp.fitted.doascurve[,i]
-                    m.residual.best <- fp.residual.best[,i]
-                } else {
-                    m.fitted.doascurve.best <- fitted.doascurve[,i]
-                    m.residual.best <- residual.best[,i]  
-                }
-
-                if (!all(is.na(m.meas.doascurve))) {
-                    if (!(plot.results %in% "pdf")) plotfu(file=paste0(plot.name,"_",i,".",plot.results), width=400, height=600)
-                    par(mfcol=c(3,1),mar=c(2, 4, 2, 1)+0.5,oma=c(2,0,3,0))
-                    cex.annotations <- 1.25
-
-                    ### differential spectrum and filtered differential broadband spectrum
-                    plot(f[x1], x1, type="n", ylim=range(m.diffspec, na.rm=TRUE), xlab="", ylab="[relative units]", main="differential spectrum", cex.axis=cex.annotations, cex.lab=cex.annotations)
-                    lines(f[x1], m.diffspec, lty=1, lwd=1.5, col="black") 
-                    lines(f[x1], m.diffspec.broadband, lty=1, lwd=1.5, col="green") 
-                    legend("bottomright", legend=c("differential","differential broadband"), bty="n", col=c("black","green"), lty=c(1,2), cex=0.75)
-
-                    ### measued & fitted DOAS curve
-                    plot(f[x1], x1, type="n", ylim=range(c(m.fitted.doascurve.best,m.meas.doascurve[x4],m.meas.doascurve[x4] - avg.fixed.pattern,m.meas.doascurve[x4+best.tau] - avg.fixed.pattern), na.rm=TRUE), xlab="", ylab="[relative units]", main=paste("DOAS curves &",ifelse(use.robust,"robust",""),ifelse(use.arima,"ARIMA fit","OLS fit")), cex.axis=cex.annotations, cex.lab=cex.annotations)
-                    abline(h=0,lty=2,col="gray60")
-                    lines(f[x1 - best.tau], m.meas.doascurve, lty=1.5, lwd=1, col="darkgreen")
-                    lines(f[x2], (m.meas.doascurve[x4] - avg.fixed.pattern), lty=1, lwd=1, col="gray80")
-                    lines(f[x2], (m.meas.doascurve[x4+best.tau] - avg.fixed.pattern), lty=1, lwd=1.5, col="black")
-                    lines(f[x2], m.fitted.doascurve.best, lty=1, lwd=1.5, col="blue")
-                    lgnd <- if (corr.fixed.pattern) {c("measured","measured-FP+shift","measured-FP","fitted")} else{c("measured","measured+shift","measured","fitted")}
-                    lgnd.lty <- c(1,1,1,1)
-                    lgnd.col <- c("darkgreen","black","gray80","blue")
-                    legend("bottomright", legend=lgnd, bty="n", col=lgnd.col, lty=lgnd.lty, cex=0.75)
-
-                    ### residual spectrum
-                    plot(f[x1], x1, type="n", ylim=range(c(m.fitted.doascurve.best,m.meas.doascurve[x4],m.meas.doascurve[x4] - avg.fixed.pattern,m.meas.doascurve[x4+best.tau] - avg.fixed.pattern), na.rm=TRUE), xlab="", ylab="[relative units]", main=sprintf("residual spectrum: SAE = %1.2E, SRE = %1.2E",sum(abs(m.residual.best)),sum(m.residual.best)), cex.axis=cex.annotations, cex.lab=cex.annotations)
-                    abline(h=0,lty=2,col="gray60")
-                    if (corr.fixed.pattern) {lines(f[x2 - best.tau], avg.fixed.pattern, lty=1, lwd=1.5, col="gold")}
-                    lines(f[x2], m.fitted.doascurve.best, lty=2, lwd=1.5, col="blue")
-                    # lines(f[x2], m.residual, lty=2, lwd=1, col="gray80")
-                    lines(f[x2], m.residual.best, lty=1, lwd=1.5, col="black")
-
-                    ### legend & title
-                    lgnd <- if (corr.fixed.pattern) {c("fixed pattern","fitted DOAS curve","residuals")} else{c("fitted DOAS curve","residuals")}
-                    lgnd.lty <- if (corr.fixed.pattern) {c(2,2,1)} else{c(2,1)}
-                    lgnd.col <- if (corr.fixed.pattern) {c("gold","blue","black")} else{c("blue","black")}
-                    legend("bottomright", legend=lgnd, bty="n", col=lgnd.col, lty=lgnd.lty, cex=0.75)
-                    msg1 <- paste(results[i,1]," to ",results[i,2],", n=",results[i,5],", tau=",best.tau," px, Imax=",round(results[i,15],0)," counts", sep="")
-                    msg2 <- paste("NH3=",round(results[i,9],1)," +- ",round(results[i,10],2)," ug/m3, SO2=",round(results[i,11],1)," +- ",round(results[i,12],2)," ug/m3, NO=",round(results[i,13],1)," +- ",round(results[i,14],2)," ug/m3", sep="")
-                    # mtext(as.expression(substitute(italic(msg), list(msg=msg))), line=-1.25, outer=TRUE, cex=0.5)
-                    # mtext(substitute(italic(msg), list(msg=msg1)), line=1, outer=TRUE, cex=0.75)
-                    # mtext(substitute(italic(msg), list(msg=msg2)), line=-0.5, outer=TRUE, cex=0.75)
-                    mtext(msg1, line=1, outer=TRUE, cex=0.75)
-                    mtext(msg2, line=-0.5, outer=TRUE, cex=0.75)
-                    mtext("wavelength [nm]",side=1,outer=TRUE,cex=0.75,adj=0.53)
-
-                    if (!(plot.results %in% "pdf")) dev.off()
-                }
-            }
-        } else {
-            images_dir <- paste0(save.dir,"/",folder,"/images")
-            dir.create(images_dir)
-            require(animation)
-            saveHTML(
-                {for (i in 1:nrow(results)) {
-
-                    cat(paste("\r saving plots... ",format(x=round(i/nrow(results)*100,1),nsmall=1),"%",sep=""))
-
-                    if (corr.fixed.pattern) {
-                        avg.fixed.pattern <- fp.avg[i,]
-                    } else {
-                        avg.fixed.pattern <- rep(0, dim2)
-                    }
-
-                    best.tau <- results[i,6]
-
-                    m.diffspec <- DiffSpec$diffspec[DOAS.win$pixel_filter,i]
-                    m.diffspec.broadband <- meas.diffspec.broadband[,i]
-                    m.meas.doascurve <- meas.doascurve[,i]
-                    f <- DOAS.info$Spectrometer$wavelength
-                    x1 <- DOAS.win$pixel_filter
-                    x2 <- DOAS.win$pixel_fit
-                    x4 <- DOAS.win$pixel_dc
-
-                    if (corr.fixed.pattern) {
-                        m.fitted.doascurve.best <- fp.fitted.doascurve[,i]
-                        m.residual.best <- fp.residual.best[,i]
-                    } else {
-                        m.fitted.doascurve.best <- fitted.doascurve[,i]
-                        m.residual.best <- residual.best[,i]  
-                    }
-
-                    if (!all(is.na(m.meas.doascurve))) {
-                        png(file=paste0(images_dir,"/",plot.name,"_",i,".png"), width=400, height=600)
-                        par(mfcol=c(3,1),mar=c(2, 4, 2, 1)+0.5,oma=c(2,0,3,0))
-                        cex.annotations <- 1.25
-
-                        ### differential spectrum and filtered differential broadband spectrum
-                        plot(f[x1], x1, type="n", ylim=range(m.diffspec, na.rm=TRUE), xlab="", ylab="[relative units]", main="differential spectrum", cex.axis=cex.annotations, cex.lab=cex.annotations)
-                        lines(f[x1], m.diffspec, lty=1, lwd=1.5, col="black") 
-                        lines(f[x1], m.diffspec.broadband, lty=1, lwd=1.5, col="green") 
-                        legend("bottomright", legend=c("differential","differential broadband"), bty="n", col=c("black","green"), lty=c(1,2), cex=0.75)
-
-                        ### measued & fitted DOAS curve
-                        plot(f[x1], x1, type="n", ylim=range(c(m.fitted.doascurve.best,m.meas.doascurve[x4],m.meas.doascurve[x4] - avg.fixed.pattern,m.meas.doascurve[x4+best.tau] - avg.fixed.pattern), na.rm=TRUE), xlab="", ylab="[relative units]", main=paste("DOAS curves &",ifelse(use.robust,"robust",""),ifelse(use.arima,"ARIMA fit","OLS fit")), cex.axis=cex.annotations, cex.lab=cex.annotations)
-                        abline(h=0,lty=2,col="gray60")
-                        lines(f[x1 - best.tau], m.meas.doascurve, lty=1.5, lwd=1, col="darkgreen")
-                        lines(f[x2], (m.meas.doascurve[x4] - avg.fixed.pattern), lty=1, lwd=1, col="gray80")
-                        lines(f[x2], (m.meas.doascurve[x4+best.tau] - avg.fixed.pattern), lty=1, lwd=1.5, col="black")
-                        lines(f[x2], m.fitted.doascurve.best, lty=1, lwd=1.5, col="blue")
-                        lgnd <- if (corr.fixed.pattern) {c("measured","measured-FP+shift","measured-FP","fitted")} else{c("measured","measured+shift","measured","fitted")}
-                        lgnd.lty <- c(1,1,1,1)
-                        lgnd.col <- c("darkgreen","black","gray80","blue")
-                        legend("bottomright", legend=lgnd, bty="n", col=lgnd.col, lty=lgnd.lty, cex=0.75)
-
-                        ### residual spectrum
-                        plot(f[x1], x1, type="n", ylim=range(c(m.fitted.doascurve.best,m.meas.doascurve[x4],m.meas.doascurve[x4] - avg.fixed.pattern,m.meas.doascurve[x4+best.tau] - avg.fixed.pattern), na.rm=TRUE), xlab="", ylab="[relative units]", main=sprintf("residual spectrum: SAE = %1.2E, SRE = %1.2E",sum(abs(m.residual.best)),sum(m.residual.best)), cex.axis=cex.annotations, cex.lab=cex.annotations)
-                        abline(h=0,lty=2,col="gray60")
-                        if (corr.fixed.pattern) {lines(f[x2 - best.tau], avg.fixed.pattern, lty=1, lwd=1.5, col="gold")}
-                        lines(f[x2], m.fitted.doascurve.best, lty=2, lwd=1.5, col="blue")
-                        # lines(f[x2], m.residual, lty=2, lwd=1, col="gray80")
-                        lines(f[x2], m.residual.best, lty=1, lwd=1.5, col="black")
-
-                        ### legend & title
-                        lgnd <- if (corr.fixed.pattern) {c("fixed pattern","fitted DOAS curve","residuals")} else{c("fitted DOAS curve","residuals")}
-                        lgnd.lty <- if (corr.fixed.pattern) {c(2,2,1)} else{c(2,1)}
-                        lgnd.col <- if (corr.fixed.pattern) {c("gold","blue","black")} else{c("blue","black")}
-                        legend("bottomright", legend=lgnd, bty="n", col=lgnd.col, lty=lgnd.lty, cex=0.75)
-                        msg1 <- paste(results[i,1]," to ",results[i,2],", n=",results[i,5],", tau=",best.tau," px, Imax=",round(results[i,15],0)," counts", sep="")
-                        msg2 <- paste("NH3=",round(results[i,9],1)," +- ",round(results[i,10],2)," ug/m3, SO2=",round(results[i,11],1)," +- ",round(results[i,12],2)," ug/m3, NO=",round(results[i,13],1)," +- ",round(results[i,14],2)," ug/m3", sep="")
-                        # mtext(as.expression(substitute(italic(msg), list(msg=msg))), line=-1.25, outer=TRUE, cex=0.5)
-                        # mtext(substitute(italic(msg), list(msg=msg1)), line=1, outer=TRUE, cex=0.75)
-                        # mtext(substitute(italic(msg), list(msg=msg2)), line=-0.5, outer=TRUE, cex=0.75)
-                        mtext(msg1, line=1, outer=TRUE, cex=0.75)
-                        mtext(msg2, line=-0.5, outer=TRUE, cex=0.75)
-                        mtext("wavelength [nm]",side=1,outer=TRUE,cex=0.75,adj=0.53)
-
-                        dev.off()
-                    }
-            }
-            cat("\n")}
-                ,htmlfile=paste0(plot.name,".html"), autobrowse=FALSE, autoplay=FALSE, use.dev=FALSE, ani.type='png', width=400, height=600, interval=0.3, verbose=FALSE, img.name=paste0("Rplot_",plot.name,"_"), title=paste0(plot.name,"_")
-            )
-        }
-
-        graphics.off()
-        setwd(gwd)
-        on.exit()
-        cat("\nfinished plotting")
-    }
-
 
     cat("\nfinished evaluation of",DOAS.model,"\n")
-    if (!return.AICcTab)aicctab <- NULL
     if (return.specData) {
         vars <- list(f=f,x1=x1,x2=x2,x3=x3,x4=x4,dat.ref=dat.ref,dat.ref.dark=dat.ref.dark,dat.dark=dat.dark,dat.N2.NH3=dat.N2.NH3,dat.N2.SO2=dat.N2.SO2,dat.N2.NO=dat.N2.NO,dat.N2.dark=dat.N2.dark,dat.NH3=dat.NH3,dat.SO2=dat.SO2,dat.NO=dat.NO,cal.diffspecs=cal.diffspecs,NH3.doascurve=NH3.doascurve,SO2.doascurve=SO2.doascurve,NO.doascurve=NO.doascurve,NH3.doascurve.theor=NH3.doascurve.theor)
     } else {
@@ -2743,11 +1929,9 @@ evalOffline <- function(
     }
 
     results <- structure(results
-        ,AICc.Tables=aicctab
         ,vars=vars
         ,CalRefSpecs=CalRefSpecs
         ,RawData=RawData
-        ,inputlist=InputList
         ,callEval=match.call()
         ,class=c("DOASeval","data.frame")
     )

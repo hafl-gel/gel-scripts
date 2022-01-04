@@ -381,8 +381,8 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
 
     }
 
-    # is this still necessary?
-    raw_data <- raw_data[!is.null(raw_data)]
+    # remove empty folders
+    raw_data <- raw_data[sapply(raw_data, function(x) !is.null(x))]
 
     if (!length(raw_data)) {
         stop("No data available for specified time range!")

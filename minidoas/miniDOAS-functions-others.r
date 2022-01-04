@@ -33,8 +33,8 @@ prepTimeRange <- function(tr,tzDOAS="") {
 ### ****************************************************************************** 
 linearity.func <- function(x, cfs) {
     y <- cfs[1] 
-    for (i in 1:(length(cfs)-1)) {
-        y <- y + cfs[i+1] * x^i  
+    for (i in seq.int(length(cfs) - 1)) {
+        y <- y + cfs[i + 1] * x ^ i  
     }
     return(y)
 }
@@ -499,145 +499,95 @@ avgSpec <- function(rawdat,type=c("raw","cal","ref","dark"),tracer=c("ambient","
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #~~ function; get dark/filter/fit windows and filter strength:
-getWindows <- function(DOASinfo,filter.type="BmHarris",timerange=Sys.time(),straylight.window=NULL,filter.window=NULL,fit.window=NULL,filter.strength=NULL,tau.shift=NULL,double=TRUE
-    ,special.control=list(b=3.5,Scale=function(r) median(abs(r))/0.6745,delta=0,filter.strength_multiplication=1.25,filter.strength_loess=0.2,fam="gaussian",maxit=c(10,0))) {
+getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(), 
+    straylight.window = NULL, filter.window = NULL, fit.window = NULL, filter.strength = NULL, 
+    tau.shift = NULL, double = TRUE) {
 
-    if (inherits(DOASinfo,"character"))DOASinfo <- getDOASinfo(DOASinfo,timerange)
+    # get doas info
+    if (inherits(DOASinfo, "character")) DOASinfo <- getDOASinfo(DOASinfo, timerange)
 
-    check.fit.win <- FALSE
-    if (DOASinfo$Spectrometer$Serial == 'AvantesS1') {
-        if (any(filter.type == c("loess","special"))) {
-            if (is.null(filter.window))filter.window <- c(202.2,226) 
-            if (is.null(filter.strength))filter.strength <- switch(filter.type, loess=0.22, special=0.17)
-            if (is.null(fit.window))fit.window <- c(204.6,223.6)
-        } else if (any(filter.type == c("Rect","Hann","Hamming","Blackman","BmNuttall"
-                    ,"Sin","Gauss","Kaiser","DolphChebyshev","BmHarris","Tukey","Poisson","Exp","ExpHamming"))) {
-            check.fit.win <- TRUE
-            if (is.null(filter.window))filter.window <- c(203, 226)                                                                                                                            ### wavelength window of evaluation: c(min,max) [nm] (from this, in case of moving average lowpass filter applications, the edge of the filter is thrown away in addition)
-            if (is.null(filter.strength)) {
-                filter.strength <- 41
-            } else if (!as.logical(filter.strength%%2)) {
-                filter.strength <- round(filter.strength)
-                if (!as.logical(filter.strength%%2)) {
-                    filter.strength <- filter.strength + 1
-                }
-                warning("filter.strength must be an uneven number and has been rounded to the nearest uneven number.")
-            }  
-            if (is.null(fit.window))fit.window <- c(204.1,224.85)
-        } else if (filter.type == "FlatTop") {
-            check.fit.win <- TRUE
-            if (is.null(filter.window))filter.window <- c(203, 226)                                                                                                                            ### wavelength window of evaluation: c(min,max) [nm] (from this, in case of moving average lowpass filter applications, the edge of the filter is thrown away in addition)
-            if (is.null(filter.strength)) {
-                filter.strength <- 71
-            } else if (!as.logical(filter.strength%%2)) {
-                filter.strength <- round(filter.strength)
-                if (!as.logical(filter.strength%%2)) {
-                    filter.strength <- filter.strength + 1
-                }
-                warning("filter.strength must be an uneven number and has been rounded to the nearest uneven number.")
-            } 
-            if (is.null(fit.window))fit.window <- c(204.1,224.85)      
-        } else {
-            stop("filter.type = \"",filter.type,"\" is not a valid filter type")
-        }
-
-        if (is.null(straylight.window))straylight.window <- c(250, 260)                                                                                                        ### wavelength (nm) window at which the dark-drift of spectrometer is monitored (at ccd pixels > ca. 230 nm that are covered)                                                                                                                     ### performs the multiple linear fit with weights according to the absolut contribution of all absorption bands over the wavelength window
-
+    # check filter
+    if (filter.type %in% c("Rect", "Hann", "Hamming", "Blackman", "BmNuttall"
+                , "Sin", "Gauss", "Kaiser", "DolphChebyshev", "BmHarris", "Tukey", "Poisson", "Exp", "ExpHamming")) {
     } else {
-        if (any(filter.type == c("loess","special"))) {
-            # if (is.null(filter.window))filter.window <- c(203,229.7) 
-            if (is.null(filter.window))filter.window <- c(202.2,230.6) 
-            if (is.null(filter.strength))filter.strength <- switch(filter.type, loess=0.22, special=0.17)
-            if (is.null(fit.window))fit.window <- c(204.3,228.6)
-        } else if (any(filter.type == c("Rect","Hann","Hamming","Blackman","BmNuttall"
-                    ,"Sin","Gauss","Kaiser","DolphChebyshev","BmHarris","Tukey","Poisson","Exp","ExpHamming"))) {
-            check.fit.win <- TRUE
-            if (is.null(filter.window))filter.window <- c(202.2,230.6)                                                                                                                            ### wavelength window of evaluation: c(min,max) [nm] (from this, in case of moving average lowpass filter applications, the edge of the filter is thrown away in addition)
-            if (is.null(filter.strength)) {
-                filter.strength <- 25
-            } else if (!as.logical(filter.strength%%2)) {
-                filter.strength <- round(filter.strength)
-                if (!as.logical(filter.strength%%2)) {
-                    filter.strength <- filter.strength + 1
-                }
-                warning("filter.strength must be an uneven number and has been rounded to the nearest uneven number.")
-            }  
-            if (is.null(fit.window))fit.window <- c(204.5,228.4)
-        } else if (filter.type == "FlatTop") {
-            check.fit.win <- TRUE
-            if (is.null(filter.window))filter.window <- c(202.2,230.6)                                                                                                                            ### wavelength window of evaluation: c(min,max) [nm] (from this, in case of moving average lowpass filter applications, the edge of the filter is thrown away in addition)
-            if (is.null(filter.strength)) {
-                filter.strength <- 51
-            } else if (!as.logical(filter.strength%%2)) {
-                filter.strength <- round(filter.strength)
-                if (!as.logical(filter.strength%%2)) {
-                    filter.strength <- filter.strength + 1
-                }
-                warning("filter.strength must be an uneven number and has been rounded to the nearest uneven number.")
-            } 
-            if (is.null(fit.window))fit.window <- c(204.5,228.4)     
-        } else {
-            stop("filter.type = \"",filter.type,"\" is not a valid filter type")
-        }
-        if (is.null(straylight.window))straylight.window <- c(150,160) # c(141.5059, 145.3158) alte Version   ### with the current ccd wavelength calibration (pixel 50:90) these correspond to a range at which the straylight induced offset might be monitored 
+        stop("filter.type = \"", filter.type, "\" is not a valid filter type")
     }
-    if (is.null(tau.shift)||is.na(tau.shift)) tau.shift <- 0                                                      ### if tau consideration is switched off => tau=0
+    
+    # check filter window
+    if (is.null(filter.window)) filter.window <- c(202.2, 230.6)
 
-    ### wavelength/pixel indices
-    ### ******************************************************************************
-    pixel1 <- which(DOASinfo$Spectrometer$wavelength >= filter.window[1] & DOASinfo$Spectrometer$wavelength <= filter.window[2])
+    # check filter strength
+    if (is.null(filter.strength)) {
+        filter.strength <- 25
+    } else if ((filter.strength %% 2) < 1) {
+        filter.strength <- round(filter.strength)
+        if ((filter.strength %% 2) < 1) {
+            filter.strength <- filter.strength + 1
+        }
+        warning("filter.strength must be an uneven number and has been rounded to the nearest uneven number.")
+    }  
 
-    pixel2 <- max(
+    # check fit.window
+    if (is.null(fit.window)) fit.window <- c(204.5, 228.4)
+
+    # check straylight window
+    if (is.null(straylight.window)) straylight.window <- c(150, 160)
+
+    # check tau shift
+    if (is.null(tau.shift) || is.na(tau.shift)) tau.shift <- 0
+
+    # filter pixel
+    pixel_filter <- which(DOASinfo$Spectrometer$wavelength >= filter.window[1] & DOASinfo$Spectrometer$wavelength <= filter.window[2])
+
+    # fitting pixel
+    pixel_fit <- max(
         which(DOASinfo$Spectrometer$wavelength >= fit.window[1])[1]
-        ,pixel1[1]-tau.shift
+        ,pixel_filter[1]-tau.shift
         ):min(
         rev(which(DOASinfo$Spectrometer$wavelength <= fit.window[2]))[1]
-        ,rev(pixel1)[1]-tau.shift
+        ,rev(pixel_filter)[1]-tau.shift
     )
-    pixel3 <- which(DOASinfo$Spectrometer$wavelength >= straylight.window[1] & DOASinfo$Spectrometer$wavelength <= straylight.window[2])
-    if (check.fit.win) {
-        fs <- if (double) filter.strength else (filter.strength - 1)/2
-        if (abs(pixel1[1]-pixel2[1])<fs) {
-            pixel2Lo <- pixel1[1]+fs
-            fit.window[1] <- DOASinfo$Spectrometer$wavelength[pixel2Lo]
-            warning(sprintf("Too broad filtering: lower limit of argument \"fit.window\" is increased from %1.4f to %1.4f nm",DOASinfo$Spectrometer$wavelength[pixel2[1]],fit.window[1]))
-        } else {
-            pixel2Lo <- pixel2[1]
-        }
-        if (abs(rev(pixel1)[1]-rev(pixel2)[1])<fs) {
-            pixel2Hi <- rev(pixel1)[1]-fs
-            fit.window[2] <- DOASinfo$Spectrometer$wavelength[pixel2Hi]
-            warning(sprintf("Too broad filtering: upper limit of argument \"fit.window\" is decreased from %1.4f to %1.4f nm",DOASinfo$Spectrometer$wavelength[rev(pixel2)[1]],fit.window[2]))
-        } else {
-            pixel2Hi <- rev(pixel2)[1]
-        }
-        pixel2 <- seq(pixel2Lo,pixel2Hi)
+
+    # straylight pixel
+    pixel_straylight <- which(DOASinfo$Spectrometer$wavelength >= straylight.window[1] & DOASinfo$Spectrometer$wavelength <= straylight.window[2])
+
+    # check filter vs fit windows
+    if (abs(pixel_filter[1]-pixel_fit[1])< filter.strength) {
+        pixel_fitLo <- pixel_filter[1]+ filter.strength
+        fit.window[1] <- DOASinfo$Spectrometer$wavelength[pixel_fitLo]
+        warning(sprintf("Too broad filtering: lower limit of argument \"fit.window\" is increased from %1.4f to %1.4f nm",DOASinfo$Spectrometer$wavelength[pixel_fit[1]],fit.window[1]))
+    } else {
+        pixel_fitLo <- pixel_fit[1]
     }
-    pixel4 <- match(pixel2,pixel1)
-    if (anyNA(pixel4)) {
-        pixel4 <- pixel4[!is.na(pixel4)]
-        pixel2 <- pixel1[pixel4]
-        fit.window <- c(DOASinfo$Spectrometer$wavelength[pixel2[1]],DOASinfo$Spectrometer$wavelength[rev(pixel2)[1]])
+    if (abs(rev(pixel_filter)[1]-rev(pixel_fit)[1])< filter.strength) {
+        pixel_fitHi <- rev(pixel_filter)[1]- filter.strength
+        fit.window[2] <- DOASinfo$Spectrometer$wavelength[pixel_fitHi]
+        warning(sprintf("Too broad filtering: upper limit of argument \"fit.window\" is decreased from %1.4f to %1.4f nm",DOASinfo$Spectrometer$wavelength[rev(pixel_fit)[1]],fit.window[2]))
+    } else {
+        pixel_fitHi <- rev(pixel_fit)[1]
+    }
+    pixel_fit <- seq(pixel_fitLo,pixel_fitHi)
+    pixel_dc <- match(pixel_fit,pixel_filter)
+    if (anyNA(pixel_dc)) {
+        pixel_dc <- pixel_dc[!is.na(pixel_dc)]
+        pixel_fit <- pixel_filter[pixel_dc]
+        fit.window <- c(DOASinfo$Spectrometer$wavelength[pixel_fit[1]],DOASinfo$Spectrometer$wavelength[rev(pixel_fit)[1]])
         warning(sprintf("\"fit.window\" does not lie within the boundaries of \"filter.window\"!\n\targument \"fit.window\" is adjusted to c(%1.4f, %1.4f)",fit.window[1],fit.window[2]))
     }
 
-    special <- list(b=3.5,Scale=function(r) median(abs(r))/0.6745,delta=0,filter.strength_multiplication=1.25,filter.strength_loess=0.2,fam="gaussian",maxit=c(10,0))
-    special[names(special.control)] <- special.control
-
-    return(list(
-            filter.window=filter.window,
-            fit.window=fit.window,
-            straylight.window=straylight.window,
-            filter.type=filter.type,
-            filter.strength=filter.strength,
-            double=double,
-            tau.shift=tau.shift,
-            pixel1=pixel1,
-            pixel2=pixel2,
-            pixel3=pixel3,
-            pixel4=pixel4,
-            special.control=special
-            ))
+    list(
+        filter.window=filter.window,
+        fit.window=fit.window,
+        straylight.window=straylight.window,
+        filter.type=filter.type,
+        filter.strength=filter.strength,
+        double=double,
+        tau.shift=tau.shift,
+        pixel_filter=pixel_filter,
+        pixel_fit=pixel_fit,
+        pixel_straylight=pixel_straylight,
+        pixel_dc=pixel_dc
+    )
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -842,7 +792,7 @@ getSpecSet <- function(
 correctSpectra <- function(specSet,rawData=NULL,correct.dark=TRUE,correct.linearity=TRUE,correct.straylight=c("avg","linear","none"),straylight.pix=NULL) {
 
     if (is.null(straylight.pix)) {
-        straylight.pix <- getWindows(specSet$DOAS.model)$pixel3
+        straylight.pix <- getWindows(specSet$DOAS.model)$pixel_straylight
     }
     ### dark-corrected reference spectra
     ### ******************************************************************************
@@ -1018,8 +968,8 @@ fitConc <- function(meas.doascurve, DOAS.win, path.length, Cal.dc, fit.type="ARI
     ord <- as.character(as.numeric(NROW(ARIMA.order) > 1) + 1)[fit.type %in% "ARIMA"]
     rob <- ".rob"[robust]
     fitcurve <- get(paste0("fit.curves.",fit.type,ord,rob),mode="function")
-    if (is.null(dyn.fixed.pattern))dyn.fixed.pattern <- meas.doascurve[DOAS.win$pixel4]*0
-    return(fitcurve(meas.doascurve,DOAS.win$pixel4,dyn.fixed.pattern,Cal.dc$Xreg[DOAS.win$pixel4,],fit.weights,DOAS.win$tau.shift,ARIMA.order,path.length))
+    if (is.null(dyn.fixed.pattern))dyn.fixed.pattern <- meas.doascurve[DOAS.win$pixel_dc]*0
+    return(fitcurve(meas.doascurve,DOAS.win$pixel_dc,dyn.fixed.pattern,Cal.dc$Xreg[DOAS.win$pixel_dc,],fit.weights,DOAS.win$tau.shift,ARIMA.order,path.length))
 }
 
 
@@ -1053,7 +1003,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
     # correct cal/ref specs:
     # CalRefCorr <- correctSpectra(CalRefSpecs)
     SpecCorr <- correctSpectra(CalRefSpecs,rawdat, correct.dark = correct.dark, correct.linearity = correct.linearity, 
-        correct.straylight = correct.straylight, straylight.pix=DOASwindows$pixel3)
+        correct.straylight = correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
 
     # diffspec:
     # DiffSpec <- diffSpecs(SpecCorr)
@@ -1062,7 +1012,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
     # cal doascurves:
     Cal.dc <- getCalCurves(DiffSpec,DOASwindows,CalRefSpecs,warn=FALSE)
 
-    wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel1]
+    wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel_filter]
 
     index.max <- ncol(rawdat$RawData)
 
@@ -1238,16 +1188,13 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         }
                         getWindows(rawdat$DOASinfo, filter.type = input$filter.type, straylight.window = straylight.window, 
                             filter.window = input$filter.window, fit.window = fit_window, double = input$double,
-                            filter.strength = filter_strength, tau.shift = input$tau.shift, special.control = list(b = special.control$b, 
-                                Scale = special.control$Scale, 
-                                filter.strength_multiplication = filter.strength_multiplication, filter.strength_loess = filter.strength_loess, 
-                                fam = special.control$fam))
+                            filter.strength = filter_strength, tau.shift = input$tau.shift)
                     })
 
                     # # correct cal/ref specs:
                     # SpecCorr_reactive <- reactive({
                     #   correctSpectra(CalRefSpecs,rawdat,correct.dark = input$correct.dark, correct.linearity = input$correct.linearity, 
-                    #           correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel3)
+                    #           correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
                     # })
 
                     # # diffspec:
@@ -1381,10 +1328,10 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         RawDat[[1]] <- rawdat[[1]][,i,drop=FALSE]
                         DOASwindows <- DOASwindows_reactive()
                         SpecCorr <- correctSpectra(CalRefSpecs,RawDat,correct.dark = input$correct.dark, correct.linearity = input$correct.linearity, 
-                            correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel3)
+                            correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
                         DiffSpec <- diffSpecs(SpecCorr,use.ref=input$use.ref)
                         Cal.dc <- getCalCurves(DiffSpec,DOASwindows,CalRefSpecs,warn=FALSE,input$p1,input$p2,input$p3,input$p4)
-                        wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel1]
+                        wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel_filter]
 
 
                         # plot(1,main="diffspec")
@@ -1395,7 +1342,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         # main <- rawdat$Header[i,]
 
                         # I.meas + I.ref
-                        ylim <- range(SpecCorr$I.meas[DOASwindows$pixel1,],SpecCorr$I.ref[DOASwindows$pixel1],na.rm=TRUE)
+                        ylim <- range(SpecCorr$I.meas[DOASwindows$pixel_filter,],SpecCorr$I.ref[DOASwindows$pixel_filter],na.rm=TRUE)
                         if (!all(is.finite(ylim))) {
                             ylim <- c(0.01,2)
                         } else if (any(ylimBelow <- ylim<0)) {
@@ -1403,19 +1350,19 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         } 
                         # windows(width=10,height=7)
                         plot(1,1,xlim=xlim,ylim=ylim,log="y",type="n",ylab="counts",xlab="",main="spectra")
-                        if (input$use.ref)lines(wavelength,SpecCorr$I.ref[DOASwindows$pixel1],col="darkgrey",lwd=2)
-                        lines(wavelength,SpecCorr$I.meas[DOASwindows$pixel1,],col="black",lwd=2)
+                        if (input$use.ref)lines(wavelength,SpecCorr$I.ref[DOASwindows$pixel_filter],col="darkgrey",lwd=2)
+                        lines(wavelength,SpecCorr$I.meas[DOASwindows$pixel_filter,],col="black",lwd=2)
                         legend("bottomright",c("meas.","ref."),lwd=2,col=c("black","darkgrey"),bty="n")
 
                         # log(I.meas/I.ref)
-                        ylim <- range(DiffSpec$diffspec[DOASwindows$pixel1,],na.rm=TRUE)
+                        ylim <- range(DiffSpec$diffspec[DOASwindows$pixel_filter,],na.rm=TRUE)
                         if (!all(is.finite(ylim))) ylim <- c(0,1)
                         meas.dc <- highpass.filter(DiffSpec$diffspec,DOASwindows,input$p1,input$p2,input$p3,input$p4)
                         # isna <- is.na(meas.dc)
                         # windows(width=10,height=7)
                         plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.meas/I.ref)",xlab="",main="diffspec")
-                        lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel1,] - meas.dc,lwd=2,col="orange")
-                        lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel1,],col="black")
+                        lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,] - meas.dc,lwd=2,col="orange")
+                        lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,],col="black")
                         fit <- fitConc(meas.dc, DOASwindows, path.length, Cal.dc, fit.type=input$fit.type, robust=input$robust)
 
                         cfs <- fit[[5]]
@@ -1442,31 +1389,31 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         lines(wavelength,fit.SO2,col="#00bb00aa")
                         lines(wavelength,fit.SO2+fit.NO,col="#ff0000dd")
                         lines(wavelength,fit.SO2+fit.NO+fit.NH3,col="blue")
-                        lines(wavelength[DOASwindows$pixel4],fit.SO2[DOASwindows$pixel4],lwd=2,col="#00bb00aa")
-                        lines(wavelength[DOASwindows$pixel4],fit.SO2[DOASwindows$pixel4]+fit.NO[DOASwindows$pixel4],lwd=2,col="#ff0000dd")
-                        lines(wavelength[DOASwindows$pixel4],fit.SO2[DOASwindows$pixel4]+fit.NO[DOASwindows$pixel4]+fit.NH3[DOASwindows$pixel4],lwd=2,col="blue")
-                        abline(v=wavelength[range(DOASwindows$pixel4)],lty=3)
+                        lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc],lwd=2,col="#00bb00aa")
+                        lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc],lwd=2,col="#ff0000dd")
+                        lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc]+fit.NH3[DOASwindows$pixel_dc],lwd=2,col="blue")
+                        abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
                         legend("topright",c("SO2","SO2 + NO","SO2 + NO + NH3"),lty=1,col=c("#00bb00aa","#ff0000dd","blue"),cex=0.7)
 
                         # residual
                         # windows(width=10,height=7)
                         plot(wavelength,meas.dc,xlim=xlim,ylim=ylim,type="l",ylab="residuals [-]",xlab="",panel.first={grid();abline(h=0)},col="darkgrey",main="residuals")
                         lines(wavelength,meas.dc-fit.SO2-fit.NO-fit.NH3) 
-                        lines(wavelength[DOASwindows$pixel4],meas.dc[DOASwindows$pixel4]-fit.SO2[DOASwindows$pixel4]-fit.NO[DOASwindows$pixel4]-fit.NH3[DOASwindows$pixel4],lwd=2) 
-                        abline(v=wavelength[range(DOASwindows$pixel4)],lty=3)
+                        lines(wavelength[DOASwindows$pixel_dc],meas.dc[DOASwindows$pixel_dc]-fit.SO2[DOASwindows$pixel_dc]-fit.NO[DOASwindows$pixel_dc]-fit.NH3[DOASwindows$pixel_dc],lwd=2) 
+                        abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
 
                         # cal diffspec
-                        ylim <- range(DiffSpec$NH3.diffspec[DOASwindows$pixel1],na.rm=TRUE)
+                        ylim <- range(DiffSpec$NH3.diffspec[DOASwindows$pixel_filter],na.rm=TRUE)
                         plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.NH3/I.N2)",xlab="",panel.first={grid();abline(h=0)})
                         # #
-                        # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel1] - Cal.dc$Xreg[,3]*CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NO$cuvette$cuvetteLength,lwd=2,col="red")
-                        # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel1])
+                        # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,3]*CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NO$cuvette$cuvetteLength,lwd=2,col="red")
+                        # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter])
                         # #
-                        # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel1] - Cal.dc$Xreg[,2]*CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.SO2$cuvette$cuvetteLength,lwd=2,col="green")
-                        # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel1])
+                        # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,2]*CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.SO2$cuvette$cuvetteLength,lwd=2,col="green")
+                        # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter])
                         # #
-                        lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel1] - Cal.dc$Xreg[,1]*CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NH3$cuvette$cuvetteLength,lwd=2,col="blue")
-                        lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel1])
+                        lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,1]*CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NH3$cuvette$cuvetteLength,lwd=2,col="blue")
+                        lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter])
 
                         # cal doascurve
                         ylim <- range(Cal.dc$Xreg,na.rm=TRUE)
@@ -1476,13 +1423,13 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         lines(wavelength,Cal.dc$Xreg[,1],lwd=2,col="blue")
 
                         ## test stats:
-                        nh3wts <- abs(Cal.dc$NH3.dc[DOASwindows$pixel4])/sum(abs(Cal.dc$NH3.dc[DOASwindows$pixel4]))
-                        so2wts <- abs(Cal.dc$SO2.dc[DOASwindows$pixel4])/sum(abs(Cal.dc$SO2.dc[DOASwindows$pixel4]))
-                        nowts <- abs(Cal.dc$NO.dc[DOASwindows$pixel4])/sum(abs(Cal.dc$NO.dc[DOASwindows$pixel4]))
-                        gof.NH3 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel4]-1)*nh3wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*nh3wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*nh3wts),2)
-                        gof.SO2 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel4]-1)*so2wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*so2wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*so2wts),2)
-                        gof.NO <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel4]-1)*nowts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*nowts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*nowts),2)
-                        gof.perc <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel4]-1)*(nh3wts+so2wts+nowts)/3)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*(nh3wts+so2wts+nowts)/3)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*(nh3wts+so2wts+nowts)/3),2)
+                        nh3wts <- abs(Cal.dc$NH3.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$NH3.dc[DOASwindows$pixel_dc]))
+                        so2wts <- abs(Cal.dc$SO2.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$SO2.dc[DOASwindows$pixel_dc]))
+                        nowts <- abs(Cal.dc$NO.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$NO.dc[DOASwindows$pixel_dc]))
+                        gof.NH3 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*nh3wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nh3wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nh3wts),2)
+                        gof.SO2 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*so2wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*so2wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*so2wts),2)
+                        gof.NO <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*nowts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nowts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nowts),2)
+                        gof.perc <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*(nh3wts+so2wts+nowts)/3)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*(nh3wts+so2wts+nowts)/3)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*(nh3wts+so2wts+nowts)/3),2)
 
                         SAE <- sum(abs(fit[[8]]))
                         SAT <- sum(abs(fit[[7]]+fit[[8]]))
@@ -1540,10 +1487,10 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             RawDat[[1]] <- rawdat[[1]][,i,drop=FALSE]
                             DOASwindows <- DOASwindows_reactive()
                             SpecCorr <- correctSpectra(CalRefSpecs,RawDat,correct.dark = input$correct.dark, correct.linearity = input$correct.linearity, 
-                                correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel3)
+                                correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
                             DiffSpec <- diffSpecs(SpecCorr,use.ref=input$use.ref)
                             Cal.dc <- getCalCurves(DiffSpec,DOASwindows,CalRefSpecs,warn=FALSE,input$p1,input$p2,input$p3,input$p4)
-                            wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel1]
+                            wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel_filter]
 
 
                             # plot(1,main="diffspec")
@@ -1554,7 +1501,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             # main <- rawdat$Header[i,]
 
                             # I.meas + I.ref
-                            ylim <- range(SpecCorr$I.meas[DOASwindows$pixel1,],SpecCorr$I.ref[DOASwindows$pixel1],na.rm=TRUE)
+                            ylim <- range(SpecCorr$I.meas[DOASwindows$pixel_filter,],SpecCorr$I.ref[DOASwindows$pixel_filter],na.rm=TRUE)
                             if (!all(is.finite(ylim))) {
                                 ylim <- c(0.01,2)
                             } else if (any(ylimBelow <- ylim<0)) {
@@ -1562,19 +1509,19 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             } 
                             # windows(width=10,height=7)
                             plot(1,1,xlim=xlim,ylim=ylim,log="y",type="n",ylab="counts",xlab="",main="spectra")
-                            if (input$use.ref)lines(wavelength,SpecCorr$I.ref[DOASwindows$pixel1],col="darkgrey",lwd=2)
-                            lines(wavelength,SpecCorr$I.meas[DOASwindows$pixel1,],col="black",lwd=2)
+                            if (input$use.ref)lines(wavelength,SpecCorr$I.ref[DOASwindows$pixel_filter],col="darkgrey",lwd=2)
+                            lines(wavelength,SpecCorr$I.meas[DOASwindows$pixel_filter,],col="black",lwd=2)
                             legend("bottomright",c("meas.","ref."),lwd=2,col=c("black","darkgrey"),bty="n")
 
                             # log(I.meas/I.ref)
-                            ylim <- range(DiffSpec$diffspec[DOASwindows$pixel1,],na.rm=TRUE)
+                            ylim <- range(DiffSpec$diffspec[DOASwindows$pixel_filter,],na.rm=TRUE)
                             if (!all(is.finite(ylim))) ylim <- c(0,1)
                             meas.dc <- highpass.filter(DiffSpec$diffspec,DOASwindows,input$p1,input$p2,input$p3,input$p4)
                             # isna <- is.na(meas.dc)
                             # windows(width=10,height=7)
                             plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.meas/I.ref)",xlab="",main="diffspec")
-                            lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel1,] - meas.dc,lwd=2,col="orange")
-                            lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel1,],col="black")
+                            lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,] - meas.dc,lwd=2,col="orange")
+                            lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,],col="black")
                             fit <- fitConc(meas.dc, DOASwindows, path.length, Cal.dc, fit.type=input$fit.type, robust=input$robust)
 
                             cfs <- fit[[5]]
@@ -1601,31 +1548,31 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             lines(wavelength,fit.SO2,col="#00bb00aa")
                             lines(wavelength,fit.SO2+fit.NO,col="#ff0000dd")
                             lines(wavelength,fit.SO2+fit.NO+fit.NH3,col="blue")
-                            lines(wavelength[DOASwindows$pixel4],fit.SO2[DOASwindows$pixel4],lwd=2,col="#00bb00aa")
-                            lines(wavelength[DOASwindows$pixel4],fit.SO2[DOASwindows$pixel4]+fit.NO[DOASwindows$pixel4],lwd=2,col="#ff0000dd")
-                            lines(wavelength[DOASwindows$pixel4],fit.SO2[DOASwindows$pixel4]+fit.NO[DOASwindows$pixel4]+fit.NH3[DOASwindows$pixel4],lwd=2,col="blue")
-                            abline(v=wavelength[range(DOASwindows$pixel4)],lty=3)
+                            lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc],lwd=2,col="#00bb00aa")
+                            lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc],lwd=2,col="#ff0000dd")
+                            lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc]+fit.NH3[DOASwindows$pixel_dc],lwd=2,col="blue")
+                            abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
                             legend("topright",c("SO2","SO2 + NO","SO2 + NO + NH3"),lty=1,col=c("#00bb00aa","#ff0000dd","blue"),cex=0.7)
 
                             # residual
                             # windows(width=10,height=7)
                             plot(wavelength,meas.dc,xlim=xlim,ylim=ylim,type="l",ylab="residuals [-]",xlab="",panel.first={grid();abline(h=0)},col="darkgrey",main="residuals")
                             lines(wavelength,meas.dc-fit.SO2-fit.NO-fit.NH3) 
-                            lines(wavelength[DOASwindows$pixel4],meas.dc[DOASwindows$pixel4]-fit.SO2[DOASwindows$pixel4]-fit.NO[DOASwindows$pixel4]-fit.NH3[DOASwindows$pixel4],lwd=2) 
-                            abline(v=wavelength[range(DOASwindows$pixel4)],lty=3)
+                            lines(wavelength[DOASwindows$pixel_dc],meas.dc[DOASwindows$pixel_dc]-fit.SO2[DOASwindows$pixel_dc]-fit.NO[DOASwindows$pixel_dc]-fit.NH3[DOASwindows$pixel_dc],lwd=2) 
+                            abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
 
                             # cal diffspec
-                            ylim <- range(DiffSpec$NH3.diffspec[DOASwindows$pixel1],na.rm=TRUE)
+                            ylim <- range(DiffSpec$NH3.diffspec[DOASwindows$pixel_filter],na.rm=TRUE)
                             plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.NH3/I.N2)",xlab="",panel.first={grid();abline(h=0)})
                             # #
-                            # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel1] - Cal.dc$Xreg[,3]*CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NO$cuvette$cuvetteLength,lwd=2,col="red")
-                            # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel1])
+                            # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,3]*CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NO$cuvette$cuvetteLength,lwd=2,col="red")
+                            # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter])
                             # #
-                            # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel1] - Cal.dc$Xreg[,2]*CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.SO2$cuvette$cuvetteLength,lwd=2,col="green")
-                            # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel1])
+                            # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,2]*CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.SO2$cuvette$cuvetteLength,lwd=2,col="green")
+                            # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter])
                             # #
-                            lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel1] - Cal.dc$Xreg[,1]*CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NH3$cuvette$cuvetteLength,lwd=2,col="blue")
-                            lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel1])
+                            lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,1]*CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NH3$cuvette$cuvetteLength,lwd=2,col="blue")
+                            lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter])
 
                             # cal doascurve
                             ylim <- range(Cal.dc$Xreg,na.rm=TRUE)
@@ -1635,13 +1582,13 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             lines(wavelength,Cal.dc$Xreg[,1],lwd=2,col="blue")
 
                             ## test stats:
-                            nh3wts <- abs(Cal.dc$NH3.dc[DOASwindows$pixel4])/sum(abs(Cal.dc$NH3.dc[DOASwindows$pixel4]))
-                            so2wts <- abs(Cal.dc$SO2.dc[DOASwindows$pixel4])/sum(abs(Cal.dc$SO2.dc[DOASwindows$pixel4]))
-                            nowts <- abs(Cal.dc$NO.dc[DOASwindows$pixel4])/sum(abs(Cal.dc$NO.dc[DOASwindows$pixel4]))
-                            gof.NH3 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel4]-1)*nh3wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*nh3wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*nh3wts),2)
-                            gof.SO2 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel4]-1)*so2wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*so2wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*so2wts),2)
-                            gof.NO <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel4]-1)*nowts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*nowts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*nowts),2)
-                            gof.perc <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel4]-1)*(nh3wts+so2wts+nowts)/3)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*(nh3wts+so2wts+nowts)/3)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel4]*(nh3wts+so2wts+nowts)/3),2)
+                            nh3wts <- abs(Cal.dc$NH3.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$NH3.dc[DOASwindows$pixel_dc]))
+                            so2wts <- abs(Cal.dc$SO2.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$SO2.dc[DOASwindows$pixel_dc]))
+                            nowts <- abs(Cal.dc$NO.dc[DOASwindows$pixel_dc])/sum(abs(Cal.dc$NO.dc[DOASwindows$pixel_dc]))
+                            gof.NH3 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*nh3wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nh3wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nh3wts),2)
+                            gof.SO2 <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*so2wts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*so2wts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*so2wts),2)
+                            gof.NO <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*nowts)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nowts)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*nowts),2)
+                            gof.perc <- round((sum(na.rm=TRUE,(fit[[7]]-1)/(meas.dc[DOASwindows$pixel_dc]-1)*(nh3wts+so2wts+nowts)/3)*(sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*(nh3wts+so2wts+nowts)/3)-1)+1)/sum(na.rm=TRUE,meas.dc[DOASwindows$pixel_dc]*(nh3wts+so2wts+nowts)/3),2)
 
                             SAE <- sum(abs(fit[[8]]))
                             SAT <- sum(abs(fit[[7]]+fit[[8]]))
@@ -1687,11 +1634,11 @@ fitparallel <- function(index,DiffSpec,DOAS.win,meas.doascurve,dyn.fixed.pattern
 
         if (median(DiffSpec$diffspec[,i],na.rm=TRUE) > -5) {
             # highpass filtering:
-            meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel1,i],DOAS.win)
+            meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel_filter,i],DOAS.win)
 
             ### fit calibration curves to measured DOAS curve (see Stutz & Platt, 1996, Applied Optics 30), determine best fit after shifting over given tau range, no fixed pattern considered
             ### ******************************************************************************#
-            fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel4, dyn.fixed.pattern, Cal.dc$Xreg[DOAS.win$pixel4,], NULL, DOAS.win$tau.shift, arima.Order, path.length)
+            fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, dyn.fixed.pattern, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, arima.Order, path.length)
 
             if (is.null(fitted)) {
                 isna[i] <- TRUE
@@ -1915,7 +1862,7 @@ evalOffline <- function(
 
 
     # correct cal/ref specs:
-    SpecCorr <- correctSpectra(CalRefSpecs,rawData=RawData,correct.dark=correct.dark,correct.linearity=correct.linearity,correct.straylight=correct.straylight,straylight.pix=DOAS.win$pixel3)
+    SpecCorr <- correctSpectra(CalRefSpecs,rawData=RawData,correct.dark=correct.dark,correct.linearity=correct.linearity,correct.straylight=correct.straylight,straylight.pix=DOAS.win$pixel_straylight)
 
     ### calibration concentrations in ppb
     ### ******************************************************************************
@@ -1927,7 +1874,7 @@ evalOffline <- function(
     # ### ******************************************************************************
     # f <- DOAS.info$Spectrometer$wavelength
     # sft <- -9
-    # x0 <- DOAS.win$pixel1 + sft
+    # x0 <- DOAS.win$pixel_filter + sft
     # f2 <- f[x0]
     # f3 <- (f[c(x0[1]-1,x0)]+f[c(x0[1],x0+1)])/2
     # if (DOAS.model!="S1") {
@@ -1957,18 +1904,18 @@ evalOffline <- function(
     #       ,x[i],x[i+1])$value/diff(x[i+(0:1)])
     #   },x=f3)
     # NH3.doascurve.theor <- highpass.filter(cs.Theor,filter.type, DOAS.win$filter.strength,b,Scale,delta, filter.strength_multiplication, filter.strength_loess,fam)/(NH3.cal*dat.NH3$cuvette[[1]])
-    # regr.NH3 <- suppressWarnings(lmrob(NH3.doascurve.theor[DOAS.win$pixel4 + sft] ~ NH3.doascurve[DOAS.win$pixel4 + sft], setting="KS2014"))
+    # regr.NH3 <- suppressWarnings(lmrob(NH3.doascurve.theor[DOAS.win$pixel_dc + sft] ~ NH3.doascurve[DOAS.win$pixel_dc + sft], setting="KS2014"))
     # theory.NH3.factor <- round(coefficients(regr.NH3)[2],3)
 
-    # plot(f[DOAS.win$pixel1],NH3.doascurve.theor,type="n",ylab="NH3 doascurve",xlab="",panel.first={grid();abline(h=0,col="darkgrey")})
-    # lines(f[DOAS.win$pixel1],NH3.doascurve,lwd=2)
-    # lines(f[DOAS.win$pixel1],NH3.doascurve.theor,col="blue",lwd=2)
-    # lines(f[DOAS.win$pixel1],NH3.doascurve*theory.NH3.factor,col="red",lwd=2)
+    # plot(f[DOAS.win$pixel_filter],NH3.doascurve.theor,type="n",ylab="NH3 doascurve",xlab="",panel.first={grid();abline(h=0,col="darkgrey")})
+    # lines(f[DOAS.win$pixel_filter],NH3.doascurve,lwd=2)
+    # lines(f[DOAS.win$pixel_filter],NH3.doascurve.theor,col="blue",lwd=2)
+    # lines(f[DOAS.win$pixel_filter],NH3.doascurve*theory.NH3.factor,col="red",lwd=2)
     # legend("bottomright",c("NH3.doascurve","Chen-Theory",sprintf("NH3.doascurve x %1.3f",theory.NH3.factor)),lwd=2,col=c("black","blue","red"))
 
     # ind <- seq.int(320)
     # par(mfrow=c(2,1))
-    # plot(f[DOAS.win$pixel1][ind],NH3.doascurve[ind]*theory.NH3.factor,type="l",ylab="NH3 doascurve (m2/ug)",xlab="",lwd=2,panel.first={grid();abline(h=0,col="darkgrey")})
+    # plot(f[DOAS.win$pixel_filter][ind],NH3.doascurve[ind]*theory.NH3.factor,type="l",ylab="NH3 doascurve (m2/ug)",xlab="",lwd=2,panel.first={grid();abline(h=0,col="darkgrey")})
     # legend("bottomright","NH3 doascurve (cuvette suisse 4, assuming 192 mg/m3)",lwd=2,col="black",bty="n")
     # plot(f2[ind],NH3.doascurve[ind]*theory.NH3.factor,type="l",ylab="NH3 doascurve (m2/ug)",xlab="",lwd=2,col="red",panel.first={grid();abline(h=0,col="darkgrey")})
     # lines(f2[ind],NH3.doascurve.theor[ind],col="black",lwd=2)
@@ -2041,8 +1988,8 @@ evalOffline <- function(
     ### initiate secondary data matrices
     ### ******************************************************************************
 
-    dim1 <- length(DOAS.win$pixel1)
-    dim2 <- length(DOAS.win$pixel2)
+    dim1 <- length(DOAS.win$pixel_filter)
+    dim2 <- length(DOAS.win$pixel_fit)
 
     files <- ncol(DiffSpec$diffspec)
     cat("\n"); cat("initiate data matrices\n")
@@ -2059,35 +2006,36 @@ evalOffline <- function(
     rob <- ".rob"[use.robust]
     fitcurve <- get(paste0("fit.curves.",ifelse(use.arima,"ARIMA","OLS"),ord,rob),mode="function")
 
-    if (any(c("loess","special") %in% DOAS.win$filter.type)) {
-        highpass.filter2 <- function(dat, DOAS.win) highpass.filter(dat[DOAS.win$pixel1], DOAS.win)
+    # create a 'lighter' highpass filter
+    winFUN <- switch(DOAS.win$filter.type,
+        "Rect" = winRect,
+        "Hann" = winHann,
+        "Hamming" = winHamming,
+        "Blackman" = winBlackman,
+        "BmNuttall" = winBmNuttall,
+        "Sin" = winSin,
+        "Gauss" = winGauss,
+        "Kaiser" = winKaiser,
+        "BmHarris" = winBmHarris,
+        "Tukey" = winTukey,
+        "Poisson" = winPoisson,
+        "Exp" = winExp,
+        "ExpHamming" = winExpHamming,
+        "DolphChebyshev" = winDolphChebyshev)
+    DOAS.win$filt <- winFUN(DOAS.win$filter.strength,...)
+    C_cfilter <- getFromNamespace('C_cfilter', 'stats')
+    if (DOAS.win$double) {
+        # old double filter
+        highpass.filter2 <- function(dat,DOAS.win) {
+            dat - rev(.Call(C_cfilter, rev(.Call(C_cfilter, dat, DOAS.win$filt, 2L, FALSE)), DOAS.win$filt, 2L, FALSE))
+        }
     } else {
-        winFUN <- switch(DOAS.win$filter.type,
-            "Rect" = winRect,
-            "Hann" = winHann,
-            "Hamming" = winHamming,
-            "Blackman" = winBlackman,
-            "BmNuttall" = winBmNuttall,
-            "FlatTop" = winFlatTop,
-            "Sin" = winSin,
-            "Gauss" = winGauss,
-            "Kaiser" = winKaiser,
-            "BmHarris" = winBmHarris,
-            "Tukey" = winTukey,
-            "Poisson" = winPoisson,
-            "Exp" = winExp,
-            "ExpHamming" = winExpHamming,
-            "DolphChebyshev" = winDolphChebyshev)
-        DOAS.win$filt <- winFUN(DOAS.win$filter.strength,...)
-        C_cfilter <- getFromNamespace('C_cfilter', 'stats')
-        if (DOAS.win$double) {
-            highpass.filter2 <- function(dat,DOAS.win) {
-                dat - rev(.Call(C_cfilter, rev(.Call(C_cfilter, dat, DOAS.win$filt, 2L, FALSE)), DOAS.win$filt, 2L, FALSE))
-            }
-        } else {
-            highpass.filter2 <- function(dat,DOAS.win) {
-                dat - .Call(C_cfilter, dat, DOAS.win$filt, 2L, FALSE)
-            }
+        # new double filter
+        highpass.filter2 <- function(dat,DOAS.win) {
+            dat - (
+                .Call(C_cfilter, dat, DOAS.win$filt, 2L, FALSE) +
+                    rev(.Call(C_cfilter, rev(dat), DOAS.win$filt, 2L, FALSE))
+                ) / 2
         }
     }
 
@@ -2095,10 +2043,10 @@ evalOffline <- function(
 
         cat("
             # highpass filtering:
-            meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel1,i],DOAS.win)
+            meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel_filter,i],DOAS.win)
 
             ### fit calibration curves to measured DOAS curve
-            fitcurve(meas.doascurve[,i], DOAS.win$pixel4, dyn.fixed.pattern, Cal.dc$Xreg[DOAS.win$pixel4,], NULL, DOAS.win$tau.shift, arima.Order, path.length)
+            fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, dyn.fixed.pattern, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, arima.Order, path.length)
             ")
 
             return(
@@ -2155,11 +2103,11 @@ evalOffline <- function(
 
             if (median(DiffSpec$diffspec[,i],na.rm=TRUE) > -5) {
                 # highpass filtering:
-                meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel1,i],DOAS.win)
+                meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel_filter,i],DOAS.win)
 
                 ### fit calibration curves to measured DOAS curve (see Stutz & Platt, 1996, Applied Optics 30), determine best fit after shifting over given tau range, no fixed pattern considered
                 ### ******************************************************************************#
-                fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel4, dyn.fixed.pattern, Cal.dc$Xreg[DOAS.win$pixel4,], NULL, DOAS.win$tau.shift, arima.Order, path.length)
+                fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, dyn.fixed.pattern, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, arima.Order, path.length)
 
                 if (is.null(fitted)) {
                     isna[i] <- TRUE
@@ -2180,17 +2128,17 @@ evalOffline <- function(
     }
 
     # broadband:
-    meas.diffspec.broadband <- DiffSpec$diffspec[DOAS.win$pixel1,] - meas.doascurve
+    meas.diffspec.broadband <- DiffSpec$diffspec[DOAS.win$pixel_filter,] - meas.doascurve
 
 
     ## test stats:
-    nh3wts <- abs(Cal.dc$NH3.dc[DOAS.win$pixel4])/sum(abs(Cal.dc$NH3.dc[DOAS.win$pixel4]))
-    so2wts <- abs(Cal.dc$SO2.dc[DOAS.win$pixel4])/sum(abs(Cal.dc$SO2.dc[DOAS.win$pixel4]))
-    nowts <- abs(Cal.dc$NO.dc[DOAS.win$pixel4])/sum(abs(Cal.dc$NO.dc[DOAS.win$pixel4]))
-    gof.NH3 <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel4,]-1)*nh3wts)*(colSums(meas.doascurve[DOAS.win$pixel4,]*nh3wts)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel4,]*nh3wts),2)
-    gof.SO2 <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel4,]-1)*so2wts)*(colSums(meas.doascurve[DOAS.win$pixel4,]*so2wts)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel4,]*so2wts),2)
-    gof.NO <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel4,]-1)*nowts)*(colSums(meas.doascurve[DOAS.win$pixel4,]*nowts)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel4,]*nowts),2)
-    gof.perc <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel4,]-1)*(nh3wts+so2wts+nowts)/3)*(colSums(meas.doascurve[DOAS.win$pixel4,]*(nh3wts+so2wts+nowts)/3)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel4,]*(nh3wts+so2wts+nowts)/3),2)
+    nh3wts <- abs(Cal.dc$NH3.dc[DOAS.win$pixel_dc])/sum(abs(Cal.dc$NH3.dc[DOAS.win$pixel_dc]))
+    so2wts <- abs(Cal.dc$SO2.dc[DOAS.win$pixel_dc])/sum(abs(Cal.dc$SO2.dc[DOAS.win$pixel_dc]))
+    nowts <- abs(Cal.dc$NO.dc[DOAS.win$pixel_dc])/sum(abs(Cal.dc$NO.dc[DOAS.win$pixel_dc]))
+    gof.NH3 <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel_dc,]-1)*nh3wts)*(colSums(meas.doascurve[DOAS.win$pixel_dc,]*nh3wts)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel_dc,]*nh3wts),2)
+    gof.SO2 <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel_dc,]-1)*so2wts)*(colSums(meas.doascurve[DOAS.win$pixel_dc,]*so2wts)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel_dc,]*so2wts),2)
+    gof.NO <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel_dc,]-1)*nowts)*(colSums(meas.doascurve[DOAS.win$pixel_dc,]*nowts)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel_dc,]*nowts),2)
+    gof.perc <- round((colSums((fitted.doascurve-1)/(meas.doascurve[DOAS.win$pixel_dc,]-1)*(nh3wts+so2wts+nowts)/3)*(colSums(meas.doascurve[DOAS.win$pixel_dc,]*(nh3wts+so2wts+nowts)/3)-1)+1)/colSums(meas.doascurve[DOAS.win$pixel_dc,]*(nh3wts+so2wts+nowts)/3),2)
 
 
     SAE <- apply(residual.best,2,function(x)sum(abs(x)))
@@ -2209,7 +2157,7 @@ evalOffline <- function(
     # ### running median residual patterns
     # cat("\n"); cat("creating median residual pattern\n")
     # if (files <= fixed.pattern.length) {
-    #   fp.avg <- matrix(rep(apply(residual.best, 1, median, na.rm=TRUE),files), nrow=files, ncol=length(DOAS.win$pixel4), byrow=TRUE)
+    #   fp.avg <- matrix(rep(apply(residual.best, 1, median, na.rm=TRUE),files), nrow=files, ncol=length(DOAS.win$pixel_dc), byrow=TRUE)
     # } else {      
     #   if (!(fixed.pattern.length%%2))fixed.pattern.length <- fixed.pattern.length + 1
     #   xin <- 1:ncol(residual.best)
@@ -2400,18 +2348,18 @@ evalOffline <- function(
         results[,13] <- coeffs[3,]
         results[,14] <- se[3,]  
         results[,15] <- apply(RawData$RawData, 2, max, na.rm=TRUE)
-        results[,16] <- apply(RawData$RawData[DOAS.win$pixel2,], 2, mean)
-        results[,17] <- apply(RawData$RawData[DOAS.win$pixel2,], 2, min)
+        results[,16] <- apply(RawData$RawData[DOAS.win$pixel_fit,], 2, mean)
+        results[,17] <- apply(RawData$RawData[DOAS.win$pixel_fit,], 2, min)
         results[,18] <- apply(residual.best^2, 2, sum)
         # results[,19] <- apply(fp.avg^2, 1, sum)
-        results[,20] <- apply(RawData$RawData[DOAS.win$pixel3,], 2, mean)
+        results[,20] <- apply(RawData$RawData[DOAS.win$pixel_straylight,], 2, mean)
         results[,21] <- TEC.Temp
         results[,22] <- board.Temp
         results[,23] <- ambient.Temp
         results[,24] <- ambient.RH
         results[,25] <- ShuPos
         results[,26] <- RevPos
-        results[,27] <- exp(apply(DiffSpec$diffspec[DOAS.win$pixel2,], 2, min))
+        results[,27] <- exp(apply(DiffSpec$diffspec[DOAS.win$pixel_fit,], 2, min))
 
         results[,28] <- NoAvgInt
         results[,29] <- SAE
@@ -2595,9 +2543,9 @@ evalOffline <- function(
         cat("\n"); cat("plot calibration spectra and DOAS curves")
         calref.cols <- c("blue", "green", "orange", "cyan")                                                                                                                                                                                        
         f <- DOAS.info$Spectrometer$wavelength
-        x1 <- DOAS.win$pixel1
-        x2 <- DOAS.win$pixel2
-        x4 <- DOAS.win$pixel4
+        x1 <- DOAS.win$pixel_filter
+        x2 <- DOAS.win$pixel_fit
+        x4 <- DOAS.win$pixel_dc
         NH3.cal.ug <- CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg * 1000 * CalRefSpecs$dat.NH3$cuvette$cuvetteLength
         SO2.cal.ug <- CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg * 1000 * CalRefSpecs$dat.SO2$cuvette$cuvetteLength
         NO.cal.ug <- CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg * 1000 * CalRefSpecs$dat.NO$cuvette$cuvetteLength
@@ -2638,13 +2586,13 @@ evalOffline <- function(
 
                 best.tau <- results[i,6]
 
-                m.diffspec <- DiffSpec$diffspec[DOAS.win$pixel1,i]
+                m.diffspec <- DiffSpec$diffspec[DOAS.win$pixel_filter,i]
                 m.diffspec.broadband <- meas.diffspec.broadband[,i]
                 m.meas.doascurve <- meas.doascurve[,i]
                 f <- DOAS.info$Spectrometer$wavelength
-                x1 <- DOAS.win$pixel1
-                x2 <- DOAS.win$pixel2
-                x4 <- DOAS.win$pixel4
+                x1 <- DOAS.win$pixel_filter
+                x2 <- DOAS.win$pixel_fit
+                x4 <- DOAS.win$pixel_dc
 
                 if (corr.fixed.pattern) {
                     m.fitted.doascurve.best <- fp.fitted.doascurve[,i]
@@ -2719,13 +2667,13 @@ evalOffline <- function(
 
                     best.tau <- results[i,6]
 
-                    m.diffspec <- DiffSpec$diffspec[DOAS.win$pixel1,i]
+                    m.diffspec <- DiffSpec$diffspec[DOAS.win$pixel_filter,i]
                     m.diffspec.broadband <- meas.diffspec.broadband[,i]
                     m.meas.doascurve <- meas.doascurve[,i]
                     f <- DOAS.info$Spectrometer$wavelength
-                    x1 <- DOAS.win$pixel1
-                    x2 <- DOAS.win$pixel2
-                    x4 <- DOAS.win$pixel4
+                    x1 <- DOAS.win$pixel_filter
+                    x2 <- DOAS.win$pixel_fit
+                    x4 <- DOAS.win$pixel_dc
 
                     if (corr.fixed.pattern) {
                         m.fitted.doascurve.best <- fp.fitted.doascurve[,i]

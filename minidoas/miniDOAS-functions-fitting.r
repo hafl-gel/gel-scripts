@@ -178,30 +178,22 @@ fit.curves.OLS <- function(meas.doascurve, x4, dyn.fixed.pattern, Xreg, fit.weig
 }   
 
 fit.curves.OLS.rob <- function(meas.doascurve, x4, dyn.fixed.pattern, Xreg, fit.weights, tau.shift, order2, path.length){
-  require(robustbase)
+  require(MASS)
   fitcurves <- lapply(tau.shift, function(x) lm(as.numeric(meas.doascurve[x4 + x] - dyn.fixed.pattern) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], weights=fit.weights, model=FALSE))
   aicc <- sapply(fitcurves,AICc)
   index <- which.min(aicc)
   tau.best <- tau.shift[index]
   delta.AICc.zero <- AICc(lm(as.numeric(meas.doascurve[x4] - dyn.fixed.pattern) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights)) - aicc[index]
 
-  fitcurves <- try(lmrob(as.numeric(meas.doascurve[x4 + tau.best] - dyn.fixed.pattern) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights, setting="KS2014"),silent=TRUE)
-  if(inherits(fitcurves,"try-error") || !fitcurves$converged){
-    cat("\nTrying KS2011\n")
-    fitcurves <- try(lmrob(as.numeric(meas.doascurve[x4 + tau.best] - dyn.fixed.pattern) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights, setting="KS2011"),silent=TRUE)
-  }
-  if(inherits(fitcurves,"try-error") || !fitcurves$converged){
-    require(MASS)
-    cat("Trying rlm 'MM'\n")
-    fitcurves <- try(rlm(as.numeric(meas.doascurve[x4 + tau.best] - dyn.fixed.pattern) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights, method="MM"),silent=TRUE)
-  }
-  if(inherits(fitcurves,"try-error") || !fitcurves$converged){
-    cat("Trying rlm 'M'\n")
-    fitcurves <- try(rlm(as.numeric(meas.doascurve[x4 + tau.best] - dyn.fixed.pattern) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights),silent=TRUE)
-  }
-  if(inherits(fitcurves,"try-error") || !fitcurves$converged){
-    out <- NULL
-  } else {  
+    # fitcurves <- try(rlm(as.numeric(meas.doascurve[x4 + tau.best] - dyn.fixed.pattern) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights, method="MM"),silent=TRUE)
+    fitcurves <- try(lm(as.numeric(meas.doascurve[x4 + tau.best] - dyn.fixed.pattern) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights),silent=TRUE)
+  # if(inherits(fitcurves,"try-error") || !fitcurves$converged){
+  #   cat("Trying rlm 'M'\n")
+  #   fitcurves <- try(rlm(as.numeric(meas.doascurve[x4 + tau.best] - dyn.fixed.pattern) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights),silent=TRUE)
+  # }
+  # if(inherits(fitcurves,"try-error") || !fitcurves$converged){
+  #   out <- NULL
+  # } else {  
     best.order <- aicctab <- NA
     coeffs <- coefficients(fitcurves)[2:4]
     se <- sqrt(diag(vcov(fitcurves))[2:4])
@@ -210,7 +202,7 @@ fit.curves.OLS.rob <- function(meas.doascurve, x4, dyn.fixed.pattern, Xreg, fit.
     ### corresponding residual spectrum
     residual.best <- meas.doascurve[x4 + tau.best] - dyn.fixed.pattern - fitted.doascurve
     out <- list(tau.best, delta.AICc.zero, best.order, aicctab, coeffs/path.length, se/path.length, fitted.doascurve, residual.best)
-  }
+  # }
   return(
     out
  )

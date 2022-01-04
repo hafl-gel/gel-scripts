@@ -1,4 +1,3 @@
-library(IDPmisc)
 
 ### neue Filter Funktionen:
 
@@ -136,18 +135,6 @@ winBlackman <- function(n, p1 = 0.42, p2 = 0.5, p3 = 0.08, ...){
   x/sum(x)
 }
 
-# Flat-Top Windowing:
-winFlatTop <- function(n, p0 = 0.21557895, p1 = 0.41663158, 
-  p2 = 0.277263158, p3 = 0.083578947, p4 = 0.006947368){
-  N <- n - 1
-  x <- p0 - 
-    p1 * cos(2 * pi * seq.int(0, N) / N) + 
-    p2 * cos(4 * pi * seq.int(0, N) / N) - 
-    p3 * cos(6 * pi * seq.int(0, N) / N) + 
-    p4 * cos(8 * pi * seq.int(0, N) / N)
-  x/sum(x)
-}
-
 # Dolph-Chebyshev Windowing:
 winDolphChebyshev <- function(n, p1 = 100, ...){
   x <- chebwin(n, p1)
@@ -177,57 +164,31 @@ kaiser <- function(n, beta){
 }
 
 double.filter <- function(x.dat, filter.strength, winFUN, double = FALSE, ...){
-  filt <- winFUN(filter.strength, ...)
-  if(double){
-    x.dat - rev(filter(
-      rev(filter(x.dat, filt, "convolution", 2, circular = FALSE)), 
-      filt, "convolution", 2, circular = FALSE))
-  } else {
-    x.dat - filter(x.dat, filt, "convolution", 2, circular = FALSE)
-  }
+    filt <- winFUN(filter.strength, ...)
+    if(double){
+        # old double filter
+        x.dat - rev(filter(
+                rev(filter(x.dat, filt, "convolution", 2, circular = FALSE)), 
+                filt, "convolution", 2, circular = FALSE))
+    } else {
+        # old 'single' filter
+        # x.dat - filter(x.dat, filt, "convolution", 2, circular = FALSE)
+        # new double filter
+        x.dat - as.numeric(
+            filter(x.dat, filt2, 'convolution', 2, circular = FALSE) +
+                rev(filter(rev(x.dat), filt2, 'convolution', 2, circular = FALSE))
+            ) / 2
+    }
 }
 
-### low pass filter based on a combination of loess (gaussian) and rfbaseline function to fit a baseline through the high-pass filtered spectrum
-### ****************************************************************************** 
-special.filter <- function(x.dat, filter.strength_rebs = 0.175, 
-  filter.strength_loess = 0.2, b, Scale, delta, fam, maxit = c(10, 0)) {  
-  loess(
-    -IDPmisc::rfbaseline(x = seq_along(x.dat), y = -x.dat, 
-      span = filter.strength_rebs, maxit = maxit, b = b, Scale = Scale,
-      delta = delta)$fit ~ seq_along(x.dat), 
-    span = filter.strength_loess, family = fam)$fitted
-}
-
-
-### low pass filter based on R's 'loess' function (local polynomial fitting)
-### ****************************************************************************** 
-loess.filter <- function(x.dat, filter.strength, fam){
-  loess(x.dat ~ seq_along(x.dat), span = filter.strength, family = fam)$fitted
-}
-
-
-### low pass filter based on R-package IDPmisc's 'rfbaseline' function (asymmetric local polynomial fitting)
-### ****************************************************************************** 
-rfbaseline.filter <- function(x.dat, filter.strength, b, Scale, delta,
-  maxit = c(10, 0)) {
-  -IDPmisc::rfbaseline(x = seq_along(x.dat), y = -x.dat, 
-    span = filter.strength, maxit = maxit, b = b, Scale = Scale, 
-    delta = delta)$fit
-}
-
-
-
-### high pass filter (for broadband absorption exclusion) (simply makes use of "lowpass.filter"; y.dat = data to be filtered, x.data = data to be filtered against - in case of moving averages x.dat should be set = y.dat -, ...)
-### ****************************************************************************** 
 highpass.filter <- function(dat, DOAS.win, ...){
-  dat <- dat[DOAS.win$pixel1]
+  dat <- dat[DOAS.win$pixel_filter]
   switch(DOAS.win$filter.type,
     "Rect" = double.filter(dat,DOAS.win$filter.strength, winRect, DOAS.win$double, ...),
     "Hann" = double.filter(dat,DOAS.win$filter.strength, winHann, DOAS.win$double, ...),
     "Hamming" = double.filter(dat,DOAS.win$filter.strength, winHamming, DOAS.win$double, ...),
     "Blackman" = double.filter(dat,DOAS.win$filter.strength, winBlackman, DOAS.win$double, ...),
     "BmNuttall" = double.filter(dat,DOAS.win$filter.strength, winBmNuttall, DOAS.win$double, ...),
-    "FlatTop" = double.filter(dat,DOAS.win$filter.strength, winFlatTop, DOAS.win$double, ...),
     "Sin" = double.filter(dat,DOAS.win$filter.strength, winSin, DOAS.win$double, ...),
     "Gauss" = double.filter(dat,DOAS.win$filter.strength, winGauss, DOAS.win$double, ...),
     "Kaiser" = double.filter(dat,DOAS.win$filter.strength, winKaiser, DOAS.win$double, ...),
@@ -237,20 +198,6 @@ highpass.filter <- function(dat, DOAS.win, ...){
     "Poisson" = double.filter(dat,DOAS.win$filter.strength, winPoisson, DOAS.win$double, ...),
     "Exp" = double.filter(dat,DOAS.win$filter.strength, winExp, DOAS.win$double, ...),
     "ExpHamming" = double.filter(dat,DOAS.win$filter.strength, winExpHamming, DOAS.win$double, ...),
-    "loess" = dat - loess(dat ~ seq_along(dat), span = DOAS.win$filter.strength, family = DOAS.win$special.control$fam)$fitted,
-    "special" = {
-      x <- dat - special.filter(dat, filter.strength_rebs = DOAS.win$filter.strength, 
-        filter.strength_loess = DOAS.win$special.control$filter.strength_loess, 
-        b = DOAS.win$special.control$b, Scale = DOAS.win$special.control$Scale,
-        delta = DOAS.win$special.control$delta, fam = DOAS.win$special.control$fam,
-        maxit = DOAS.win$special.control$maxit)
-      x - special.filter(x, filter.strength_rebs = DOAS.win$filter.strength * 
-        DOAS.win$special.control$filter.strength_multiplication, 
-        filter.strength_loess = DOAS.win$special.control$filter.strength_loess,
-        b = DOAS.win$special.control$b, Scale = DOAS.win$special.control$Scale,
-        delta = DOAS.win$special.control$delta, fam = DOAS.win$special.control$fam,
-        maxit = DOAS.win$special.control$maxit) # Joerg
-    }
   )
 }
 

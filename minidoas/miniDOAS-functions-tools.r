@@ -151,7 +151,7 @@ lines.avgdat <- function(x, y = NULL, what = c('avg', 'resid'), ...) {
 #### helper function to correct for dark current
 correct_dark <- function(x) {
     win <- getWindows(x$DOASinfo)
-    x$RawData - mean(x$RawData[win$pixel4, ])
+    x$RawData - mean(x$RawData[win$pixel_dc, ])
 }
 
 #### helper function to correct for non-linearity
@@ -219,7 +219,7 @@ read_cal <- function(file, tz = 'Etc/GMT-1', Serial = NULL,
     # correct.dark
     if (correct.dark) {
         win <- getWindows(out$DOASinfo)
-        dark <- out$data[, mean(cnt[win$pixel4])]
+        dark <- out$data[, mean(cnt[win$pixel_dc])]
         if (!lin_before_dark) {
             out$data[, cnt := cnt - dark]
         }
@@ -302,7 +302,7 @@ calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
     dc <- highpass.filter(ds, win)
     structure(
         list(
-            wl = get_wl(meas)[win$pixel1],
+            wl = get_wl(meas)[win$pixel_filter],
             cnt = dc
             ),
         class = 'dc',
@@ -384,8 +384,8 @@ if (FALSE) {
     # lin_first <- TRUE
     dcAula <- calc_dc(FileAulaNH3, FileAulaN2, correct.dark = c_dark, correct.linearity = c_lin, lin_before_dark = lin_first)
     dcOld <- calc_dc(FileOldNH3, FileOldN2, correct.dark = c_dark, correct.linearity = c_lin, lin_before_dark = lin_first)
-    dsAula <- attr(dcAula, 'ds')[attr(dcAula, 'win')$pixel1]
-    dsOld <- attr(dcOld, 'ds')[attr(dcOld, 'win')$pixel1]
+    dsAula <- attr(dcAula, 'ds')[attr(dcAula, 'win')$pixel_filter]
+    dsOld <- attr(dcOld, 'ds')[attr(dcOld, 'win')$pixel_filter]
     chAula <- cheng2dc(dcAula)
     chOld <- cheng2dc(dcOld)
 
@@ -395,7 +395,7 @@ if (FALSE) {
     lines(dcOld$wl, dcOld$cnt, col = 'orange', type = type)
 
     # plot(dcAula$wl, dsAula, type = 'l', ylim = c(-0.8, 0))
-    plot(calc_wl(attr(dcAula, 'meas'), attr(dcAula, 'win')$pixel1 - 10), dsAula, type = 'l', ylim = c(-0.8, 0))
+    plot(calc_wl(attr(dcAula, 'meas'), attr(dcAula, 'win')$pixel_filter - 10), dsAula, type = 'l', ylim = c(-0.8, 0))
     lines(get_wl(nh3), cheng * 193e3 * 0.075, col = 'orange')
 
     dc1 <- calc_dc(FileAulaNH3, FileAulaN2, correct.dark = c_dark, correct.linearity = c_lin, lin_before_dark = FALSE)
@@ -450,7 +450,7 @@ if (FALSE) {
 
 
     # hier bin ich!!!!!
-    # -> to do: check Abzug blinds anstatt pixel4, ev mit linearity vorher (oder gar ohne lin?)...
+    # -> to do: check Abzug blinds anstatt pixel_dc, ev mit linearity vorher (oder gar ohne lin?)...
 
 
     cheng <- -cheng2doas(get_Cheng(), nh3)

@@ -89,7 +89,7 @@ write_daily <- function(files, obj, path) {
     # write files
     writeBin(files, con, endian = 'big')
     # serialize object
-    ser <- serialize(obj, NULL, TRUE)
+    ser <- serialize(obj, NULL, FALSE)
     # write length of ser
     writeBin(length(ser), con, endian = 'big')
     # write list

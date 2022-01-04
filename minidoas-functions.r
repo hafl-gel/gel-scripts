@@ -13,6 +13,7 @@ programVersion <- "v5.2 (26.12.2020)"
 # library(data.table)
 library(lubridate)
 library(robustbase)
+require(MASS)
 # options(shiny.trace=FALSE)
 
 

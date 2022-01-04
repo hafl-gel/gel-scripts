@@ -970,10 +970,10 @@ getCalCurves <- function(diffspec,DOAS.win,calrefspec,warn=TRUE,...) {
             ))
 }
 
-fitConc <- function(meas.doascurve, DOAS.win, path.length, Cal.dc, robust=FALSE, fit.weights=NULL) {
+fitConc <- function(meas.doascurve, DOAS.win, path.length, Cal.dc, robust=FALSE) {
     rob <- ".rob"[robust]
     fitcurve <- get(paste0("fit.curves",rob),mode="function")
-    return(fitcurve(meas.doascurve,DOAS.win$pixel_dc,Cal.dc$Xreg[DOAS.win$pixel_dc,],fit.weights,DOAS.win$tau.shift,path.length))
+    return(fitcurve(meas.doascurve,DOAS.win$pixel_dc,Cal.dc$Xreg[DOAS.win$pixel_dc,],DOAS.win$tau.shift,path.length))
 }
 
 
@@ -1426,7 +1426,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.meas/I.ref)",xlab="",main="diffspec")
                             lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,] - meas.dc,lwd=2,col="orange")
                             lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,],col="black")
-                            fit <- fitConc(meas.dc, DOASwindows, path.length, Cal.dc, fit.type=input$fit.type, robust=input$robust)
+                            fit <- fitConc(meas.dc, DOASwindows, path.length, Cal.dc, robust=input$robust)
 
                             cfs <- fit[[5]]
                             fit.SO2 <- cfs[2]*path.length*Cal.dc$SO2.dc
@@ -1512,7 +1512,7 @@ fitparallel <- function(index,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.lengt
 
             ### fit calibration curves to measured DOAS curve (see Stutz & Platt, 1996, Applied Optics 30), determine best fit after shifting over given tau range, no fixed pattern considered
             ### ******************************************************************************#
-            fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, path.length)
+            fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], DOAS.win$tau.shift, path.length)
 
             if (is.null(fitted)) {
                 isna[i] <- TRUE
@@ -1852,8 +1852,11 @@ evalOffline <- function(
         cat("Parallel computing doascurve and fit...\n\n")
         pindex <- parallel::clusterSplit(cl,seq(files))
 
-        if (use.robust) sfLibrary(robustbase)
-        sfExport("highpass.filter2","fitcurve","AICc","fitparallel")
+        if (use.robust) {
+            parallel::clusterCall(cl, library, robustbase)
+            parallel::clusterCall(cl, library, MASS)
+        }
+        parallel::clusterExport(cl, list("highpass.filter2","fitcurve","AICc","fitparallel"))
 
         cat("This might take a while...\n\n")
         p <- parallel::clusterApply(cl,pindex,fitparallel,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
@@ -1869,8 +1872,9 @@ evalOffline <- function(
             fitted.doascurve[,pindex[[i]]] <- p[[i]][[7]][,pindex[[i]]]
             residual.best[,pindex[[i]]] <- p[[i]][[8]][,pindex[[i]]]
         }
-        if (!wasrunning) {
-            sfStop();on.exit()
+        if (!cl_was_up) {
+            parallel::stopCluster(cl)
+            on.exit()
         }
     } else {
         for(i in seq(files)) {
@@ -1882,7 +1886,7 @@ evalOffline <- function(
 
                 ### fit calibration curves to measured DOAS curve (see Stutz & Platt, 1996, Applied Optics 30), determine best fit after shifting over given tau range, no fixed pattern considered
                 ### ******************************************************************************#
-                fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, path.length)
+                fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], DOAS.win$tau.shift, path.length)
 
                 if (is.null(fitted)) {
                     isna[i] <- TRUE

@@ -1,16 +1,16 @@
 
 
-fit.curves <- function(meas.doascurve, ind_fit, Xreg, fit.weights, tau.shift, path.length){
+fit.curves <- function(meas.doascurve, ind_fit, Xreg, tau.shift, path.length){
     # fit lm
     if (length(tau.shift) > 1) {
-        fitcurves <- lapply(tau.shift, function(x) lm(as.numeric(meas.doascurve[ind_fit + x]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], weights=fit.weights, model=FALSE))
+        fitcurves <- lapply(tau.shift, function(x) lm(as.numeric(meas.doascurve[ind_fit + x]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], model=FALSE))
         aicc <- sapply(fitcurves,AICc)
         index <- which.min(aicc)
         tau.best <- tau.shift[index]
-        delta.AICc.zero <- AICc(lm(as.numeric(meas.doascurve[ind_fit]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights)) - aicc[index]
+        delta.AICc.zero <- AICc(lm(as.numeric(meas.doascurve[ind_fit]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3])) - aicc[index]
         fitcurves <- fitcurves[[index]]
     } else {
-        fitcurves <- lm(as.numeric(meas.doascurve[ind_fit]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], weights=fit.weights, model=FALSE)
+        fitcurves <- lm(as.numeric(meas.doascurve[ind_fit]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], model=FALSE)
         tau.best <- tau.shift
         delta.AICc.zero <- 0
     }
@@ -26,30 +26,28 @@ fit.curves <- function(meas.doascurve, ind_fit, Xreg, fit.weights, tau.shift, pa
     )
 }   
 
-fit.curves.rob <- function(meas.doascurve, ind_fit, Xreg, fit.weights, tau.shift, path.length){
-    require(robustbase)
+fit.curves.rob <- function(meas.doascurve, ind_fit, Xreg, tau.shift, path.length){
     # tau shift?
     if (length(tau.shift) > 1) {
-        fitcurves <- lapply(tau.shift, function(x) lm(as.numeric(meas.doascurve[ind_fit + x]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], weights=fit.weights, model=FALSE))
+        fitcurves <- lapply(tau.shift, function(x) lm(as.numeric(meas.doascurve[ind_fit + x]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],  model=FALSE))
         aicc <- sapply(fitcurves,AICc)
         index <- which.min(aicc)
         tau.best <- tau.shift[index]
-        delta.AICc.zero <- AICc(lm(as.numeric(meas.doascurve[ind_fit]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights)) - aicc[index]
+        delta.AICc.zero <- AICc(lm(as.numeric(meas.doascurve[ind_fit]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3])) - aicc[index]
     } else {
         tau.best <- tau.shift
         delta.AICc.zero <- 0
     }
     # fit robust
-    fitcurves <- try(lmrob(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights, setting="KS2014"),silent=TRUE)
+    fitcurves <- try(lmrob(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], setting="KS2014"),silent=TRUE)
     if(inherits(fitcurves,"try-error") || !fitcurves$converged){
-        fitcurves <- try(lmrob(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights, setting="KS2011"),silent=TRUE)
+        fitcurves <- try(lmrob(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], setting="KS2011"),silent=TRUE)
     }
     if(inherits(fitcurves,"try-error") || !fitcurves$converged){
-        require(MASS)
-        fitcurves <- try(rlm(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights, method="MM"),silent=TRUE)
+        fitcurves <- try(rlm(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], method="MM"),silent=TRUE)
     }
     if(inherits(fitcurves,"try-error") || !fitcurves$converged){
-        fitcurves <- try(rlm(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],weights=fit.weights),silent=TRUE)
+        fitcurves <- try(rlm(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3]),silent=TRUE)
     }
     if(inherits(fitcurves,"try-error") || !fitcurves$converged){
         out <- NULL

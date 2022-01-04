@@ -964,12 +964,11 @@ getCalCurves <- function(diffspec,DOAS.win,calrefspec,warn=TRUE,...) {
 }
 
 fitConc <- function(meas.doascurve, DOAS.win, path.length, Cal.dc, fit.type="ARIMA", robust=FALSE, 
-    ARIMA.order=rbind(expand.grid(0:2,0,0,KEEP.OUT.ATTRS = FALSE),expand.grid(0,0,1:2,KEEP.OUT.ATTRS = FALSE)), dyn.fixed.pattern=NULL, fit.weights=NULL) {
+    ARIMA.order=rbind(expand.grid(0:2,0,0,KEEP.OUT.ATTRS = FALSE),expand.grid(0,0,1:2,KEEP.OUT.ATTRS = FALSE)), fit.weights=NULL) {
     ord <- as.character(as.numeric(NROW(ARIMA.order) > 1) + 1)[fit.type %in% "ARIMA"]
     rob <- ".rob"[robust]
     fitcurve <- get(paste0("fit.curves.",fit.type,ord,rob),mode="function")
-    if (is.null(dyn.fixed.pattern))dyn.fixed.pattern <- meas.doascurve[DOAS.win$pixel_dc]*0
-    return(fitcurve(meas.doascurve,DOAS.win$pixel_dc,dyn.fixed.pattern,Cal.dc$Xreg[DOAS.win$pixel_dc,],fit.weights,DOAS.win$tau.shift,ARIMA.order,path.length))
+    return(fitcurve(meas.doascurve,DOAS.win$pixel_dc,Cal.dc$Xreg[DOAS.win$pixel_dc,],fit.weights,DOAS.win$tau.shift,ARIMA.order,path.length))
 }
 
 
@@ -1627,7 +1626,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
 }
 
 
-fitparallel <- function(index,DiffSpec,DOAS.win,meas.doascurve,dyn.fixed.pattern,Cal.dc,arima.Order,path.length,
+fitparallel <- function(index,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
     isna,best.tau,delta.AICc.zero,best.order,aicctab,coeffs,se,fitted.doascurve,residual.best) {
 
     for(i in index) {
@@ -1638,7 +1637,7 @@ fitparallel <- function(index,DiffSpec,DOAS.win,meas.doascurve,dyn.fixed.pattern
 
             ### fit calibration curves to measured DOAS curve (see Stutz & Platt, 1996, Applied Optics 30), determine best fit after shifting over given tau range, no fixed pattern considered
             ### ******************************************************************************#
-            fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, dyn.fixed.pattern, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, arima.Order, path.length)
+            fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, path.length)
 
             if (is.null(fitted)) {
                 isna[i] <- TRUE
@@ -1694,7 +1693,6 @@ if (FALSE) {
     rawdata.dir=rawdataDir[DOASmodel]
     reference.dir=referenceDir[DOASmodel]
     save.results=FALSE
-    arima.Order=NULL
     arima.Order.FP=NULL
     special.Args = list(b=3.5
         ,Scale=function(r) median(abs(r))/0.6745
@@ -1750,7 +1748,6 @@ evalOffline <- function(
     rawdata.dir=NULL,
     reference.dir=NULL,
     save.results=FALSE,
-    arima.Order=NULL,
     arima.Order.FP=NULL,
     special.Args = list(b=3.5
         ,Scale=function(r) median(abs(r))/0.6745
@@ -1797,8 +1794,6 @@ evalOffline <- function(
     filter.strength_loess <- specialArgs$filter.strength_loess
 
     program.version <- programVersion
-    if (use.arima&is.null(arima.Order))arima.Order <- rbind(expand.grid(0:2,0,0,KEEP.OUT.ATTRS = FALSE),expand.grid(0,0,1:2,KEEP.OUT.ATTRS = FALSE))
-    if (use.arima&is.null(arima.Order.FP)&corr.fixed.pattern)arima.Order.FP <- rbind(expand.grid(0:2,0,0,KEEP.OUT.ATTRS = FALSE),expand.grid(0,0,1:2,KEEP.OUT.ATTRS = FALSE))
     tau.fix <- length(tau.shift)==1 
 
     cat("\n************\nevaluating miniDOAS model",DOAS.model,"\n")
@@ -1999,12 +1994,10 @@ evalOffline <- function(
     se <- coeffs <- matrix(nrow=3, ncol=files)
     residual.best <- fitted.doascurve <- matrix(nrow=dim2, ncol=files)
     isna <- logical(files)
-    dyn.fixed.pattern <- rep(0, dim2)
 
     # get correct function:
-    ord <- as.character(as.numeric(NROW(arima.Order) > 1) + 1)[use.arima]
     rob <- ".rob"[use.robust]
-    fitcurve <- get(paste0("fit.curves.",ifelse(use.arima,"ARIMA","OLS"),ord,rob),mode="function")
+    fitcurve <- get(paste0("fit.curves.",rob),mode="function")
 
     # create a 'lighter' highpass filter
     winFUN <- switch(DOAS.win$filter.type,
@@ -2046,7 +2039,7 @@ evalOffline <- function(
             meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel_filter,i],DOAS.win)
 
             ### fit calibration curves to measured DOAS curve
-            fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, dyn.fixed.pattern, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, arima.Order, path.length)
+            fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, path.length)
             ")
 
             return(
@@ -2055,9 +2048,7 @@ evalOffline <- function(
                     fitcurve = fitcurve,
                     DiffSpec = DiffSpec,
                     DOAS.win = DOAS.win,
-                    dyn.fixed.pattern = dyn.fixed.pattern,
                     Cal.dc = Cal.dc,
-                    arima.Order = arima.Order,
                     path.length = path.length
                 )
             )
@@ -2076,9 +2067,7 @@ evalOffline <- function(
         sfExport("highpass.filter2","fitcurve","AICc","fitparallel","forecastArima")
 
         cat("This might take a while...\n\n")
-        # p <- clusterApplyLB(cl,pindex,fitparallel,DiffSpec,DOAS.win,meas.doascurve,dyn.fixed.pattern,Cal.dc,arima.Order,path.length,
-        #       isna,best.tau,delta.AICc.zero,best.order,aicctab,coeffs,se,fitted.doascurve,residual.best)
-        p <- clusterApply(cl,pindex,fitparallel,DiffSpec,DOAS.win,meas.doascurve,dyn.fixed.pattern,Cal.dc,arima.Order,path.length,
+        p <- clusterApply(cl,pindex,fitparallel,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
             isna,best.tau,delta.AICc.zero,best.order,aicctab,coeffs,se,fitted.doascurve,residual.best)
 
         for(i in seq_along(p)) {
@@ -2107,19 +2096,17 @@ evalOffline <- function(
 
                 ### fit calibration curves to measured DOAS curve (see Stutz & Platt, 1996, Applied Optics 30), determine best fit after shifting over given tau range, no fixed pattern considered
                 ### ******************************************************************************#
-                fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, dyn.fixed.pattern, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, arima.Order, path.length)
+                fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, path.length)
 
                 if (is.null(fitted)) {
                     isna[i] <- TRUE
                 } else {
                     best.tau[i] <- fitted[[1]]
                     delta.AICc.zero[i] <- fitted[[2]]
-                    best.order[i] <- fitted[[3]]
-                    aicctab[[i]] <- fitted[[4]]
-                    coeffs[,i] <- fitted[[5]]
-                    se[,i] <- fitted[[6]]
-                    fitted.doascurve[,i] <- fitted[[7]]
-                    residual.best[,i] <- fitted[[8]]
+                    coeffs[,i] <- fitted[[3]]
+                    se[,i] <- fitted[[4]]
+                    fitted.doascurve[,i] <- fitted[[5]]
+                    residual.best[,i] <- fitted[[6]]
                 }
             } else {
                 isna[i] <- TRUE
@@ -2418,7 +2405,6 @@ evalOffline <- function(
         rawdata.dir=rawdata.dir,
         reference.dir=reference.dir,
         save.results=save.results,
-        arima.Order=arima.Order,
         arima.Order.FP=arima.Order.FP,
         special.Args=special.Args,
         ref.spec=ref.spec,

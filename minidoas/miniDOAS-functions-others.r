@@ -1902,6 +1902,8 @@ evalOffline <- function(
 
     cat("\n")
 
+    NH3cor <- if (Edinburgh_correction) 1.16 else 1
+
         # reduce results and simplify names
         results <- as.data.frame(matrix(nrow=files, ncol=13, dimnames=list(1:files,
                     c('st', 'et', 'nh3', 'so2', 'no', 'nh3_se', 'so2_se', 'no_se', 'Imax', 'n', 'tau', 'shutter', 'revolver'))))

@@ -946,14 +946,21 @@ diffSpecs <- function(Iset,use.ref=TRUE) {
     return(out)
 }
 
-getCalCurves <- function(diffspec,DOAS.win,calrefspec,warn=TRUE,...) {
+### get calibration related stuff
+### ******************************************************************************
+# TODO: tidy up later
+getCalCurves <- function(diffspec, DOAS.win, calrefspec, warn = TRUE, ...) {
+
+    # correct filter window for subsetted differential spectra
+    if (length(diffspec$NH3.diffspec) < 800) {
+        DOAS.win$pixel_filter <- seq_along(diffspec$NH3.diffspec)
+    }
 
     # NH3:
     if (anyNA(c(calrefspec$dat.NH3$ambient$pathLength,calrefspec$dat.N2.NH3$ambient$pathLength))) {
         if (warn)warning("NH3 calibration spectrum: unknown path lengths might be different!")
         NH3_total <- calrefspec$dat.NH3$cuvette$cuvetteConc_mg*1000*calrefspec$dat.NH3$cuvette$cuvetteLength
     } else {
-        # if (calrefspec$dat.NH3$ambient$pathLength != calrefspec$dat.N2.NH3$ambient$pathLength & anyNA(c(calrefspec$dat.NH3$ambient$NH3ambient_ug,calrefspec$dat.N2.NH3$ambient$NH3ambient_ug))) {
         if (anyNA(c(calrefspec$dat.NH3$ambient$NH3ambient_ug,calrefspec$dat.N2.NH3$ambient$NH3ambient_ug))) {
             if (warn)warning("NH3 calibration spectrum: unknown ambient concentrations!")
             NH3_total <- calrefspec$dat.NH3$cuvette$cuvetteConc_mg*1000*calrefspec$dat.NH3$cuvette$cuvetteLength
@@ -971,7 +978,6 @@ getCalCurves <- function(diffspec,DOAS.win,calrefspec,warn=TRUE,...) {
         if (warn)warning("SO2 calibration spectrum: unknown path lengths might be different!")
         SO2_total <- calrefspec$dat.SO2$cuvette$cuvetteConc_mg*1000*calrefspec$dat.SO2$cuvette$cuvetteLength
     } else {
-        # if (calrefspec$dat.SO2$ambient$pathLength != calrefspec$dat.N2.SO2$ambient$pathLength & anyNA(c(calrefspec$dat.SO2$ambient$SO2ambient_ug,calrefspec$dat.N2.SO2$ambient$SO2ambient_ug))) {
         if (anyNA(c(calrefspec$dat.SO2$ambient$SO2ambient_ug,calrefspec$dat.N2.SO2$ambient$SO2ambient_ug))) {
             if (warn)warning("SO2 calibration spectrum: unknown ambient concentrations!")
             SO2_total <- calrefspec$dat.SO2$cuvette$cuvetteConc_mg*1000*calrefspec$dat.SO2$cuvette$cuvetteLength
@@ -988,7 +994,6 @@ getCalCurves <- function(diffspec,DOAS.win,calrefspec,warn=TRUE,...) {
         if (warn)warning("NO calibration spectrum: unknown path lengths might be different!")
         NO_total <- calrefspec$dat.NO$cuvette$cuvetteConc_mg*1000*calrefspec$dat.NO$cuvette$cuvetteLength
     } else {
-        # if (calrefspec$dat.NO$ambient$pathLength != calrefspec$dat.N2.NO$ambient$pathLength & anyNA(c(calrefspec$dat.NO$ambient$NOambient_ug,calrefspec$dat.N2.NO$ambient$NOambient_ug))) {
         if (anyNA(c(calrefspec$dat.NO$ambient$NOambient_ug,calrefspec$dat.N2.NO$ambient$NOambient_ug))) {
             if (warn)warning("NO calibration spectrum: unknown ambient concentrations!")
             NO_total <- calrefspec$dat.NO$cuvette$cuvetteConc_mg*1000*calrefspec$dat.NO$cuvette$cuvetteLength
@@ -1016,42 +1021,6 @@ fitConc <- function(meas.doascurve, DOAS.win, path.length, Cal.dc, robust=FALSE)
     fitcurve <- get(paste0("fit.curves",rob),mode="function")
     return(fitcurve(meas.doascurve,DOAS.win$pixel_dc,Cal.dc$Xreg[DOAS.win$pixel_dc,],DOAS.win$tau.shift,path.length))
 }
-
-
-
-
-fitparallel <- function(index,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
-    isna,best.tau,delta.AICc.zero,coeffs,se,fitted.doascurve,residual.best) {
-
-    for(i in index) {
-
-        if (median(DiffSpec$diffspec[,i],na.rm=TRUE) > -5) {
-            # highpass filtering:
-            meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel_filter,i],DOAS.win)
-
-            ### fit calibration curves to measured DOAS curve (see Stutz & Platt, 1996, Applied Optics 30), determine best fit after shifting over given tau range, no fixed pattern considered
-            ### ******************************************************************************#
-            fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], DOAS.win$tau.shift, path.length)
-
-            if (is.null(fitted)) {
-                isna[i] <- TRUE
-            } else {
-                best.tau[i] <- fitted[[1]]
-                delta.AICc.zero[i] <- fitted[[2]]
-                coeffs[,i] <- fitted[[3]]
-                se[,i] <- fitted[[4]]
-                fitted.doascurve[,i] <- fitted[[5]]
-                residual.best[,i] <- fitted[[6]]
-            }
-        } else {
-            isna[i] <- TRUE
-        }
-    }
-
-    out <- list(meas.doascurve,isna,best.tau,delta.AICc.zero,coeffs,se,fitted.doascurve,residual.best)
-    return(out)
-}
-
 
 
 
@@ -1093,7 +1062,6 @@ evalOffline <- function(
     force.write.daily=FALSE,
     lite=TRUE,
     return.specData=FALSE,
-    return.fitData=FALSE,
     ncores=1,
     add.name="",
     RawData = NULL,
@@ -1219,28 +1187,14 @@ evalOffline <- function(
     DiffSpec <- diffSpecs(SpecCorr, use.ref = use.ref)
 
     # get calibration doascurves:
-    Cal.dc <- getCalCurves(DiffSpec,DOAS.win,CalRefSpecs,...)
+    Cal.dc <- getCalCurves(DiffSpec, DOAS.win, CalRefSpecs, ...)
 
-    ### process raw-data record-wise
-    ### ******************************************************************************
-    ### initiate secondary data matrices
-    ### ******************************************************************************
-
-    dim1 <- length(DOAS.win$pixel_filter)
-    dim2 <- length(DOAS.win$pixel_fit)
-
-    files <- ncol(DiffSpec$diffspec)
-    cat("\n"); cat("initiate data matrices\n")
-    meas.doascurve <- matrix(nrow=dim1, ncol=files)
-    best.order <- delta.AICc.zero <- best.tau <- numeric(files)*NA
-    aicctab <- vector(mode="list", length=files)
-    se <- coeffs <- matrix(nrow=3, ncol=files)
-    residual.best <- fitted.doascurve <- matrix(nrow=dim2, ncol=files)
-    isna <- logical(files)
-
-    # get correct function:
-    rob <- ".rob"[use.robust]
-    fitcurve <- get(paste0("fit.curves",rob),mode="function")
+    # get fitting function:
+    if (use.robust) {
+        fitcurve <- fit.curves.rob
+    } else {
+        fitcurve <- fit.curves
+    }
 
     # create a 'lighter' highpass filter
     winFUN <- switch(DOAS.win$filter.type,
@@ -1262,42 +1216,62 @@ evalOffline <- function(
     C_cfilter <- getFromNamespace('C_cfilter', 'stats')
     if (DOAS.win$filter.rev) {
         # old double filter
-        highpass.filter2 <- function(dat,DOAS.win) {
-            dat - rev(.Call(C_cfilter, rev(.Call(C_cfilter, dat, DOAS.win$filt, 2L, FALSE)), DOAS.win$filt, 2L, FALSE))
+        highpass.filter2 <- function(dat, filt) {
+            dat - rev(.Call(C_cfilter, rev(.Call(C_cfilter, dat, filt, 2L, FALSE)), filt, 2L, FALSE))
         }
     } else {
         # new double filter
-        highpass.filter2 <- function(dat,DOAS.win) {
+        highpass.filter2 <- function(dat, filt) {
             dat - (
-                .Call(C_cfilter, dat, DOAS.win$filt, 2L, FALSE) +
-                    rev(.Call(C_cfilter, rev(dat), DOAS.win$filt, 2L, FALSE))
+                .Call(C_cfilter, dat, filt, 2L, FALSE) +
+                    rev(.Call(C_cfilter, rev(dat), filt, 2L, FALSE))
                 ) / 2
         }
     }
 
-    if (return.fitData) {
 
-        cat("
-            # highpass filtering:
-            meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel_filter,i],DOAS.win)
-
-            ### fit calibration curves to measured DOAS curve
-            fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], NULL, DOAS.win$tau.shift, path.length)
-            ")
-
-            return(
-                list(
-                    highpass.filter2 = highpass.filter2,
-                    fitcurve = fitcurve,
-                    DiffSpec = DiffSpec,
-                    DOAS.win = DOAS.win,
-                    Cal.dc = Cal.dc,
-                    path.length = path.length
-                )
-            )
-    }
+    ### ******************************************************************************
+    ### process raw-data record-wise
+    ### ******************************************************************************
 
     if (parl) {
+
+        # FIXME: fix parallel comp, move functions outside, remove process_fit, change fitparallel
+        process_fit <- function(diffspec, doas_win, xreg, path_length, 
+            filter_fu, fit_fu) {
+            # highpass filter and fit curve to calibration
+            ### ******************************************************************************#
+            fit_fu(
+                filter_fu(diffspec, doas_win$filt), 
+                doas_win$pixel_dc, xreg, doas_win$tau.shift, path_length)
+        }
+
+        fitparallel <- function(index,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
+            isna,best.tau,delta.AICc.zero,coeffs,se,fitted.doascurve,residual.best) {
+            for(i in index) {
+                if (median(DiffSpec$diffspec[,i],na.rm=TRUE) > -5) {
+                    # highpass filtering:
+                    meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel_filter,i],DOAS.win)
+                    ### fit calibration curves to measured DOAS curve (see Stutz & Platt, 1996, Applied Optics 30), determine best fit after shifting over given tau range, no fixed pattern considered
+                    ### ******************************************************************************#
+                    fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], DOAS.win$tau.shift, path.length)
+                    if (is.null(fitted)) {
+                        isna[i] <- TRUE
+                    } else {
+                        best.tau[i] <- fitted[[1]]
+                        delta.AICc.zero[i] <- fitted[[2]]
+                        coeffs[,i] <- fitted[[3]]
+                        se[,i] <- fitted[[4]]
+                        fitted.doascurve[,i] <- fitted[[5]]
+                        residual.best[,i] <- fitted[[6]]
+                    }
+                } else {
+                    isna[i] <- TRUE
+                }
+            }
+            out <- list(meas.doascurve,isna,best.tau,delta.AICc.zero,coeffs,se,fitted.doascurve,residual.best)
+            return(out)
+        }
 
         cat("Parallel computing doascurve and fit...\n\n")
         pindex <- parallel::clusterSplit(cl,seq(files))
@@ -1327,34 +1301,28 @@ evalOffline <- function(
             on.exit()
         }
     } else {
-        for(i in seq(files)) {
-            cat("\r",i,"/",files)
-
-            if (median(DiffSpec$diffspec[,i],na.rm=TRUE) > -5) {
-                # highpass filtering:
-                meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel_filter,i],DOAS.win)
-
-                ### fit calibration curves to measured DOAS curve (see Stutz & Platt, 1996, Applied Optics 30), determine best fit after shifting over given tau range, no fixed pattern considered
-                ### ******************************************************************************#
-                fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], DOAS.win$tau.shift, path.length)
-
-                if (is.null(fitted)) {
-                    isna[i] <- TRUE
-                } else {
-                    best.tau[i] <- fitted[[1]]
-                    delta.AICc.zero[i] <- fitted[[2]]
-                    coeffs[,i] <- fitted[[3]]
-                    se[,i] <- fitted[[4]]
-                    fitted.doascurve[,i] <- fitted[[5]]
-                    residual.best[,i] <- fitted[[6]]
-                }
-            } else {
-                isna[i] <- TRUE
+        ### sequential
+        ### ******************************************************************************#
+        # get # of files to process
+        n_files <- length(DiffSpec$diffspec)
+        # prepare xreg
+        xreg <- Cal.dc$Xreg[DOAS.win$pixel_dc, ]
+        # loop over files
+        out <- lapply(seq.int(n_files), function(i) {
+            # verbose
+            cat("\r", i, "/", n_files)
+            # check if light
+            if (median(DiffSpec$diffspec[[i]],na.rm=TRUE) > -5) {
+                # highpass filter and fit curve to calibration
+                fitcurve(
+                    highpass.filter2(DiffSpec$diffspec[[i]], DOAS.win$filt), 
+                    DOAS.win$pixel_dc, xreg, DOAS.win$tau.shift, path.length)
             }
-        }
+            })
+        cat("\n")
     }
 
-    cat("\n")
+    browser()
 
     NH3cor <- if (Edinburgh_correction) 1.16 else 1
 

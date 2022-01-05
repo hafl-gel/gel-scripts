@@ -907,15 +907,26 @@ process_spectra <- function(specSet, rawData = NULL, correct.dark = TRUE,
         stop("argument correct.straylight must be either \"none\", \"avg\" or \"linear\"")
     )
 
+    # remove straylight data
+    if (return.subset.list) {
+        out$I.N2.NH3 <- out$I.N2.NH3[-straylight.pix]
+        out$I.N2.SO2 <- out$I.N2.SO2[-straylight.pix]
+        out$I.N2.NO <- out$I.N2.NO[-straylight.pix]
+        out$I.NH3 <- out$I.NH3[-straylight.pix]
+        out$I.SO2 <- out$I.SO2[-straylight.pix]
+        out$I.NO <- out$I.NO[-straylight.pix]
+        out$I.ref <- out$I.ref[-straylight.pix]      
+        out$I.meas <- lapply(out$I.meas, '[', -straylight.pix)
+    }
     # remove empty I.meas entry if rawData is null
     if (!length(out$I.meas)) out$I.meas <- NULL 
-
-    out$dat.ref <- specSet$dat.ref
 
     return(out)
 }
 
 diffSpecs <- function(Iset,use.ref=TRUE) {
+
+    browser()
 
     suppressWarnings(
         out <- list(
@@ -929,7 +940,6 @@ diffSpecs <- function(Iset,use.ref=TRUE) {
         if (use.ref) {
             suppressWarnings(out$diffspec <- log(Iset$I.meas/Iset$I.ref))
             out$diffspec[is.na(out$diffspec)] <- log(.Machine$double.eps)
-            out$dat.ref <- Iset$dat.ref
         } else {
             out$diffspec <- log(Iset$I.meas)
         }
@@ -1153,64 +1163,59 @@ evalOffline <- function(
         cat("argument 'CalRefSpecs' supplied...\n")
     }
 
+    ### calibration concentrations in ppb
+    cat(
+        sprintf(
+            "\nNH3 calibration of %1.2f mg/m3 (corresponds to %1.2f ug/m3 in a path of %1.1f m)\n",
+            CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg,
+            CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg * 1000 / path.length * CalRefSpecs$dat.NH3$cuvette$cuvetteLength,
+            path.length
+            )
+    )
+    cat(
+        sprintf(
+            "SO2 calibration of %1.2f mg/m3 (corresponds to %1.2f ug/m3 in a path of %1.1f m)\n",
+            CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg,
+            CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg * 1000 / path.length * CalRefSpecs$dat.SO2$cuvette$cuvetteLength,
+            path.length
+            )
+    )
+    cat(
+        sprintf(
+            "NO calibration of %1.2f mg/m3 (corresponds to %1.2f ug/m3 in a path of %1.1f m)\n",
+            CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg,
+            CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg * 1000 / path.length * CalRefSpecs$dat.NO$cuvette$cuvetteLength,
+            path.length
+            )
+    )
+
+    ################################################################################
+    ### data processing ############################################################
+    ################################################################################
+
     # correct cal/ref specs:
     SpecCorr <- process_spectra(CalRefSpecs, rawData = RawData, correct.dark = correct.dark, 
         correct.linearity = correct.linearity, correct.straylight = correct.straylight, 
         straylight.pix = DOAS.win$pixel_straylight, return.subset.list = TRUE)
 
-    ### calibration concentrations in ppb
-    ### ******************************************************************************
-    cat(sprintf("\nNH3 calibration of %1.2f mg/m3 (corresponds to %1.2f ug/m3 in a path of %1.1f m)\n",CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg,CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg * 1000 / path.length * CalRefSpecs$dat.NH3$cuvette$cuvetteLength,path.length))
-    cat(sprintf("SO2 calibration of %1.2f mg/m3 (corresponds to %1.2f ug/m3 in a path of %1.1f m)\n",CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg,CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg * 1000 / path.length * CalRefSpecs$dat.SO2$cuvette$cuvetteLength,path.length))
-    cat(sprintf("NO calibration of %1.2f mg/m3 (corresponds to %1.2f ug/m3 in a path of %1.1f m)\n",CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg,CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg * 1000 / path.length * CalRefSpecs$dat.NO$cuvette$cuvetteLength,path.length))
-
-
-
-    ################################################################################
-    ### data processing ############################################################
-    ################################################################################
+    # Fix S1
     if (DOAS.model=="S1" && RawData$Header[1,"st"] > strptime("20160614",format="%Y%m%d") && RawData$Header[1,"st"] < strptime("20170101",format="%Y%m%d")) {
         RawData$Header[,"TECTemp"] <- sapply(strsplit(RawData$Header[,"Klima"],","),"[",4)
     }
 
-    # averaging:
-    if (avg.period!=1) {
-        cat("Average based on",avg.period,"minute intervals...\n")
-        dts <- as.numeric(RawData$Header[,"st"] + as.numeric(RawData$Header[,"et"]-RawData$Header[,"st"],units="secs")/2 - timerange[1],units="secs")
-        avgIndex <- floor(dts/(avg.period*60))
-        diffAvgI <- as.logical(diff(avgIndex))
-        NoAvgInt <- tapply(avgIndex,avgIndex,length)
-        ###
-        SpecCorr$I.meas <- t(apply(SpecCorr$I.meas,1,function(x,y)tapply(x,y,mean),y=avgIndex))
-        ###
-        n <- tapply(RawData$Header[,"AccNum"],avgIndex,sum)
-        st <- RawData$Header[c(TRUE,diffAvgI),"st"]
-        et <- RawData$Header[c(diffAvgI,TRUE),"et"]
-        TEC.Temp <- tapply(as.numeric(RawData$Header[,"TECTemp"]),avgIndex,median)
-        bT <- strsplit(RawData$Header[,"Klima"],",")
-        board.Temp <- round(tapply(as.numeric(sapply(bT,"[",1)),avgIndex,mean),1)
-        ambient.Temp <- round(tapply(as.numeric(sapply(bT,"[",2)),avgIndex,mean),1)
-        ambient.RH <- round(tapply(as.numeric(sapply(bT,"[",3)),avgIndex,mean),1)
-        time.res <- tapply(RawData$Header[,"Expos"]*RawData$Header[,"AccNum"],avgIndex,sum)
-        integr.time <- tapply(RawData$Header[,"Expos"],avgIndex,function(x)paste(unique(x),collapse="/"))
-        RevPos <- tapply(RawData$Header[,"RevPos"],avgIndex,function(x)paste(unique(x),collapse="/"))
-        ShuPos <- tapply(RawData$Header[,"ShuPos"],avgIndex,function(x)paste(unique(x),collapse="/"))
-    } else {
-        NoAvgInt <- rep(1,length(RawData$Header[,"st"]))
-        ###
-        n <- RawData$Header[,"AccNum"]
-        st <- RawData$Header[,"st"]
-        et <- RawData$Header[,"et"]
-        TEC.Temp <- as.numeric(RawData$Header[,"TECTemp"])
-        bT <- strsplit(RawData$Header[,"Klima"],",")
-        board.Temp <- as.numeric(sapply(bT,"[",1))
-        ambient.Temp <- as.numeric(sapply(bT,"[",2))
-        ambient.RH <- as.numeric(sapply(bT,"[",3))
-        time.res <- RawData$Header[,"Expos"]*RawData$Header[,"AccNum"]
-        integr.time <- RawData$Header[,"Expos"]
-        RevPos <- RawData$Header[,"RevPos"]
-        ShuPos <- RawData$Header[,"ShuPos"]
-    }
+    #### TODO: is this needed? yet?
+    #n <- RawData$Header[,"AccNum"]
+    #st <- RawData$Header[,"st"]
+    #et <- RawData$Header[,"et"]
+    #TEC.Temp <- as.numeric(RawData$Header[,"TECTemp"])
+    #bT <- strsplit(RawData$Header[,"Klima"],",")
+    #board.Temp <- as.numeric(sapply(bT,"[",1))
+    #ambient.Temp <- as.numeric(sapply(bT,"[",2))
+    #ambient.RH <- as.numeric(sapply(bT,"[",3))
+    #time.res <- RawData$Header[,"Expos"]*RawData$Header[,"AccNum"]
+    #integr.time <- RawData$Header[,"Expos"]
+    #RevPos <- RawData$Header[,"RevPos"]
+    #ShuPos <- RawData$Header[,"ShuPos"]
 
     # calculate differential spectra:
     DiffSpec <- diffSpecs(SpecCorr, use.ref = use.ref)

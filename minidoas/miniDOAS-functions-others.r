@@ -1158,7 +1158,7 @@ evalOffline <- function(
     ################################################################################
     ### data processing ############################################################
     ################################################################################
-
+    
     # correct cal/ref specs:
     SpecCorr <- process_spectra(CalRefSpecs, rawData = RawData, correct.dark = correct.dark, 
         correct.linearity = correct.linearity, correct.straylight = correct.straylight, 
@@ -1168,20 +1168,6 @@ evalOffline <- function(
     if (DOAS.model=="S1" && RawData$Header[1,"st"] > strptime("20160614",format="%Y%m%d") && RawData$Header[1,"st"] < strptime("20170101",format="%Y%m%d")) {
         RawData$Header[,"TECTemp"] <- sapply(strsplit(RawData$Header[,"Klima"],","),"[",4)
     }
-
-    #### TODO: is this needed? yet?
-    #n <- RawData$Header[,"AccNum"]
-    #st <- RawData$Header[,"st"]
-    #et <- RawData$Header[,"et"]
-    #TEC.Temp <- as.numeric(RawData$Header[,"TECTemp"])
-    #bT <- strsplit(RawData$Header[,"Klima"],",")
-    #board.Temp <- as.numeric(sapply(bT,"[",1))
-    #ambient.Temp <- as.numeric(sapply(bT,"[",2))
-    #ambient.RH <- as.numeric(sapply(bT,"[",3))
-    #time.res <- RawData$Header[,"Expos"]*RawData$Header[,"AccNum"]
-    #integr.time <- RawData$Header[,"Expos"]
-    #RevPos <- RawData$Header[,"RevPos"]
-    #ShuPos <- RawData$Header[,"ShuPos"]
 
     # calculate differential spectra:
     DiffSpec <- diffSpecs(SpecCorr, use.ref = use.ref)
@@ -1322,26 +1308,35 @@ evalOffline <- function(
         cat("\n")
     }
 
+    # rbind results
+    out <- rbindlist(out)
+
+    # name them
+    setnames(out, c('nh3', 'so2', 'no', 'nh3_se', 'so2_se', 'no_se', 'tau'))
+
     browser()
 
-    NH3cor <- if (Edinburgh_correction) 1.16 else 1
+    # correct NH3 calibration with Edinburgh correction?
+    if (Edinburgh_correction) {
+        out[, ':='(
+            nh3 = nh3 * 1.16,
+            nh3_se = nh3_se * 1.16
+            )]
+    }
 
-        # reduce results and simplify names
-        results <- as.data.frame(matrix(nrow=files, ncol=13, dimnames=list(1:files,
-                    c('st', 'et', 'nh3', 'so2', 'no', 'nh3_se', 'so2_se', 'no_se', 'Imax', 'n', 'tau', 'shutter', 'revolver'))))
-        results[,1] <- st
-        results[,2] <- et
-        results[,3] <- coeffs[1,] * NH3cor
-        results[,4] <- coeffs[2,]  
-        results[,5] <- coeffs[3,]
-        results[,6] <- se[1,] * NH3cor
-        results[,7] <- se[2,]
-        results[,8] <- se[3,]  
-        results[,9] <- apply(RawData$RawData, 2, max, na.rm=TRUE)
-        results[,10] <- n
-        results[,11] <- best.tau
-        results[,12] <- ShuPos
-        results[,13] <- RevPos
+    # gather residual results
+    results <- cbind(
+        st = RawData$Header[, "st"],
+        et = RawData$Header[, "et"],
+        out,
+        i_max = sapply(RawData$RawData, max, na.rm = TRUE),
+        n = RawData$Header[,"AccNum"],
+        shutter = RawData$Header[, "ShuPos"],
+        revolver = RawData$Header[, "RevPos"],
+        tec = as.numeric(RawData$Header[, "TECTemp"]),
+        i_fit_min = sapply(RawData$RawData, function(x) min(x[DOAS.win$pixel_fit], na.rm = TRUE)),
+        i_fit_max = sapply(RawData$RawData, function(x) max(x[DOAS.win$pixel_fit], na.rm = TRUE))
+    )
 
     if (lite) {
         return.specData <- FALSE
@@ -1365,7 +1360,7 @@ evalOffline <- function(
         ,CalRefSpecs=CalRefSpecs
         ,RawData=RawData
         ,callEval=match.call()
-        ,class=c("DOASeval","data.frame")
+        ,class=c("DOASeval", 'data.table', "data.frame")
     )
     return(results)
 }

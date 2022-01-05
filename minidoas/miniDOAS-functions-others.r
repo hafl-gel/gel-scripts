@@ -1158,6 +1158,8 @@ evalOffline <- function(
     ### data processing ############################################################
     ################################################################################
     
+    cat('\nProcessing spectra...\n')
+
     # correct cal/ref specs:
     SpecCorr <- process_spectra(CalRefSpecs, rawData = RawData, correct.dark = correct.dark, 
         correct.linearity = correct.linearity, correct.straylight = correct.straylight, 
@@ -1222,82 +1224,72 @@ evalOffline <- function(
     if (parl) {
 
         # FIXME: fix parallel comp, move functions outside, remove process_fit, change fitparallel
-        process_fit <- function(diffspec, doas_win, xreg, path_length, 
-            filter_fu, fit_fu) {
-            # highpass filter and fit curve to calibration
-            ### ******************************************************************************#
-            fit_fu(
-                filter_fu(diffspec, doas_win$filt), 
-                doas_win$pixel_dc, xreg, doas_win$tau.shift, path_length)
-        }
-
-        fitparallel <- function(index,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
-            isna,best.tau,delta.AICc.zero,coeffs,se,fitted.doascurve,residual.best) {
-            for(i in index) {
-                if (median(DiffSpec$diffspec[,i],na.rm=TRUE) > -5) {
-                    # highpass filtering:
-                    meas.doascurve[,i] <- highpass.filter2(DiffSpec$diffspec[DOAS.win$pixel_filter,i],DOAS.win)
-                    ### fit calibration curves to measured DOAS curve (see Stutz & Platt, 1996, Applied Optics 30), determine best fit after shifting over given tau range, no fixed pattern considered
-                    ### ******************************************************************************#
-                    fitted <- fitcurve(meas.doascurve[,i], DOAS.win$pixel_dc, Cal.dc$Xreg[DOAS.win$pixel_dc,], DOAS.win$tau.shift, path.length)
-                    if (is.null(fitted)) {
-                        isna[i] <- TRUE
-                    } else {
-                        best.tau[i] <- fitted[[1]]
-                        delta.AICc.zero[i] <- fitted[[2]]
-                        coeffs[,i] <- fitted[[3]]
-                        se[,i] <- fitted[[4]]
-                        fitted.doascurve[,i] <- fitted[[5]]
-                        residual.best[,i] <- fitted[[6]]
-                    }
+        fit_parallel <- function(index, ds, doas_win, xreg, path_length) {
+            lapply(index, function(i) {
+                # check if light
+                if (median(ds[[i]], na.rm = TRUE) > -5) {
+                    # highpass filter and fit curve to calibration
+                    fitcurve(
+                        hpf2(ds[[i]], doas_win$filt), 
+                        doas_win$pixel_dc, xreg, doas_win$tau.shift, path_length)
                 } else {
-                    isna[i] <- TRUE
+                    # return NAs if too few light
+                    as.list(c(
+                            rep(NA_real_, 6),
+                            NA_integer_
+                            ))
                 }
-            }
-            out <- list(meas.doascurve,isna,best.tau,delta.AICc.zero,coeffs,se,fitted.doascurve,residual.best)
-            return(out)
+            })
         }
 
-        cat("Parallel computing doascurve and fit...\n\n")
-        pindex <- parallel::clusterSplit(cl,seq(files))
+        # verbose
+        cat("\nParallel computing doascurve and fit...\n\n")
 
+        browser()
+
+        # split diffspecs
+        p_index <- parallel::splitIndices(length(DiffSpec$diffspec), length(cl))
+
+        # call libraries for robust fit
         if (use.robust) {
             parallel::clusterCall(cl, library, package = 'robustbase', character.only = TRUE)
             parallel::clusterCall(cl, library, package = 'MASS', character.only = TRUE)
         }
-        parallel::clusterExport(cl, list("highpass.filter2","fitcurve","AICc","fitparallel"))
 
+        # get calibration curves
+        xreg <- Cal.dc$Xreg[DOAS.win$pixel_dc, ]
+
+        # export functions
+        hpf2 <- compiler::cmpfun(highpass.filter2)
+        parallel::clusterExport(cl, list('hpf2', "fitcurve","fit_parallel"), envir = environment())
+
+        # parallel calculation
         cat("This might take a while...\n\n")
-        p <- parallel::clusterApply(cl,pindex,fitparallel,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
-            isna,best.tau,delta.AICc.zero,coeffs,se,fitted.doascurve,residual.best)
+        p <- parallel::clusterApply(cl, p_index, fit_parallel, ds = DiffSpec$diffspec, 
+            doas_win = DOAS.win, xreg = xreg, path_length = path.length)
 
-        for(i in seq_along(p)) {
-            meas.doascurve[,pindex[[i]]] <- p[[i]][[1]][,pindex[[i]]]
-            isna[pindex[[i]]] <- p[[i]][[2]][pindex[[i]]]
-            best.tau[pindex[[i]]] <- p[[i]][[3]][pindex[[i]]]
-            delta.AICc.zero[pindex[[i]]] <- p[[i]][[4]][pindex[[i]]]
-            coeffs[,pindex[[i]]] <- p[[i]][[5]][,pindex[[i]]]
-            se[,pindex[[i]]] <- p[[i]][[6]][,pindex[[i]]]
-            fitted.doascurve[,pindex[[i]]] <- p[[i]][[7]][,pindex[[i]]]
-            residual.best[,pindex[[i]]] <- p[[i]][[8]][,pindex[[i]]]
-        }
         if (!cl_was_up) {
             parallel::stopCluster(cl)
             on.exit()
         }
+
     } else {
+
         ### sequential
         ### ******************************************************************************#
+
         # get # of files to process
         n_files <- length(DiffSpec$diffspec)
+
         # prepare xreg
         xreg <- Cal.dc$Xreg[DOAS.win$pixel_dc, ]
+
         # loop over files
         out <- lapply(seq.int(n_files), function(i) {
             # verbose
             cat("\r", i, "/", n_files)
             # check if light
-            if (median(DiffSpec$diffspec[[i]],na.rm=TRUE) > -5) {
+            if (median(DiffSpec$diffspec[[i]], na.rm = TRUE) > -5) {
                 # highpass filter and fit curve to calibration
                 fitcurve(
                     highpass.filter2(DiffSpec$diffspec[[i]], DOAS.win$filt), 
@@ -1311,6 +1303,7 @@ evalOffline <- function(
             }
             })
         cat("\n")
+
     }
 
     # rbind results

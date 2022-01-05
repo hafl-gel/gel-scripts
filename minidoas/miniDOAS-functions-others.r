@@ -924,25 +924,23 @@ process_spectra <- function(specSet, rawData = NULL, correct.dark = TRUE,
     return(out)
 }
 
+### calculate differential spectra
+### ******************************************************************************
 diffSpecs <- function(Iset,use.ref=TRUE) {
 
-    browser()
-
-    suppressWarnings(
-        out <- list(
-            NH3.diffspec = log(Iset$I.NH3/Iset$I.N2.NH3),
-            SO2.diffspec = log(Iset$I.SO2/Iset$I.N2.SO2),
-            NO.diffspec = log(Iset$I.NO/Iset$I.N2.NO)
-        )
+    out <- list(
+        NH3.diffspec = log(Iset$I.NH3 / Iset$I.N2.NH3),
+        SO2.diffspec = log(Iset$I.SO2 / Iset$I.N2.SO2),
+        NO.diffspec = log(Iset$I.NO / Iset$I.N2.NO)
     )
 
     if (!is.null(Iset$I.meas)) {
         if (use.ref) {
-            suppressWarnings(out$diffspec <- log(Iset$I.meas/Iset$I.ref))
-            out$diffspec[is.na(out$diffspec)] <- log(.Machine$double.eps)
+            suppressWarnings(out$diffspec <- lapply(Iset$I.meas, function(x) log(x / Iset$I.ref)))
         } else {
-            out$diffspec <- log(Iset$I.meas)
+            suppressWarnings(out$diffspec <- lapply(Iset$I.meas, log))
         }
+        out$diffspec[is.na(out$diffspec)] <- log(.Machine$double.eps)
     }
 
     return(out)

@@ -384,16 +384,6 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
     # subset header
     header <- header[takeme, ]
 
-    # stupid S1
-    if(DOASinfo$DOASmodel=="S1" && DOASinfo$timerange[1] < as.POSIXct("2016-01-01", tz=tz(DOASinfo$timerange[1]))){
-        RawData <- RawData[1:1021,,drop=FALSE]
-        DOASinfo$Spectrometer$"Pixel Number" <- 1021
-        # wavelength
-        DOASinfo$Spectrometer$pixel <- seq.int(1021)
-        DOASinfo$Spectrometer$wavelength <- DOASinfo$Spectrometer$"Calibration Coefficients"[1] + DOASinfo$Spectrometer$"Calibration Coefficients"[2]*DOASinfo$Spectrometer$pixel + DOASinfo$Spectrometer$"Calibration Coefficients"[3]*DOASinfo$Spectrometer$pixel^2 + DOASinfo$Spectrometer$"Calibration Coefficients"[4]*DOASinfo$Spectrometer$pixel^3
-        warning("S1: old data structure. Cut high end data!")
-    }
-
     # write header
     Header <- data.frame(
         DOASmodel = DOASinfo$DOASmodel,
@@ -413,6 +403,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #~~ function; average Spectra:
+# TODO:
 avgSpec <- function(rawdat,type=c("raw","cal","ref","dark"),tracer=c("ambient","NH3","NO","SO2"),saveToFile=FALSE
     ,pathLength=NA,NH3ambient_ug=NA,NOambient_ug=NA,SO2ambient_ug=NA,cuvetteLength=ifelse(tracer[1]=="ambient",NA,0.075),cuvetteConc_mg=NA,Dirname=getwd(),verbose=TRUE) {
 
@@ -597,7 +588,8 @@ getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #~~ function; get calibration and reference spectra:
-getSpec <- function(spec,DOASmodel=NULL,lite=FALSE) {
+# TODO:
+getSpec <- function(spec, DOASmodel = NULL, lite = FALSE) {
 
     SpecName <- as.character(substitute(spec))
 
@@ -740,6 +732,10 @@ getSpec <- function(spec,DOASmodel=NULL,lite=FALSE) {
     }
 }
 
+
+### read set of (average) reference, calibration & noise spectra
+### ******************************************************************************
+# TODO:
 getSpecSet <- function(
     spec.dir="",  
     ref.spec=NULL,
@@ -766,8 +762,6 @@ getSpecSet <- function(
     if (is.null(N2.SO2.cal.spec))N2.SO2.cal.spec <- spec.dir
     if (is.null(N2.NO.cal.spec))N2.NO.cal.spec <- spec.dir
 
-    ### read (average) reference, calibration & noise spectra
-    ### ******************************************************************************
     return(
         list(
             DOAS.model = DOAS.model,
@@ -794,11 +788,45 @@ getSpecSet <- function(
     )
 }
 
-correctSpectra <- function(specSet,rawData=NULL,correct.dark=TRUE,correct.linearity=TRUE,correct.straylight=c("avg","linear","none"),straylight.pix=NULL) {
+### process spectra data
+### ******************************************************************************
+process_spectra <- function(specSet, rawData = NULL, correct.dark = TRUE, 
+    correct.linearity = TRUE, correct.straylight = c("avg", "linear", "none"), 
+    straylight.pix = NULL, return.subset.list = FALSE) {
 
-    if (is.null(straylight.pix)) {
-        straylight.pix <- getWindows(specSet$DOAS.model)$pixel_straylight
+    # get doas model
+    doas_model <- specSet$DOAS.model
+
+    # subset data?
+    if (return.subset.list) {
+        # get windows
+        wins <- getWindows(specSet$DOAS.model)
+        # get user defined straylight pixels
+        if (!is.null(straylight.pix)) {
+            wins$pixel_straylight <- straylight.pix
+        }
+        # re-define straylight.pix
+        straylight.pix <- seq_along(wins$pixel_straylight)
+        # remove doas model
+        specSet$DOAS.model <- NULL
+        # get subset index
+        s_ind <- c(wins$pixel_straylight, wins$pixel_filter)
+        # subset specSet
+        specSet <- lapply(specSet, function(x) {
+            out <- x
+            out[[1]] <- out[[1]][s_ind]
+            out
+        })
+        # subset rawData
+        rawData[[1]] <- lapply(rawData[[1]], '[', s_ind)
+    } else {
+        if (is.null(straylight.pix)) {
+            straylight.pix <- getWindows(specSet$DOAS.model)$pixel_straylight
+        }
+        # define s_ind for prediction of linear straylight
+        s_ind <- seq_along(rawData[[1]][, 1])
     }
+
     ### dark-corrected reference spectra
     ### ******************************************************************************
     if (correct.dark) {
@@ -810,7 +838,7 @@ correctSpectra <- function(specSet,rawData=NULL,correct.dark=TRUE,correct.linear
             I.SO2 = specSet$dat.SO2[[1]] - specSet$dat.N2.dark[[1]],
             I.NO = specSet$dat.NO[[1]] - specSet$dat.N2.dark[[1]],
             I.ref = specSet$dat.ref[[1]] - specSet$dat.ref.dark[[1]],
-            I.meas = rawData[[1]] - specSet$dat.dark[[1]]
+            I.meas = lapply(rawData[[1]], '-', specSet$dat.dark[[1]])
         )
     } else {
         out <- list(
@@ -840,7 +868,7 @@ correctSpectra <- function(specSet,rawData=NULL,correct.dark=TRUE,correct.linear
         out$I.N2.SO2 <- out$I.N2.SO2 / linearity.func(out$I.N2.SO2, lin.coef)
         out$I.N2.NO <- out$I.N2.NO / linearity.func(out$I.N2.NO, lin.coef)
         out$I.ref <- out$I.ref / linearity.func(out$I.ref, lin.coef)
-        out$I.meas <- out$I.meas / linearity.func(out$I.meas, lin.coef)
+        out$I.meas <- lapply(out$I.meas, function(x) x / linearity.func(x, lin.coef))
     }
 
     ### straylight-corrected reference spectra
@@ -857,22 +885,29 @@ correctSpectra <- function(specSet,rawData=NULL,correct.dark=TRUE,correct.linear
             out$I.SO2 <- out$I.SO2 - mean(out$I.SO2[straylight.pix])
             out$I.NO <- out$I.NO - mean(out$I.NO[straylight.pix])
             out$I.ref <- out$I.ref - mean(out$I.ref[straylight.pix])      
-            if (!is.null(rawData))out$I.meas <- sweep(out$I.meas,2,colMeans(out$I.meas[straylight.pix,,drop=FALSE]),"-")    
+            out$I.meas <- lapply(out$I.meas, function(x) x - mean(x[straylight.pix]))
         },
         {
+            # NOTE: possibly introduced error with s_ind...
             require(MASS)
-            out$I.N2.NH3 <- out$I.N2.NH3 - predict(rlm(out$I.N2.NH3[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=seq.int(length(out$I.N2.NH3))))
-            out$I.N2.SO2 <- out$I.N2.SO2 - predict(rlm(out$I.N2.SO2[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=seq.int(length(out$I.N2.SO2))))
-            out$I.N2.NO <- out$I.N2.NO - predict(rlm(out$I.N2.NO[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=seq.int(length(out$I.N2.NO))))
-            out$I.NH3 <- out$I.NH3 - predict(rlm(out$I.NH3[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=seq.int(length(out$I.NH3))))
-            out$I.SO2 <- out$I.SO2 - predict(rlm(out$I.SO2[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=seq.int(length(out$I.SO2))))
-            out$I.NO <- out$I.NO - predict(rlm(out$I.NO[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=seq.int(length(out$I.NO))))
-            out$I.ref <- out$I.ref - predict(rlm(out$I.ref[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=seq.int(length(out$I.ref))))      
-            if (!is.null(rawData))out$I.meas <-apply(out$I.meas,2,function(x) {x - predict(rlm(x[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=seq.int(length(x))))})         
+            out$I.N2.NH3 <- out$I.N2.NH3 - predict(rlm(out$I.N2.NH3[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=s_ind))
+            out$I.N2.SO2 <- out$I.N2.SO2 - predict(rlm(out$I.N2.SO2[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=s_ind))
+            out$I.N2.NO <- out$I.N2.NO - predict(rlm(out$I.N2.NO[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=s_ind))
+            out$I.NH3 <- out$I.NH3 - predict(rlm(out$I.NH3[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=s_ind))
+            out$I.SO2 <- out$I.SO2 - predict(rlm(out$I.SO2[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=s_ind))
+            out$I.NO <- out$I.NO - predict(rlm(out$I.NO[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=s_ind))
+            out$I.ref <- out$I.ref - predict(rlm(out$I.ref[straylight.pix]~straylight.pix,psi=psi.huber,maxit=1000),newdata=list(straylight.pix=s_ind))
+            out$I.meas <- lapply(out$I.meas, function(x) {
+                x - predict(
+                    rlm(x[straylight.pix] ~ straylight.pix, psi = psi.huber, maxit = 1000),
+                    newdata = list(straylight.pix = s_ind)
+                )
+            })
         },
         stop("argument correct.straylight must be either \"none\", \"avg\" or \"linear\"")
     )
 
+    # remove empty I.meas entry if rawData is null
     if (!length(out$I.meas)) out$I.meas <- NULL 
 
     out$dat.ref <- specSet$dat.ref
@@ -975,520 +1010,6 @@ fitConc <- function(meas.doascurve, DOAS.win, path.length, Cal.dc, robust=FALSE)
 }
 
 
-inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
-    filter.type = "BmHarris", fit.type = "OLS",filter.rev=TRUE, robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
-    filter.strength = NULL, tau.shift = NULL, correct.dark = TRUE, correct.linearity = TRUE, 
-    correct.straylight = c("avg", "linear", "none"), use.ref = TRUE,
-    Edinburgh_correction = TRUE) {
-
-    require(shiny)
-    require(lubridate)
-    require(robustbase)
-    require(MASS)
-
-    # windows first time:
-    DOASwindows <- getWindows(rawdat$DOASinfo,filter.type = filter.type, straylight.window = straylight.window, 
-        filter.window = filter.window, fit.window = fit.window, filter.strength = filter.strength, filter.rev = filter.rev,
-        tau.shift = tau.shift)
-
-    # correct cal/ref specs:
-    # CalRefCorr <- correctSpectra(CalRefSpecs)
-    SpecCorr <- correctSpectra(CalRefSpecs,rawdat, correct.dark = correct.dark, correct.linearity = correct.linearity, 
-        correct.straylight = correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
-
-    # diffspec:
-    # DiffSpec <- diffSpecs(SpecCorr)
-    DiffSpec <- diffSpecs(SpecCorr,use.ref=use.ref)
-
-    # cal doascurves:
-    Cal.dc <- getCalCurves(DiffSpec,DOASwindows,CalRefSpecs,warn=FALSE)
-
-    wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel_filter]
-
-    index.max <- ncol(rawdat$RawData)
-
-    frmls <- switch(DOASwindows$filter.type,
-        "Rect" = formals(winRect),
-        "Hann" = formals(winHann),
-        "Hamming" = formals(winHamming),
-        "Blackman" = formals(winBlackman),
-        "BmNuttall" = formals(winBmNuttall),
-        "FlatTop" = formals(winFlatTop),
-        "Sin" = formals(winSin),
-        "Gauss" = formals(winGauss),
-        "Kaiser" = formals(winKaiser),
-        "DolphChebyshev" = formals(winDolphChebyshev),
-        "BmHarris" = formals(winBmHarris),
-        "Tukey" = formals(winTukey),
-        "Poisson" = formals(winPoisson),
-        "Exp" = formals(winExp),
-        "ExpHamming" = formals(winExpHamming),
-        NULL
-    )
-    n <- DOASwindows$filter.strength
-    p1 <- eval(frmls$p1)
-    p2 <- eval(frmls$p2)
-    p3 <- eval(frmls$p3) 
-    p4 <- eval(frmls$p4)
-
-    # runApp:
-    runApp(
-        list(
-            # ui:
-            ui={
-                fluidPage(
-
-                    # Application title
-                    titlePanel(paste0("spectra analysis - miniDOAS ",rawdat$DOASinfo$DOASmodel)),
-
-                    sidebarLayout(position="right",
-
-                        sidebarPanel(width=2,
-                            numericInput("index", 
-                                label = "index:",
-                                step = 1L,
-                                min = 1L, 
-                                max = index.max, 
-                                value = index
-                            )             
-                            ,uiOutput("filter_strength")
-                            # ,numericInput("filter.strength", 
-                            #   label = "filter.strength:",
-                            #   step = 0.01,
-                            #   value = DOASwindows$filter.strength
-                            # )
-                            ,selectInput("filter.type", 
-                                label = "filter.type:",
-                                choices = c("Hamming","Rect","Hann","Blackman","BmNuttall","Sin"
-                                    ,"Gauss","Kaiser","DolphChebyshev","BmHarris","Tukey","Poisson","Exp","ExpHamming"),
-                                selected = DOASwindows$filter.type
-                            )
-                            ,selectInput("filter.rev", 
-                                label = "filter.rev:",
-                                choices = c(TRUE,FALSE),
-                                selected = DOASwindows$filter.rev
-                            )
-                            ,sliderInput("filter.window", 
-                                label = "filter.window:", 
-                                min = 190, 
-                                max = 240,
-                                step = 0.1, 
-                                value = DOASwindows$filter.window
-                            )
-                            ,uiOutput("fit_window")
-                            # ,sliderInput("fit.window", 
-                            #   label = "fit.window:", 
-                            #   min = filter_window[1], 
-                            #   max = filter_window[2],
-                            #          step = 0.1, 
-                            #   value = DOASwindows$fit.window
-                            # )
-                            ,checkboxInput("robust", 
-                                label = "robust:",
-                                value = robust
-                            )
-                            ,numericInput("tau.shift", 
-                                label = "tau.shift:", 
-                                value = DOASwindows$tau.shift,
-                                step = 1L,
-                                min = -20L,
-                                max = 20L
-                            )
-                            ,uiOutput("filterArgs")
-                            ,checkboxInput("correct.dark", 
-                                label = "correct.dark:",
-                                value = correct.dark
-                            )
-                            ,checkboxInput("correct.linearity", 
-                                label = "correct.linearity:",
-                                value = correct.linearity
-                            )
-                            ,selectInput("correct.straylight", 
-                                label = "correct.straylight:",
-                                choices = c("avg", "linear", "none"),
-                                selected = correct.straylight[1]
-                            )
-                            ,checkboxInput("use.ref", 
-                                label = "use.ref:",
-                                value = use.ref
-                            )
-                            ,downloadButton('downloadPlot', 'Save Plot to png')                                                           
-
-                            ),
-
-                        mainPanel(
-                            plotOutput("specs",height="800px")
-                        )
-                    )
-                )
-            },
-            # server
-            server={
-                function(input, output, session) {
-
-                    # # observe DOASwindows:
-                    # observe({
-                    #   DOASwindows <- DOASwindows_reactive()
-                    #   # SpecCorr <- SpecCorr_reactive()
-                    #   # DiffSpec <- DiffSpec_reactive()
-                    #   # Cal.dc <- Cal.dc_reactive()
-                    # })
-
-
-                    # windows:
-                    DOASwindows_reactive <- reactive({
-                        if (is.null(input$fit.window)) {
-                            fit_window <- DOASwindows$fit.window
-                        } else {
-                            fit_window <- input$fit.window
-                        }
-                        if (is.null(input$filter.strength)) {
-                            filter.strength <- DOASwindows$filter.strength
-                        } else {
-                            filter.strength <- input$filter.strength
-                        }
-                        if (filter.strength < 3) {
-                            if (rawdat$DOASinfo$DOASmodel=="S1" & rawdat$DOASinfo$timerange < parse_date_time("20170101","Ymd")) {
-                                filter_strength <- 41
-                            } else {
-                                filter_strength <- 25
-                            }
-                        } else {
-                            filter_strength <- filter.strength
-                        }
-                        getWindows(rawdat$DOASinfo, filter.type = input$filter.type, straylight.window = straylight.window, 
-                            filter.window = input$filter.window, fit.window = fit_window, filter.rev = input$filter.rev,
-                            filter.strength = filter_strength, tau.shift = input$tau.shift)
-                    })
-
-                    # # correct cal/ref specs:
-                    # SpecCorr_reactive <- reactive({
-                    #   correctSpectra(CalRefSpecs,rawdat,correct.dark = input$correct.dark, correct.linearity = input$correct.linearity, 
-                    #           correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
-                    # })
-
-                    # # diffspec:
-                    # DiffSpec_reactive <- reactive({
-                    #   diffSpecs(SpecCorr,use.ref=input$use.ref)
-                    # })
-
-                    # # cal doascurves:
-                    # Cal.dc_reactive <- reactive({
-                    #   getCalCurves(DiffSpec,DOASwindows,CalRefSpecs,warn=FALSE)
-                    # })
-                    output$filterArgs <- renderUI({
-                        DOASwindows <- DOASwindows_reactive()
-                            if (is.null(input$filter.strength)) {
-                                filter.strength <- DOASwindows$filter.strength
-                            } else {
-                                filter.strength <- input$filter.strength
-                            }
-                            frmls <- switch(DOASwindows$filter.type,
-                                "Rect" = formals(winRect),
-                                "Hann" = formals(winHann),
-                                "Hamming" = formals(winHamming),
-                                "Blackman" = formals(winBlackman),
-                                "BmNuttall" = formals(winBmNuttall),
-                                "Sin" = formals(winSin),
-                                "Gauss" = formals(winGauss),
-                                "Kaiser" = formals(winKaiser),
-                                "DolphChebyshev" = formals(winDolphChebyshev),
-                                "BmHarris" = formals(winBmHarris),
-                                "Tukey" = formals(winTukey),
-                                "Poisson" = formals(winPoisson),
-                                "Exp" = formals(winExp),
-                                "ExpHamming" = formals(winExpHamming),
-                                NULL
-                            )
-                            n <- filter.strength
-                            p1 <- eval(frmls$p1)
-                            p2 <- eval(frmls$p2)
-                            p3 <- eval(frmls$p3)
-                            p4 <- eval(frmls$p4)
-
-                            tagList(
-                                if (!is.null(p1))numericInput("p1", 
-                                    label = "p1:",
-                                    step = 0.1,
-                                    value = p1
-                                )
-                                ,if (!is.null(p2))numericInput("p2", 
-                                    label = "p2:",
-                                    step = 0.1,
-                                    value = p2
-                                )
-                                ,if (!is.null(p3))numericInput("p3", 
-                                    label = "p3:",
-                                    step = 0.1,
-                                    value = p3
-                                )
-                                ,if (!is.null(p4))numericInput("p4", 
-                                    label = "p4:",
-                                    step = 0.1,
-                                    value = p4
-                                )
-                            )
-                        }            
-                    )
-
-                    output$filter_strength <- renderUI({
-                        DOASwindows <- DOASwindows_reactive()
-
-                        numericInput("filter.strength", 
-                            label = "filter.strength:",
-                            step = 2,
-                            value = DOASwindows$filter.strength
-                        )
-                    })
-
-                    output$fit_window <- renderUI({
-                        DOASwindows <- DOASwindows_reactive()
-                        sliderInput("fit.window", 
-                            label = "fit.window:", 
-                            min = DOASwindows$filter.window[1], 
-                            max = DOASwindows$filter.window[2],
-                            step = 0.1, 
-                            value = DOASwindows$fit.window
-                        )
-                    })
-
-
-                    plot_reactive <- reactive({
-                        i <- input$index
-                        RawDat <- rawdat
-                        RawDat[[1]] <- rawdat[[1]][,i,drop=FALSE]
-                        DOASwindows <- DOASwindows_reactive()
-                        SpecCorr <- correctSpectra(CalRefSpecs,RawDat,correct.dark = input$correct.dark, correct.linearity = input$correct.linearity, 
-                            correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
-                        DiffSpec <- diffSpecs(SpecCorr,use.ref=input$use.ref)
-                        Cal.dc <- getCalCurves(DiffSpec,DOASwindows,CalRefSpecs,warn=FALSE,input$p1,input$p2,input$p3,input$p4)
-                        wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel_filter]
-
-
-                        # plot(1,main="diffspec")
-                        # plot(1,main="doascurve")
-                        # plot(1,main="darkspec")
-                        # reactive:
-                        xlim <- range(wavelength)
-                        # main <- rawdat$Header[i,]
-
-                        # I.meas + I.ref
-                        ylim <- range(SpecCorr$I.meas[DOASwindows$pixel_filter,],SpecCorr$I.ref[DOASwindows$pixel_filter],na.rm=TRUE)
-                        if (!all(is.finite(ylim))) {
-                            ylim <- c(0.01,2)
-                        } else if (any(ylimBelow <- ylim<0)) {
-                            ylim[ylimBelow] <- c(0.01,2)[ylimBelow]
-                        } 
-                        # windows(width=10,height=7)
-                        plot(1,1,xlim=xlim,ylim=ylim,log="y",type="n",ylab="counts",xlab="",main="spectra")
-                        if (input$use.ref)lines(wavelength,SpecCorr$I.ref[DOASwindows$pixel_filter],col="darkgrey",lwd=2)
-                        lines(wavelength,SpecCorr$I.meas[DOASwindows$pixel_filter,],col="black",lwd=2)
-                        legend("bottomright",c("meas.","ref."),lwd=2,col=c("black","darkgrey"),bty="n")
-
-                        # log(I.meas/I.ref)
-                        ylim <- range(DiffSpec$diffspec[DOASwindows$pixel_filter,],na.rm=TRUE)
-                        if (!all(is.finite(ylim))) ylim <- c(0,1)
-                        meas.dc <- highpass.filter(DiffSpec$diffspec,DOASwindows,input$p1,input$p2,input$p3,input$p4)
-                        # isna <- is.na(meas.dc)
-                        # windows(width=10,height=7)
-                        plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.meas/I.ref)",xlab="",main="diffspec")
-                        lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,] - meas.dc,lwd=2,col="orange")
-                        lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,],col="black")
-                        fit <- fitConc(meas.dc, DOASwindows, path.length, Cal.dc, robust=input$robust)
-
-                        cfs <- fit[[5]]
-                        fit.SO2 <- cfs[2]*path.length*Cal.dc$SO2.dc
-                        fit.NO <- cfs[3]*path.length*Cal.dc$NO.dc
-                        fit.NH3 <- cfs[1]*path.length*Cal.dc$NH3.dc
-
-                        # fit.SO2[isna] <- NA
-                        # fit.NO[isna] <- NA
-                        # fit.NH3[isna] <- NA
-
-                        if (input$tau.shift>0) {
-                            meas.dc <- c(meas.dc[-seq.int(input$tau.shift)],rep(NA,abs(input$tau.shift)))
-                        } else if (input$tau.shift<0) {
-                            tau.shift <- abs(input$tau.shift)
-                            meas.dc <- c(rep(NA,tau.shift),meas.dc[-(length(meas.dc) - seq.int(tau.shift) + 1)])
-                        }
-
-                        # doascurve
-                        ylim <- range(meas.dc,na.rm=TRUE)
-                        if (!all(is.finite(ylim))) ylim <- c(0,1)
-                        # windows(width=10,height=7)
-                        plot(wavelength,meas.dc,xlim=xlim,ylim=ylim,type="l",ylab="DOAS curve [-]",xlab="",panel.first={grid();abline(h=0)},main="doascurve")
-                        lines(wavelength,fit.SO2,col="#00bb00aa")
-                        lines(wavelength,fit.SO2+fit.NO,col="#ff0000dd")
-                        lines(wavelength,fit.SO2+fit.NO+fit.NH3,col="blue")
-                        lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc],lwd=2,col="#00bb00aa")
-                        lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc],lwd=2,col="#ff0000dd")
-                        lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc]+fit.NH3[DOASwindows$pixel_dc],lwd=2,col="blue")
-                        abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
-                        legend("topright",c("SO2","SO2 + NO","SO2 + NO + NH3"),lty=1,col=c("#00bb00aa","#ff0000dd","blue"),cex=0.7)
-
-                        # residual
-                        # windows(width=10,height=7)
-                        plot(wavelength,meas.dc,xlim=xlim,ylim=ylim,type="l",ylab="residuals [-]",xlab="",panel.first={grid();abline(h=0)},col="darkgrey",main="residuals")
-                        lines(wavelength,meas.dc-fit.SO2-fit.NO-fit.NH3) 
-                        lines(wavelength[DOASwindows$pixel_dc],meas.dc[DOASwindows$pixel_dc]-fit.SO2[DOASwindows$pixel_dc]-fit.NO[DOASwindows$pixel_dc]-fit.NH3[DOASwindows$pixel_dc],lwd=2) 
-                        abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
-
-                        # cal diffspec
-                        ylim <- range(DiffSpec$NH3.diffspec[DOASwindows$pixel_filter],na.rm=TRUE)
-                        plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.NH3/I.N2)",xlab="",panel.first={grid();abline(h=0)})
-                        # #
-                        # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,3]*CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NO$cuvette$cuvetteLength,lwd=2,col="red")
-                        # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter])
-                        # #
-                        # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,2]*CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.SO2$cuvette$cuvetteLength,lwd=2,col="green")
-                        # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter])
-                        # #
-                        lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,1]*CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NH3$cuvette$cuvetteLength,lwd=2,col="blue")
-                        lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter])
-
-                        # cal doascurve
-                        ylim <- range(Cal.dc$Xreg,na.rm=TRUE)
-                        plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="cal. DOAS curve [-]",xlab="",panel.first={grid();abline(h=0)})
-                        lines(wavelength,Cal.dc$Xreg[,3],lwd=2,col="red")
-                        lines(wavelength,Cal.dc$Xreg[,2],lwd=2,col="green")
-                        lines(wavelength,Cal.dc$Xreg[,1],lwd=2,col="blue")
-
-                        if (Edinburgh_correction) {
-                            cfs <- cfs * 1.16
-                        }
-
-                        msg1 <- sprintf("index %i/%i:  %s  --  NH3: %1.1f +/- %1.1f  --  SO2: %1.1f +/- %1.1f  --  NO: %1.1f +/- %1.1f",i,index.max,format(rawdat$Header[i,"st"]),cfs[1],fit[[6]][1],cfs[2],fit[[6]][2],cfs[3],fit[[6]][3])
-                        # mtext(as.expression(substitute(italic(msg), list(msg=msg))), line=-1.25, outer=TRUE, cex=0.5)
-                        # mtext(substitute(italic(msg), list(msg=msg1)), line=1, outer=TRUE, cex=0.75)
-                        # mtext(substitute(italic(msg), list(msg=msg2)), line=-0.5, outer=TRUE, cex=0.75)
-                        mtext(msg1, line=0, outer=TRUE)#, cex=0.75)
-
-                    })
-
-                    output$specs <- renderPlot({
-                        par(mfrow=c(3,2),oma=c(0,0,1.5,0))
-                        plot_reactive()
-                    })
-                    output$downloadPlot <- downloadHandler(
-                        filename=function() {paste0("shinyInspect_",format(Sys.time(),"%Y%m%d_%H%M%S"),".png")},
-                        content = function(file) {
-                            png(file,width=1200,height=1200)
-                            on.exit(dev.off())
-
-                            par(mfrow=c(3,2),oma=c(0,0,1.5,0))
-                            i <- input$index
-                            RawDat <- rawdat
-                            RawDat[[1]] <- rawdat[[1]][,i,drop=FALSE]
-                            DOASwindows <- DOASwindows_reactive()
-                            SpecCorr <- correctSpectra(CalRefSpecs,RawDat,correct.dark = input$correct.dark, correct.linearity = input$correct.linearity, 
-                                correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
-                            DiffSpec <- diffSpecs(SpecCorr,use.ref=input$use.ref)
-                            Cal.dc <- getCalCurves(DiffSpec,DOASwindows,CalRefSpecs,warn=FALSE,input$p1,input$p2,input$p3,input$p4)
-                            wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel_filter]
-
-
-                            # plot(1,main="diffspec")
-                            # plot(1,main="doascurve")
-                            # plot(1,main="darkspec")
-                            # reactive:
-                            xlim <- range(wavelength)
-                            # main <- rawdat$Header[i,]
-
-                            # I.meas + I.ref
-                            ylim <- range(SpecCorr$I.meas[DOASwindows$pixel_filter,],SpecCorr$I.ref[DOASwindows$pixel_filter],na.rm=TRUE)
-                            if (!all(is.finite(ylim))) {
-                                ylim <- c(0.01,2)
-                            } else if (any(ylimBelow <- ylim<0)) {
-                                ylim[ylimBelow] <- c(0.01,2)[ylimBelow]
-                            } 
-                            # windows(width=10,height=7)
-                            plot(1,1,xlim=xlim,ylim=ylim,log="y",type="n",ylab="counts",xlab="",main="spectra")
-                            if (input$use.ref)lines(wavelength,SpecCorr$I.ref[DOASwindows$pixel_filter],col="darkgrey",lwd=2)
-                            lines(wavelength,SpecCorr$I.meas[DOASwindows$pixel_filter,],col="black",lwd=2)
-                            legend("bottomright",c("meas.","ref."),lwd=2,col=c("black","darkgrey"),bty="n")
-
-                            # log(I.meas/I.ref)
-                            ylim <- range(DiffSpec$diffspec[DOASwindows$pixel_filter,],na.rm=TRUE)
-                            if (!all(is.finite(ylim))) ylim <- c(0,1)
-                            meas.dc <- highpass.filter(DiffSpec$diffspec,DOASwindows,input$p1,input$p2,input$p3,input$p4)
-                            # isna <- is.na(meas.dc)
-                            # windows(width=10,height=7)
-                            plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.meas/I.ref)",xlab="",main="diffspec")
-                            lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,] - meas.dc,lwd=2,col="orange")
-                            lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,],col="black")
-                            fit <- fitConc(meas.dc, DOASwindows, path.length, Cal.dc, robust=input$robust)
-
-                            cfs <- fit[[5]]
-                            fit.SO2 <- cfs[2]*path.length*Cal.dc$SO2.dc
-                            fit.NO <- cfs[3]*path.length*Cal.dc$NO.dc
-                            fit.NH3 <- cfs[1]*path.length*Cal.dc$NH3.dc
-
-                            # fit.SO2[isna] <- NA
-                            # fit.NO[isna] <- NA
-                            # fit.NH3[isna] <- NA
-
-                            if (input$tau.shift>0) {
-                                meas.dc <- c(meas.dc[-seq.int(input$tau.shift)],rep(NA,abs(input$tau.shift)))
-                            } else if (input$tau.shift<0) {
-                                tau.shift <- abs(input$tau.shift)
-                                meas.dc <- c(rep(NA,tau.shift),meas.dc[-(length(meas.dc) - seq.int(tau.shift) + 1)])
-                            }
-
-                            # doascurve
-                            ylim <- range(meas.dc,na.rm=TRUE)
-                            if (!all(is.finite(ylim))) ylim <- c(0,1)
-                            # windows(width=10,height=7)
-                            plot(wavelength,meas.dc,xlim=xlim,ylim=ylim,type="l",ylab="DOAS curve [-]",xlab="",panel.first={grid();abline(h=0)},main="doascurve")
-                            lines(wavelength,fit.SO2,col="#00bb00aa")
-                            lines(wavelength,fit.SO2+fit.NO,col="#ff0000dd")
-                            lines(wavelength,fit.SO2+fit.NO+fit.NH3,col="blue")
-                            lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc],lwd=2,col="#00bb00aa")
-                            lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc],lwd=2,col="#ff0000dd")
-                            lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc]+fit.NH3[DOASwindows$pixel_dc],lwd=2,col="blue")
-                            abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
-                            legend("topright",c("SO2","SO2 + NO","SO2 + NO + NH3"),lty=1,col=c("#00bb00aa","#ff0000dd","blue"),cex=0.7)
-
-                            # residual
-                            # windows(width=10,height=7)
-                            plot(wavelength,meas.dc,xlim=xlim,ylim=ylim,type="l",ylab="residuals [-]",xlab="",panel.first={grid();abline(h=0)},col="darkgrey",main="residuals")
-                            lines(wavelength,meas.dc-fit.SO2-fit.NO-fit.NH3) 
-                            lines(wavelength[DOASwindows$pixel_dc],meas.dc[DOASwindows$pixel_dc]-fit.SO2[DOASwindows$pixel_dc]-fit.NO[DOASwindows$pixel_dc]-fit.NH3[DOASwindows$pixel_dc],lwd=2) 
-                            abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
-
-                            # cal diffspec
-                            ylim <- range(DiffSpec$NH3.diffspec[DOASwindows$pixel_filter],na.rm=TRUE)
-                            plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.NH3/I.N2)",xlab="",panel.first={grid();abline(h=0)})
-                            # #
-                            # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,3]*CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NO$cuvette$cuvetteLength,lwd=2,col="red")
-                            # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter])
-                            # #
-                            # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,2]*CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.SO2$cuvette$cuvetteLength,lwd=2,col="green")
-                            # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter])
-                            # #
-                            lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,1]*CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NH3$cuvette$cuvetteLength,lwd=2,col="blue")
-                            lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter])
-
-                            # cal doascurve
-                            ylim <- range(Cal.dc$Xreg,na.rm=TRUE)
-                            plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="cal. DOAS curve [-]",xlab="",panel.first={grid();abline(h=0)})
-                            lines(wavelength,Cal.dc$Xreg[,3],lwd=2,col="red")
-                            lines(wavelength,Cal.dc$Xreg[,2],lwd=2,col="green")
-                            lines(wavelength,Cal.dc$Xreg[,1],lwd=2,col="blue")
-
-                            msg1 <- sprintf("index %i/%i:  %s  --  NH3: %1.1f +/- %1.1f  --  SO2: %1.1f +/- %1.1f  --  NO: %1.1f +/- %1.1f",i,index.max,format(rawdat$Header[i,"st"]),cfs[1],fit[[6]][1],cfs[2],fit[[6]][2],cfs[3],fit[[6]][3])
-                            # mtext(as.expression(substitute(italic(msg), list(msg=msg))), line=-1.25, outer=TRUE, cex=0.5)
-                            # mtext(substitute(italic(msg), list(msg=msg1)), line=1, outer=TRUE, cex=0.75)
-                            # mtext(substitute(italic(msg), list(msg=msg2)), line=-0.5, outer=TRUE, cex=0.75)
-                            mtext(msg1, line=0, outer=TRUE)#, cex=0.75)
-
-                        },
-                        contentType="image/png"
-                    )
-                }
-            } 
-        )
-    )
-}
 
 
 fitparallel <- function(index,DiffSpec,DOAS.win,meas.doascurve,Cal.dc,path.length,
@@ -1575,17 +1096,13 @@ evalOffline <- function(
     ) {
 
 
-    program.version <- programVersion
-    tau.fix <- length(tau.shift)==1 
-
-    cat("\n************\nevaluating miniDOAS model",DOAS.model,"\n")
+    ### verbose
+    cat("\n************\nevaluating miniDOAS model", DOAS.model, "\n")
 
     ### prepare time range:
-    ### ******************************************************************************
     timerange <- prepTimeRange(evalperiod,tz.DOAS)
 
     ### get DOAS information:
-    ### ******************************************************************************
     DOAS.info <- getDOASinfo(DOAS.model,timerange, Serial = Serial)
 
     ### initialize parallelism:
@@ -1599,22 +1116,20 @@ evalOffline <- function(
         }
     }
 
-    ### Read raw data:
+    ### read raw data:
     if (is.null(RawData)) {
         cat("read raw data\n")
-        RawData <- readDOASdata(DOAS.info,rawdata.dir,skip.check.daily = skip.check.daily, force.write.daily = force.write.daily, ncores = ncores)
+        RawData <- readDOASdata(DOAS.info, rawdata.dir, skip.check.daily = skip.check.daily, 
+            force.write.daily = force.write.daily, ncores = ncores)
     } else {
         cat("raw data supplied - ignoring argument 'evalperiod'...\n")
         # NOTE: get time subset?
     }
-    if (DOAS.model=="S1")DOAS.info <- RawData$DOASinfo
 
     ### get DOAS windows:
-    ### ******************************************************************************
     DOAS.win <- getWindows(DOAS.info, filter.type, timerange, 
         straylight.window, filter.window, fit.window, 
         filter.strength, tau.shift, filter.rev)
-
 
     ### read (average) reference, calibration & noise spectra
     ### ******************************************************************************
@@ -1638,9 +1153,10 @@ evalOffline <- function(
         cat("argument 'CalRefSpecs' supplied...\n")
     }
 
-
     # correct cal/ref specs:
-    SpecCorr <- correctSpectra(CalRefSpecs,rawData=RawData,correct.dark=correct.dark,correct.linearity=correct.linearity,correct.straylight=correct.straylight,straylight.pix=DOAS.win$pixel_straylight)
+    SpecCorr <- process_spectra(CalRefSpecs, rawData = RawData, correct.dark = correct.dark, 
+        correct.linearity = correct.linearity, correct.straylight = correct.straylight, 
+        straylight.pix = DOAS.win$pixel_straylight, return.subset.list = TRUE)
 
     ### calibration concentrations in ppb
     ### ******************************************************************************
@@ -1648,65 +1164,6 @@ evalOffline <- function(
     cat(sprintf("SO2 calibration of %1.2f mg/m3 (corresponds to %1.2f ug/m3 in a path of %1.1f m)\n",CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg,CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg * 1000 / path.length * CalRefSpecs$dat.SO2$cuvette$cuvetteLength,path.length))
     cat(sprintf("NO calibration of %1.2f mg/m3 (corresponds to %1.2f ug/m3 in a path of %1.1f m)\n",CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg,CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg * 1000 / path.length * CalRefSpecs$dat.NO$cuvette$cuvetteLength,path.length))
 
-    # ### create synthetic theoretical calibration DOAS curves only based on published absorption crosssection and compare that with calibration DOAS curve
-    # ### ******************************************************************************
-    # f <- DOAS.info$Spectrometer$wavelength
-    # sft <- -9
-    # x0 <- DOAS.win$pixel_filter + sft
-    # f2 <- f[x0]
-    # f3 <- (f[c(x0[1]-1,x0)]+f[c(x0[1],x0+1)])/2
-    # if (DOAS.model!="S1") {
-    #   filter.length <- 21 
-    # } else {
-    #   filter.length <- 41
-    # }
-
-    # ### NH3 (Cheng et al., 2006):
-    # lit.crossec.NH3 <- read.table(paste0(dirname(ref.spec),"/Literature_absorption_crossections/NH3_Cheng(2006)_298K_140-230nm(0.02nm).txt"), header=FALSE, stringsAsFactors=FALSE)
-    # # xb.NH3 <- which(lit.crossec.NH3[,1] >= (f3[1]-df2a) & lit.crossec.NH3[,1] <= (f3[length(f3)]+df2b))
-    # f2.NH3 <- lit.crossec.NH3[,1]
-    # crossec.NH3 <- lit.crossec.NH3[,2] ### in cm2 / molecule
-    # # 
-    # f2.NH3_filt <- f2.NH3[-c(1:((filter.length-1)/2),length(f2.NH3)-(0:((filter.length-1)/2-1)))]
-    # crossec.NH3_filt <- convolve(crossec.NH3,rep(1/filter.length,filter.length),type="filter")
-    # abscrossec.NH3_scaled <- crossec.NH3_filt*6.022 * 10^23/17/10^6/100^2 # cm2/molecule -> m2/ug
-    # abscrossec.NH3_cuv <- 1 - abscrossec.NH3_scaled*NH3.cal*dat.NH3$cuvette[[1]] # m2/ug -> [-]
-    # cs.Theor <- sapply(seq_along(f2),
-    #   function(x,i) {
-    #     integrate(
-    #       function(x) {
-    #         out <- approx(f2.NH3_filt,abscrossec.NH3_cuv,xout=x)$y
-    #         out[is.na(out)] <- 0
-    #         return(out)
-    #       }
-    #       ,x[i],x[i+1])$value/diff(x[i+(0:1)])
-    #   },x=f3)
-    # NH3.doascurve.theor <- highpass.filter(cs.Theor,filter.type, DOAS.win$filter.strength,b,Scale,delta, filter.strength_multiplication, filter.strength_loess,fam)/(NH3.cal*dat.NH3$cuvette[[1]])
-    # regr.NH3 <- suppressWarnings(lmrob(NH3.doascurve.theor[DOAS.win$pixel_dc + sft] ~ NH3.doascurve[DOAS.win$pixel_dc + sft], setting="KS2014"))
-    # theory.NH3.factor <- round(coefficients(regr.NH3)[2],3)
-
-    # plot(f[DOAS.win$pixel_filter],NH3.doascurve.theor,type="n",ylab="NH3 doascurve",xlab="",panel.first={grid();abline(h=0,col="darkgrey")})
-    # lines(f[DOAS.win$pixel_filter],NH3.doascurve,lwd=2)
-    # lines(f[DOAS.win$pixel_filter],NH3.doascurve.theor,col="blue",lwd=2)
-    # lines(f[DOAS.win$pixel_filter],NH3.doascurve*theory.NH3.factor,col="red",lwd=2)
-    # legend("bottomright",c("NH3.doascurve","Chen-Theory",sprintf("NH3.doascurve x %1.3f",theory.NH3.factor)),lwd=2,col=c("black","blue","red"))
-
-    # ind <- seq.int(320)
-    # par(mfrow=c(2,1))
-    # plot(f[DOAS.win$pixel_filter][ind],NH3.doascurve[ind]*theory.NH3.factor,type="l",ylab="NH3 doascurve (m2/ug)",xlab="",lwd=2,panel.first={grid();abline(h=0,col="darkgrey")})
-    # legend("bottomright","NH3 doascurve (cuvette suisse 4, assuming 192 mg/m3)",lwd=2,col="black",bty="n")
-    # plot(f2[ind],NH3.doascurve[ind]*theory.NH3.factor,type="l",ylab="NH3 doascurve (m2/ug)",xlab="",lwd=2,col="red",panel.first={grid();abline(h=0,col="darkgrey")})
-    # lines(f2[ind],NH3.doascurve.theor[ind],col="black",lwd=2)
-    # legend("bottomright",c("NH3 doascurve (cuvette suisse 4, shifted)","Lit. based NH3 doascurve (Cheng et al. 2006) convolved"),lwd=2,col=c("red","black"),bty="n")
-
-
-    # ### optionally: use theoretical DOAS curves
-    # ### ******************************************************************************
-    # if (!use.calibration) {
-    #   NH3.doascurve <- NH3.doascurve.theor
-    #   #NO.doascurve <- NO.doascurve.theor ### technically possible, but no good literature NO crossection data available
-    #   #SO2.doascurve <- SO2.doascurve.theor ### let out SO2 -> focus on NH3
-    # }
 
 
     ################################################################################
@@ -2341,3 +1798,562 @@ runAppDOAS <- function(ShinyInput) {
 }
 
 
+inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
+    filter.type = "BmHarris", fit.type = "OLS",filter.rev=TRUE, robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
+    filter.strength = NULL, tau.shift = NULL, correct.dark = TRUE, correct.linearity = TRUE, 
+    correct.straylight = c("avg", "linear", "none"), use.ref = TRUE,
+    Edinburgh_correction = TRUE) {
+
+    require(shiny)
+    require(lubridate)
+    require(robustbase)
+    require(MASS)
+
+    # windows first time:
+    DOASwindows <- getWindows(rawdat$DOASinfo,filter.type = filter.type, straylight.window = straylight.window, 
+        filter.window = filter.window, fit.window = fit.window, filter.strength = filter.strength, filter.rev = filter.rev,
+        tau.shift = tau.shift)
+
+    # correct cal/ref specs:
+    SpecCorr <- process_spectra(CalRefSpecs,rawdat, correct.dark = correct.dark, correct.linearity = correct.linearity, 
+        correct.straylight = correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
+
+    # diffspec:
+    # DiffSpec <- diffSpecs(SpecCorr)
+    DiffSpec <- diffSpecs(SpecCorr,use.ref=use.ref)
+
+    # cal doascurves:
+    Cal.dc <- getCalCurves(DiffSpec,DOASwindows,CalRefSpecs,warn=FALSE)
+
+    wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel_filter]
+
+    index.max <- ncol(rawdat$RawData)
+
+    frmls <- switch(DOASwindows$filter.type,
+        "Rect" = formals(winRect),
+        "Hann" = formals(winHann),
+        "Hamming" = formals(winHamming),
+        "Blackman" = formals(winBlackman),
+        "BmNuttall" = formals(winBmNuttall),
+        "FlatTop" = formals(winFlatTop),
+        "Sin" = formals(winSin),
+        "Gauss" = formals(winGauss),
+        "Kaiser" = formals(winKaiser),
+        "DolphChebyshev" = formals(winDolphChebyshev),
+        "BmHarris" = formals(winBmHarris),
+        "Tukey" = formals(winTukey),
+        "Poisson" = formals(winPoisson),
+        "Exp" = formals(winExp),
+        "ExpHamming" = formals(winExpHamming),
+        NULL
+    )
+    n <- DOASwindows$filter.strength
+    p1 <- eval(frmls$p1)
+    p2 <- eval(frmls$p2)
+    p3 <- eval(frmls$p3) 
+    p4 <- eval(frmls$p4)
+
+    # runApp:
+    runApp(
+        list(
+            # ui:
+            ui={
+                fluidPage(
+
+                    # Application title
+                    titlePanel(paste0("spectra analysis - miniDOAS ",rawdat$DOASinfo$DOASmodel)),
+
+                    sidebarLayout(position="right",
+
+                        sidebarPanel(width=2,
+                            numericInput("index", 
+                                label = "index:",
+                                step = 1L,
+                                min = 1L, 
+                                max = index.max, 
+                                value = index
+                            )             
+                            ,uiOutput("filter_strength")
+                            # ,numericInput("filter.strength", 
+                            #   label = "filter.strength:",
+                            #   step = 0.01,
+                            #   value = DOASwindows$filter.strength
+                            # )
+                            ,selectInput("filter.type", 
+                                label = "filter.type:",
+                                choices = c("Hamming","Rect","Hann","Blackman","BmNuttall","Sin"
+                                    ,"Gauss","Kaiser","DolphChebyshev","BmHarris","Tukey","Poisson","Exp","ExpHamming"),
+                                selected = DOASwindows$filter.type
+                            )
+                            ,selectInput("filter.rev", 
+                                label = "filter.rev:",
+                                choices = c(TRUE,FALSE),
+                                selected = DOASwindows$filter.rev
+                            )
+                            ,sliderInput("filter.window", 
+                                label = "filter.window:", 
+                                min = 190, 
+                                max = 240,
+                                step = 0.1, 
+                                value = DOASwindows$filter.window
+                            )
+                            ,uiOutput("fit_window")
+                            # ,sliderInput("fit.window", 
+                            #   label = "fit.window:", 
+                            #   min = filter_window[1], 
+                            #   max = filter_window[2],
+                            #          step = 0.1, 
+                            #   value = DOASwindows$fit.window
+                            # )
+                            ,checkboxInput("robust", 
+                                label = "robust:",
+                                value = robust
+                            )
+                            ,numericInput("tau.shift", 
+                                label = "tau.shift:", 
+                                value = DOASwindows$tau.shift,
+                                step = 1L,
+                                min = -20L,
+                                max = 20L
+                            )
+                            ,uiOutput("filterArgs")
+                            ,checkboxInput("correct.dark", 
+                                label = "correct.dark:",
+                                value = correct.dark
+                            )
+                            ,checkboxInput("correct.linearity", 
+                                label = "correct.linearity:",
+                                value = correct.linearity
+                            )
+                            ,selectInput("correct.straylight", 
+                                label = "correct.straylight:",
+                                choices = c("avg", "linear", "none"),
+                                selected = correct.straylight[1]
+                            )
+                            ,checkboxInput("use.ref", 
+                                label = "use.ref:",
+                                value = use.ref
+                            )
+                            ,downloadButton('downloadPlot', 'Save Plot to png')                                                           
+
+                            ),
+
+                        mainPanel(
+                            plotOutput("specs",height="800px")
+                        )
+                    )
+                )
+            },
+            # server
+            server={
+                function(input, output, session) {
+
+                    # # observe DOASwindows:
+                    # observe({
+                    #   DOASwindows <- DOASwindows_reactive()
+                    #   # SpecCorr <- SpecCorr_reactive()
+                    #   # DiffSpec <- DiffSpec_reactive()
+                    #   # Cal.dc <- Cal.dc_reactive()
+                    # })
+
+
+                    # windows:
+                    DOASwindows_reactive <- reactive({
+                        if (is.null(input$fit.window)) {
+                            fit_window <- DOASwindows$fit.window
+                        } else {
+                            fit_window <- input$fit.window
+                        }
+                        if (is.null(input$filter.strength)) {
+                            filter.strength <- DOASwindows$filter.strength
+                        } else {
+                            filter.strength <- input$filter.strength
+                        }
+                        if (filter.strength < 3) {
+                            if (rawdat$DOASinfo$DOASmodel=="S1" & rawdat$DOASinfo$timerange < parse_date_time("20170101","Ymd")) {
+                                filter_strength <- 41
+                            } else {
+                                filter_strength <- 25
+                            }
+                        } else {
+                            filter_strength <- filter.strength
+                        }
+                        getWindows(rawdat$DOASinfo, filter.type = input$filter.type, straylight.window = straylight.window, 
+                            filter.window = input$filter.window, fit.window = fit_window, filter.rev = input$filter.rev,
+                            filter.strength = filter_strength, tau.shift = input$tau.shift)
+                    })
+
+                    output$filterArgs <- renderUI({
+                        DOASwindows <- DOASwindows_reactive()
+                            if (is.null(input$filter.strength)) {
+                                filter.strength <- DOASwindows$filter.strength
+                            } else {
+                                filter.strength <- input$filter.strength
+                            }
+                            frmls <- switch(DOASwindows$filter.type,
+                                "Rect" = formals(winRect),
+                                "Hann" = formals(winHann),
+                                "Hamming" = formals(winHamming),
+                                "Blackman" = formals(winBlackman),
+                                "BmNuttall" = formals(winBmNuttall),
+                                "Sin" = formals(winSin),
+                                "Gauss" = formals(winGauss),
+                                "Kaiser" = formals(winKaiser),
+                                "DolphChebyshev" = formals(winDolphChebyshev),
+                                "BmHarris" = formals(winBmHarris),
+                                "Tukey" = formals(winTukey),
+                                "Poisson" = formals(winPoisson),
+                                "Exp" = formals(winExp),
+                                "ExpHamming" = formals(winExpHamming),
+                                NULL
+                            )
+                            n <- filter.strength
+                            p1 <- eval(frmls$p1)
+                            p2 <- eval(frmls$p2)
+                            p3 <- eval(frmls$p3)
+                            p4 <- eval(frmls$p4)
+
+                            tagList(
+                                if (!is.null(p1))numericInput("p1", 
+                                    label = "p1:",
+                                    step = 0.1,
+                                    value = p1
+                                )
+                                ,if (!is.null(p2))numericInput("p2", 
+                                    label = "p2:",
+                                    step = 0.1,
+                                    value = p2
+                                )
+                                ,if (!is.null(p3))numericInput("p3", 
+                                    label = "p3:",
+                                    step = 0.1,
+                                    value = p3
+                                )
+                                ,if (!is.null(p4))numericInput("p4", 
+                                    label = "p4:",
+                                    step = 0.1,
+                                    value = p4
+                                )
+                            )
+                        }            
+                    )
+
+                    output$filter_strength <- renderUI({
+                        DOASwindows <- DOASwindows_reactive()
+
+                        numericInput("filter.strength", 
+                            label = "filter.strength:",
+                            step = 2,
+                            value = DOASwindows$filter.strength
+                        )
+                    })
+
+                    output$fit_window <- renderUI({
+                        DOASwindows <- DOASwindows_reactive()
+                        sliderInput("fit.window", 
+                            label = "fit.window:", 
+                            min = DOASwindows$filter.window[1], 
+                            max = DOASwindows$filter.window[2],
+                            step = 0.1, 
+                            value = DOASwindows$fit.window
+                        )
+                    })
+
+
+                    plot_reactive <- reactive({
+                        i <- input$index
+                        RawDat <- rawdat
+                        RawDat[[1]] <- rawdat[[1]][,i,drop=FALSE]
+                        DOASwindows <- DOASwindows_reactive()
+                        SpecCorr <- process_spectra(CalRefSpecs,RawDat,correct.dark = input$correct.dark, correct.linearity = input$correct.linearity, 
+                            correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
+                        DiffSpec <- diffSpecs(SpecCorr,use.ref=input$use.ref)
+                        Cal.dc <- getCalCurves(DiffSpec,DOASwindows,CalRefSpecs,warn=FALSE,input$p1,input$p2,input$p3,input$p4)
+                        wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel_filter]
+
+
+                        # plot(1,main="diffspec")
+                        # plot(1,main="doascurve")
+                        # plot(1,main="darkspec")
+                        # reactive:
+                        xlim <- range(wavelength)
+                        # main <- rawdat$Header[i,]
+
+                        # I.meas + I.ref
+                        ylim <- range(SpecCorr$I.meas[DOASwindows$pixel_filter,],SpecCorr$I.ref[DOASwindows$pixel_filter],na.rm=TRUE)
+                        if (!all(is.finite(ylim))) {
+                            ylim <- c(0.01,2)
+                        } else if (any(ylimBelow <- ylim<0)) {
+                            ylim[ylimBelow] <- c(0.01,2)[ylimBelow]
+                        } 
+                        # windows(width=10,height=7)
+                        plot(1,1,xlim=xlim,ylim=ylim,log="y",type="n",ylab="counts",xlab="",main="spectra")
+                        if (input$use.ref)lines(wavelength,SpecCorr$I.ref[DOASwindows$pixel_filter],col="darkgrey",lwd=2)
+                        lines(wavelength,SpecCorr$I.meas[DOASwindows$pixel_filter,],col="black",lwd=2)
+                        legend("bottomright",c("meas.","ref."),lwd=2,col=c("black","darkgrey"),bty="n")
+
+                        # log(I.meas/I.ref)
+                        ylim <- range(DiffSpec$diffspec[DOASwindows$pixel_filter,],na.rm=TRUE)
+                        if (!all(is.finite(ylim))) ylim <- c(0,1)
+                        meas.dc <- highpass.filter(DiffSpec$diffspec,DOASwindows,input$p1,input$p2,input$p3,input$p4)
+                        # isna <- is.na(meas.dc)
+                        # windows(width=10,height=7)
+                        plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.meas/I.ref)",xlab="",main="diffspec")
+                        lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,] - meas.dc,lwd=2,col="orange")
+                        lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,],col="black")
+                        fit <- fitConc(meas.dc, DOASwindows, path.length, Cal.dc, robust=input$robust)
+
+                        cfs <- fit[[5]]
+                        fit.SO2 <- cfs[2]*path.length*Cal.dc$SO2.dc
+                        fit.NO <- cfs[3]*path.length*Cal.dc$NO.dc
+                        fit.NH3 <- cfs[1]*path.length*Cal.dc$NH3.dc
+
+                        # fit.SO2[isna] <- NA
+                        # fit.NO[isna] <- NA
+                        # fit.NH3[isna] <- NA
+
+                        if (input$tau.shift>0) {
+                            meas.dc <- c(meas.dc[-seq.int(input$tau.shift)],rep(NA,abs(input$tau.shift)))
+                        } else if (input$tau.shift<0) {
+                            tau.shift <- abs(input$tau.shift)
+                            meas.dc <- c(rep(NA,tau.shift),meas.dc[-(length(meas.dc) - seq.int(tau.shift) + 1)])
+                        }
+
+                        # doascurve
+                        ylim <- range(meas.dc,na.rm=TRUE)
+                        if (!all(is.finite(ylim))) ylim <- c(0,1)
+                        # windows(width=10,height=7)
+                        plot(wavelength,meas.dc,xlim=xlim,ylim=ylim,type="l",ylab="DOAS curve [-]",xlab="",panel.first={grid();abline(h=0)},main="doascurve")
+                        lines(wavelength,fit.SO2,col="#00bb00aa")
+                        lines(wavelength,fit.SO2+fit.NO,col="#ff0000dd")
+                        lines(wavelength,fit.SO2+fit.NO+fit.NH3,col="blue")
+                        lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc],lwd=2,col="#00bb00aa")
+                        lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc],lwd=2,col="#ff0000dd")
+                        lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc]+fit.NH3[DOASwindows$pixel_dc],lwd=2,col="blue")
+                        abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
+                        legend("topright",c("SO2","SO2 + NO","SO2 + NO + NH3"),lty=1,col=c("#00bb00aa","#ff0000dd","blue"),cex=0.7)
+
+                        # residual
+                        # windows(width=10,height=7)
+                        plot(wavelength,meas.dc,xlim=xlim,ylim=ylim,type="l",ylab="residuals [-]",xlab="",panel.first={grid();abline(h=0)},col="darkgrey",main="residuals")
+                        lines(wavelength,meas.dc-fit.SO2-fit.NO-fit.NH3) 
+                        lines(wavelength[DOASwindows$pixel_dc],meas.dc[DOASwindows$pixel_dc]-fit.SO2[DOASwindows$pixel_dc]-fit.NO[DOASwindows$pixel_dc]-fit.NH3[DOASwindows$pixel_dc],lwd=2) 
+                        abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
+
+                        # cal diffspec
+                        ylim <- range(DiffSpec$NH3.diffspec[DOASwindows$pixel_filter],na.rm=TRUE)
+                        plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.NH3/I.N2)",xlab="",panel.first={grid();abline(h=0)})
+                        # #
+                        # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,3]*CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NO$cuvette$cuvetteLength,lwd=2,col="red")
+                        # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter])
+                        # #
+                        # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,2]*CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.SO2$cuvette$cuvetteLength,lwd=2,col="green")
+                        # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter])
+                        # #
+                        lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,1]*CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NH3$cuvette$cuvetteLength,lwd=2,col="blue")
+                        lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter])
+
+                        # cal doascurve
+                        ylim <- range(Cal.dc$Xreg,na.rm=TRUE)
+                        plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="cal. DOAS curve [-]",xlab="",panel.first={grid();abline(h=0)})
+                        lines(wavelength,Cal.dc$Xreg[,3],lwd=2,col="red")
+                        lines(wavelength,Cal.dc$Xreg[,2],lwd=2,col="green")
+                        lines(wavelength,Cal.dc$Xreg[,1],lwd=2,col="blue")
+
+                        if (Edinburgh_correction) {
+                            cfs <- cfs * 1.16
+                        }
+
+                        msg1 <- sprintf("index %i/%i:  %s  --  NH3: %1.1f +/- %1.1f  --  SO2: %1.1f +/- %1.1f  --  NO: %1.1f +/- %1.1f",i,index.max,format(rawdat$Header[i,"st"]),cfs[1],fit[[6]][1],cfs[2],fit[[6]][2],cfs[3],fit[[6]][3])
+                        # mtext(as.expression(substitute(italic(msg), list(msg=msg))), line=-1.25, outer=TRUE, cex=0.5)
+                        # mtext(substitute(italic(msg), list(msg=msg1)), line=1, outer=TRUE, cex=0.75)
+                        # mtext(substitute(italic(msg), list(msg=msg2)), line=-0.5, outer=TRUE, cex=0.75)
+                        mtext(msg1, line=0, outer=TRUE)#, cex=0.75)
+
+                    })
+
+                    output$specs <- renderPlot({
+                        par(mfrow=c(3,2),oma=c(0,0,1.5,0))
+                        plot_reactive()
+                    })
+                    output$downloadPlot <- downloadHandler(
+                        filename=function() {paste0("shinyInspect_",format(Sys.time(),"%Y%m%d_%H%M%S"),".png")},
+                        content = function(file) {
+                            png(file,width=1200,height=1200)
+                            on.exit(dev.off())
+
+                            par(mfrow=c(3,2),oma=c(0,0,1.5,0))
+                            i <- input$index
+                            RawDat <- rawdat
+                            RawDat[[1]] <- rawdat[[1]][,i,drop=FALSE]
+                            DOASwindows <- DOASwindows_reactive()
+                            SpecCorr <- process_spectra(CalRefSpecs,RawDat,correct.dark = input$correct.dark, correct.linearity = input$correct.linearity, 
+                                correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
+                            DiffSpec <- diffSpecs(SpecCorr,use.ref=input$use.ref)
+                            Cal.dc <- getCalCurves(DiffSpec,DOASwindows,CalRefSpecs,warn=FALSE,input$p1,input$p2,input$p3,input$p4)
+                            wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel_filter]
+
+
+                            # plot(1,main="diffspec")
+                            # plot(1,main="doascurve")
+                            # plot(1,main="darkspec")
+                            # reactive:
+                            xlim <- range(wavelength)
+                            # main <- rawdat$Header[i,]
+
+                            # I.meas + I.ref
+                            ylim <- range(SpecCorr$I.meas[DOASwindows$pixel_filter,],SpecCorr$I.ref[DOASwindows$pixel_filter],na.rm=TRUE)
+                            if (!all(is.finite(ylim))) {
+                                ylim <- c(0.01,2)
+                            } else if (any(ylimBelow <- ylim<0)) {
+                                ylim[ylimBelow] <- c(0.01,2)[ylimBelow]
+                            } 
+                            # windows(width=10,height=7)
+                            plot(1,1,xlim=xlim,ylim=ylim,log="y",type="n",ylab="counts",xlab="",main="spectra")
+                            if (input$use.ref)lines(wavelength,SpecCorr$I.ref[DOASwindows$pixel_filter],col="darkgrey",lwd=2)
+                            lines(wavelength,SpecCorr$I.meas[DOASwindows$pixel_filter,],col="black",lwd=2)
+                            legend("bottomright",c("meas.","ref."),lwd=2,col=c("black","darkgrey"),bty="n")
+
+                            # log(I.meas/I.ref)
+                            ylim <- range(DiffSpec$diffspec[DOASwindows$pixel_filter,],na.rm=TRUE)
+                            if (!all(is.finite(ylim))) ylim <- c(0,1)
+                            meas.dc <- highpass.filter(DiffSpec$diffspec,DOASwindows,input$p1,input$p2,input$p3,input$p4)
+                            # isna <- is.na(meas.dc)
+                            # windows(width=10,height=7)
+                            plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.meas/I.ref)",xlab="",main="diffspec")
+                            lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,] - meas.dc,lwd=2,col="orange")
+                            lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,],col="black")
+                            fit <- fitConc(meas.dc, DOASwindows, path.length, Cal.dc, robust=input$robust)
+
+                            cfs <- fit[[5]]
+                            fit.SO2 <- cfs[2]*path.length*Cal.dc$SO2.dc
+                            fit.NO <- cfs[3]*path.length*Cal.dc$NO.dc
+                            fit.NH3 <- cfs[1]*path.length*Cal.dc$NH3.dc
+
+                            # fit.SO2[isna] <- NA
+                            # fit.NO[isna] <- NA
+                            # fit.NH3[isna] <- NA
+
+                            if (input$tau.shift>0) {
+                                meas.dc <- c(meas.dc[-seq.int(input$tau.shift)],rep(NA,abs(input$tau.shift)))
+                            } else if (input$tau.shift<0) {
+                                tau.shift <- abs(input$tau.shift)
+                                meas.dc <- c(rep(NA,tau.shift),meas.dc[-(length(meas.dc) - seq.int(tau.shift) + 1)])
+                            }
+
+                            # doascurve
+                            ylim <- range(meas.dc,na.rm=TRUE)
+                            if (!all(is.finite(ylim))) ylim <- c(0,1)
+                            # windows(width=10,height=7)
+                            plot(wavelength,meas.dc,xlim=xlim,ylim=ylim,type="l",ylab="DOAS curve [-]",xlab="",panel.first={grid();abline(h=0)},main="doascurve")
+                            lines(wavelength,fit.SO2,col="#00bb00aa")
+                            lines(wavelength,fit.SO2+fit.NO,col="#ff0000dd")
+                            lines(wavelength,fit.SO2+fit.NO+fit.NH3,col="blue")
+                            lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc],lwd=2,col="#00bb00aa")
+                            lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc],lwd=2,col="#ff0000dd")
+                            lines(wavelength[DOASwindows$pixel_dc],fit.SO2[DOASwindows$pixel_dc]+fit.NO[DOASwindows$pixel_dc]+fit.NH3[DOASwindows$pixel_dc],lwd=2,col="blue")
+                            abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
+                            legend("topright",c("SO2","SO2 + NO","SO2 + NO + NH3"),lty=1,col=c("#00bb00aa","#ff0000dd","blue"),cex=0.7)
+
+                            # residual
+                            # windows(width=10,height=7)
+                            plot(wavelength,meas.dc,xlim=xlim,ylim=ylim,type="l",ylab="residuals [-]",xlab="",panel.first={grid();abline(h=0)},col="darkgrey",main="residuals")
+                            lines(wavelength,meas.dc-fit.SO2-fit.NO-fit.NH3) 
+                            lines(wavelength[DOASwindows$pixel_dc],meas.dc[DOASwindows$pixel_dc]-fit.SO2[DOASwindows$pixel_dc]-fit.NO[DOASwindows$pixel_dc]-fit.NH3[DOASwindows$pixel_dc],lwd=2) 
+                            abline(v=wavelength[range(DOASwindows$pixel_dc)],lty=3)
+
+                            # cal diffspec
+                            ylim <- range(DiffSpec$NH3.diffspec[DOASwindows$pixel_filter],na.rm=TRUE)
+                            plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.NH3/I.N2)",xlab="",panel.first={grid();abline(h=0)})
+                            # #
+                            # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,3]*CalRefSpecs$dat.NO$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NO$cuvette$cuvetteLength,lwd=2,col="red")
+                            # lines(wavelength,DiffSpec$NO.diffspec[DOASwindows$pixel_filter])
+                            # #
+                            # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,2]*CalRefSpecs$dat.SO2$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.SO2$cuvette$cuvetteLength,lwd=2,col="green")
+                            # lines(wavelength,DiffSpec$SO2.diffspec[DOASwindows$pixel_filter])
+                            # #
+                            lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter] - Cal.dc$Xreg[,1]*CalRefSpecs$dat.NH3$cuvette$cuvetteConc_mg*1000*CalRefSpecs$dat.NH3$cuvette$cuvetteLength,lwd=2,col="blue")
+                            lines(wavelength,DiffSpec$NH3.diffspec[DOASwindows$pixel_filter])
+
+                            # cal doascurve
+                            ylim <- range(Cal.dc$Xreg,na.rm=TRUE)
+                            plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="cal. DOAS curve [-]",xlab="",panel.first={grid();abline(h=0)})
+                            lines(wavelength,Cal.dc$Xreg[,3],lwd=2,col="red")
+                            lines(wavelength,Cal.dc$Xreg[,2],lwd=2,col="green")
+                            lines(wavelength,Cal.dc$Xreg[,1],lwd=2,col="blue")
+
+                            msg1 <- sprintf("index %i/%i:  %s  --  NH3: %1.1f +/- %1.1f  --  SO2: %1.1f +/- %1.1f  --  NO: %1.1f +/- %1.1f",i,index.max,format(rawdat$Header[i,"st"]),cfs[1],fit[[6]][1],cfs[2],fit[[6]][2],cfs[3],fit[[6]][3])
+                            # mtext(as.expression(substitute(italic(msg), list(msg=msg))), line=-1.25, outer=TRUE, cex=0.5)
+                            # mtext(substitute(italic(msg), list(msg=msg1)), line=1, outer=TRUE, cex=0.75)
+                            # mtext(substitute(italic(msg), list(msg=msg2)), line=-0.5, outer=TRUE, cex=0.75)
+                            mtext(msg1, line=0, outer=TRUE)#, cex=0.75)
+
+                        },
+                        contentType="image/png"
+                    )
+                }
+            } 
+        )
+    )
+}
+
+
+# ### create synthetic theoretical calibration DOAS curves only based on published absorption crosssection and compare that with calibration DOAS curve
+# ### ******************************************************************************
+# f <- DOAS.info$Spectrometer$wavelength
+# sft <- -9
+# x0 <- DOAS.win$pixel_filter + sft
+# f2 <- f[x0]
+# f3 <- (f[c(x0[1]-1,x0)]+f[c(x0[1],x0+1)])/2
+# if (DOAS.model!="S1") {
+#   filter.length <- 21 
+# } else {
+#   filter.length <- 41
+# }
+
+# ### NH3 (Cheng et al., 2006):
+# lit.crossec.NH3 <- read.table(paste0(dirname(ref.spec),"/Literature_absorption_crossections/NH3_Cheng(2006)_298K_140-230nm(0.02nm).txt"), header=FALSE, stringsAsFactors=FALSE)
+# # xb.NH3 <- which(lit.crossec.NH3[,1] >= (f3[1]-df2a) & lit.crossec.NH3[,1] <= (f3[length(f3)]+df2b))
+# f2.NH3 <- lit.crossec.NH3[,1]
+# crossec.NH3 <- lit.crossec.NH3[,2] ### in cm2 / molecule
+# # 
+# f2.NH3_filt <- f2.NH3[-c(1:((filter.length-1)/2),length(f2.NH3)-(0:((filter.length-1)/2-1)))]
+# crossec.NH3_filt <- convolve(crossec.NH3,rep(1/filter.length,filter.length),type="filter")
+# abscrossec.NH3_scaled <- crossec.NH3_filt*6.022 * 10^23/17/10^6/100^2 # cm2/molecule -> m2/ug
+# abscrossec.NH3_cuv <- 1 - abscrossec.NH3_scaled*NH3.cal*dat.NH3$cuvette[[1]] # m2/ug -> [-]
+# cs.Theor <- sapply(seq_along(f2),
+#   function(x,i) {
+#     integrate(
+#       function(x) {
+#         out <- approx(f2.NH3_filt,abscrossec.NH3_cuv,xout=x)$y
+#         out[is.na(out)] <- 0
+#         return(out)
+#       }
+#       ,x[i],x[i+1])$value/diff(x[i+(0:1)])
+#   },x=f3)
+# NH3.doascurve.theor <- highpass.filter(cs.Theor,filter.type, DOAS.win$filter.strength,b,Scale,delta, filter.strength_multiplication, filter.strength_loess,fam)/(NH3.cal*dat.NH3$cuvette[[1]])
+# regr.NH3 <- suppressWarnings(lmrob(NH3.doascurve.theor[DOAS.win$pixel_dc + sft] ~ NH3.doascurve[DOAS.win$pixel_dc + sft], setting="KS2014"))
+# theory.NH3.factor <- round(coefficients(regr.NH3)[2],3)
+
+# plot(f[DOAS.win$pixel_filter],NH3.doascurve.theor,type="n",ylab="NH3 doascurve",xlab="",panel.first={grid();abline(h=0,col="darkgrey")})
+# lines(f[DOAS.win$pixel_filter],NH3.doascurve,lwd=2)
+# lines(f[DOAS.win$pixel_filter],NH3.doascurve.theor,col="blue",lwd=2)
+# lines(f[DOAS.win$pixel_filter],NH3.doascurve*theory.NH3.factor,col="red",lwd=2)
+# legend("bottomright",c("NH3.doascurve","Chen-Theory",sprintf("NH3.doascurve x %1.3f",theory.NH3.factor)),lwd=2,col=c("black","blue","red"))
+
+# ind <- seq.int(320)
+# par(mfrow=c(2,1))
+# plot(f[DOAS.win$pixel_filter][ind],NH3.doascurve[ind]*theory.NH3.factor,type="l",ylab="NH3 doascurve (m2/ug)",xlab="",lwd=2,panel.first={grid();abline(h=0,col="darkgrey")})
+# legend("bottomright","NH3 doascurve (cuvette suisse 4, assuming 192 mg/m3)",lwd=2,col="black",bty="n")
+# plot(f2[ind],NH3.doascurve[ind]*theory.NH3.factor,type="l",ylab="NH3 doascurve (m2/ug)",xlab="",lwd=2,col="red",panel.first={grid();abline(h=0,col="darkgrey")})
+# lines(f2[ind],NH3.doascurve.theor[ind],col="black",lwd=2)
+# legend("bottomright",c("NH3 doascurve (cuvette suisse 4, shifted)","Lit. based NH3 doascurve (Cheng et al. 2006) convolved"),lwd=2,col=c("red","black"),bty="n")
+
+
+# ### optionally: use theoretical DOAS curves
+# ### ******************************************************************************
+# if (!use.calibration) {
+#   NH3.doascurve <- NH3.doascurve.theor
+#   #NO.doascurve <- NO.doascurve.theor ### technically possible, but no good literature NO crossection data available
+#   #SO2.doascurve <- SO2.doascurve.theor ### let out SO2 -> focus on NH3
+# }

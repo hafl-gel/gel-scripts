@@ -217,7 +217,7 @@ getDOASinfo <- function(DOASmodel, timerange = Sys.time(), tzone = "", Serial = 
 
   # check for old data structures
   if(DOASmodel=="S1" && timerange[1] < as.POSIXct("2016-01-01", tz=tz(timerange[1]))){
-    Spectrometer$"Pixel Number" <- 2048
+    Spectrometer$"Pixel Number" <- 1021
     rawdata.structure$"Header Lines" <- 17
     rawdata.structure$"Time Format" <- "%Y-%m-%d %H:%M:%OS"
     rawdata.structure$"Acquisition start time" <- 2

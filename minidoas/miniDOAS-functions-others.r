@@ -1061,7 +1061,6 @@ evalOffline <- function(
     N2.cal.spec=NULL,
     force.write.daily=FALSE,
     lite=TRUE,
-    return.specData=FALSE,
     ncores=1,
     add.name="",
     RawData = NULL,
@@ -1303,6 +1302,12 @@ evalOffline <- function(
                 fitcurve(
                     highpass.filter2(DiffSpec$diffspec[[i]], DOAS.win$filt), 
                     DOAS.win$pixel_dc, xreg, DOAS.win$tau.shift, path.length)
+            } else {
+                # return NAs if too few light
+                as.list(c(
+                        rep(NA_real_, 6),
+                        NA_integer_
+                        ))
             }
             })
         cat("\n")
@@ -1313,8 +1318,6 @@ evalOffline <- function(
 
     # name them
     setnames(out, c('nh3', 'so2', 'no', 'nh3_se', 'so2_se', 'no_se', 'tau'))
-
-    browser()
 
     # correct NH3 calibration with Edinburgh correction?
     if (Edinburgh_correction) {
@@ -1338,121 +1341,24 @@ evalOffline <- function(
         i_fit_max = sapply(RawData$RawData, function(x) max(x[DOAS.win$pixel_fit], na.rm = TRUE))
     )
 
-    if (lite) {
-        return.specData <- FALSE
-    } 
-
-
+    # verbose
     cat("\nfinished evaluation of",DOAS.model,"\n")
-    if (return.specData) {
-        vars <- list(f=f,x1=x1,x2=x2,x3=x3,x4=x4,dat.ref=dat.ref,dat.ref.dark=dat.ref.dark,dat.dark=dat.dark,dat.N2.NH3=dat.N2.NH3,dat.N2.SO2=dat.N2.SO2,dat.N2.NO=dat.N2.NO,dat.N2.dark=dat.N2.dark,dat.NH3=dat.NH3,dat.SO2=dat.SO2,dat.NO=dat.NO,cal.diffspecs=cal.diffspecs,NH3.doascurve=NH3.doascurve,SO2.doascurve=SO2.doascurve,NO.doascurve=NO.doascurve,NH3.doascurve.theor=NH3.doascurve.theor)
-    } else {
-        vars <- NULL
-    }
 
+    # return results
     if (lite) {
-        CalRefSpecs <- NULL 
-        RawData <- NULL
+        results
+    } else {
+        structure(
+            results
+            ,CalRefSpecs = CalRefSpecs
+            ,RawData = RawData
+            ,callEval = match.call()
+            ,class = c("DOASeval", 'data.table', "data.frame")
+        )
     }
-
-    results <- structure(results
-        ,vars=vars
-        ,CalRefSpecs=CalRefSpecs
-        ,RawData=RawData
-        ,callEval=match.call()
-        ,class=c("DOASeval", 'data.table', "data.frame")
-    )
-    return(results)
 }
 
 
-
-# ev. noch plot=T/F einbauen
-extractResults <- function(resList,excols,as.xts=TRUE,tz="UTC",Ithresh=NULL,DOASmodel=NULL,tzResults=NULL) { 
-    # resList=Results;excols=9:12
-    # resList=test
-    # as.xts=TRUE;Ithresh=NULL;tz="CET"
-    # excols= c("NH3 [ug/m3]","SO2 sigma [ug/m3]","NO sigma [ug/m3]")
-    if (as.xts)require(xts)
-    if (cD <- class(resList)[1]=="DOASeval")resList <- list(resList)
-    if (is.null(DOASmodel)) {
-        Doasmodels <- sapply(lapply(resList,"attr","inputlist"),"[[","DOAS.model")
-    } else {
-        Doasmodels <- DOASmodel
-    }
-    if (is.null(tzResults)) {
-        tzIn <- sapply(lapply(resList,"attr","inputlist"),"[[","tz.Output")
-    } else {
-        tzIn <- tzResults
-    }
-    if (cD)names(resList) <- Doasmodels
-    lrL <- length(resList)
-    takecols <- excols
-    excols <- colnams <- colnams0 <- vector(lrL,mode="list")
-    for(i in 1:lrL) {
-        colnams0[[i]] <- gsub(paste0(" ",Doasmodels[1]),"",colnames(resList[[1]]))
-        colnams[[i]] <- gsub("fpcorr ","",colnams0[[i]])
-        if (class(takecols)=="character") {
-            excols2 <- which(colnams[[i]] %in% takecols)
-            isna <- which(!(takecols %in% colnams[[i]][excols2]))
-            if (length(isna))stop("Could not find colnames: ",paste(takecols[isna],collapse=", "))
-            excols[[i]] <- excols2
-        } else {
-            excols[[i]] <- takecols
-        } 
-    }
-
-    index <- vector(lrL,mode="list")
-    if (!is.null(Ithresh)) {
-        Ithresh <- rep(Ithresh,lrL)[seq(lrL)]
-        for(i in 1:lrL) {
-            index[[i]] <- resList[[i]][,15]<Ithresh[i]
-        }
-    } else {
-        for(i in 1:lrL) {
-            index[[i]] <- logical(length(resList[[i]][,15]))
-        }    
-    }
-    run_names <- names(resList)
-    if (is.null(run_names))run_names <- seq(lrL)
-    abbr_rn <- abbreviate(run_names)
-    out <- vector(lrL,mode="list")
-    names(out) <- abbr_rn
-    cn <- paste(unlist(mapply(function(x,y)rep(x,length(y)),x=abbr_rn,y=excols,SIMPLIFY=FALSE)),unlist(mapply(function(x,y)x[y],x=colnams0,y=excols,SIMPLIFY=FALSE)),sep=" - ")
-    if (as.xts) {
-        for(i in 1:lrL) {
-            st <- as.POSIXct(strptime(resList[[i]][,1],"%d.%m.%Y %H:%M:%S",tz=tzIn[i]))
-            et <- as.POSIXct(strptime(resList[[i]][,2],"%d.%m.%Y %H:%M:%S",tz=tzIn[i]))
-            Time <- st + (et-st)/2
-            if (lrL>1) {
-                Time <- as.POSIXct(round(Time,"mins"))
-            }
-            out[[i]] <- xts(resList[[i]][,excols[[i]],drop=FALSE],Time,tz=tz)
-            out[[i]][index[[i]],] <- NA
-        }
-        out <- do.call(merge,out)
-    } else {
-        for(i in 1:lrL) {
-            st <- as.POSIXct(strptime(resList[[i]][,1],"%d.%m.%Y %H:%M:%S",tz=tzIn[i]))
-            et <- as.POSIXct(strptime(resList[[i]][,2],"%d.%m.%Y %H:%M:%S",tz=tzIn[i]))
-            Time <- st + (et-st)/2
-            if (lrL>1) {
-                Time <- format(round(Time,"mins"),"%Y%m%d%H%M")
-            }
-            if (i==1) {
-                out <- data.frame(Time=Time,resList[[i]][,excols[[i]],drop=FALSE])
-                out[index[[i]],-1] <- NA
-            } else {
-                out <- merge(out,data.frame(Time=Time,resList[[i]][,excols[[i]],drop=FALSE]),by="Time",all=TRUE)
-                out[index[[i]],-1] <- NA
-            }
-        }
-        out <- out[,-1]
-    }
-    colnames(out) <- cn
-    out <- structure(out,class=c("DOASres",class(out)))
-    return(out)
-}
 
 runAppDOAS <- function(ShinyInput) {
     require(shiny)

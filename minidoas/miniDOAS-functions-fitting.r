@@ -46,8 +46,8 @@ fit.curves.rob <- function(meas.doascurve, ind_fit, Xreg, tau.shift, path.length
     }
     # return result
     if(inherits(fitcurves,"try-error") || !fitcurves$converged){
-        # was not able to fit - return null
-        NULL
+        # was not able to fit - return NAs
+        as.list(c(rep(NA_real_, 6), NA_integer_))
     } else {  
         as.list(c(
             # coefficients NH3/SO2/NO

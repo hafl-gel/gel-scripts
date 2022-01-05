@@ -220,7 +220,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
             cl <- parallel::makePSOCKcluster(rep('localhost', ncores))
             on.exit(parallel::stopCluster(cl))
         }
-        parallel::clusterCall(cl, library, 'lubridate')
+        parallel::clusterCall(cl, library, package = 'lubridate', character.only = TRUE)
     }
 
     if(inherits(DOASinfo, "character")){
@@ -508,7 +508,7 @@ avgSpec <- function(rawdat,type=c("raw","cal","ref","dark"),tracer=c("ambient","
 #~~ function; get dark/filter/fit windows and filter strength:
 getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(), 
     straylight.window = NULL, filter.window = NULL, fit.window = NULL, filter.strength = NULL, 
-    tau.shift = NULL, double = TRUE) {
+    tau.shift = NULL, filter.rev = TRUE) {
 
     # get doas info
     if (inherits(DOASinfo, "character")) DOASinfo <- getDOASinfo(DOASinfo, timerange)
@@ -558,42 +558,40 @@ getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(
     # straylight pixel
     pixel_straylight <- which(DOASinfo$Spectrometer$wavelength >= straylight.window[1] & DOASinfo$Spectrometer$wavelength <= straylight.window[2])
 
-    # check filter vs fit windows
-    if (abs(pixel_filter[1]-pixel_fit[1])< filter.strength) {
-        pixel_fitLo <- pixel_filter[1]+ filter.strength
+    # check fit window lower bound
+    if ((pixel_fit[1] - pixel_filter[1]) < filter.strength) {
+        pixel_fitLo <- pixel_filter[1] + filter.strength
         fit.window[1] <- DOASinfo$Spectrometer$wavelength[pixel_fitLo]
-        warning(sprintf("Too broad filtering: lower limit of argument \"fit.window\" is increased from %1.4f to %1.4f nm",DOASinfo$Spectrometer$wavelength[pixel_fit[1]],fit.window[1]))
     } else {
         pixel_fitLo <- pixel_fit[1]
     }
-    if (abs(rev(pixel_filter)[1]-rev(pixel_fit)[1])< filter.strength) {
-        pixel_fitHi <- rev(pixel_filter)[1]- filter.strength
+
+    # check fit window upper bound
+    if ((pixel_filter[length(pixel_filter)] - pixel_fit[length(pixel_fit)]) < filter.strength) {
+        pixel_fitHi <- pixel_filter[length(pixel_filer)] - filter.strength
         fit.window[2] <- DOASinfo$Spectrometer$wavelength[pixel_fitHi]
-        warning(sprintf("Too broad filtering: upper limit of argument \"fit.window\" is decreased from %1.4f to %1.4f nm",DOASinfo$Spectrometer$wavelength[rev(pixel_fit)[1]],fit.window[2]))
     } else {
-        pixel_fitHi <- rev(pixel_fit)[1]
+        pixel_fitHi <- pixel_fit[length(pixel_fit)]
     }
-    pixel_fit <- seq(pixel_fitLo,pixel_fitHi)
-    pixel_dc <- match(pixel_fit,pixel_filter)
-    if (anyNA(pixel_dc)) {
-        pixel_dc <- pixel_dc[!is.na(pixel_dc)]
-        pixel_fit <- pixel_filter[pixel_dc]
-        fit.window <- c(DOASinfo$Spectrometer$wavelength[pixel_fit[1]],DOASinfo$Spectrometer$wavelength[rev(pixel_fit)[1]])
-        warning(sprintf("\"fit.window\" does not lie within the boundaries of \"filter.window\"!\n\targument \"fit.window\" is adjusted to c(%1.4f, %1.4f)",fit.window[1],fit.window[2]))
-    }
+    
+    # rebuild pixel_fit with updated boundaries
+    pixel_fit <- seq(pixel_fitLo, pixel_fitHi)
+
+    # find pixel_fit within pixel_filter
+    pixel_dc <- match(pixel_fit, pixel_filter)
 
     list(
-        filter.window=filter.window,
-        fit.window=fit.window,
-        straylight.window=straylight.window,
-        filter.type=filter.type,
-        filter.strength=filter.strength,
-        double=double,
-        tau.shift=tau.shift,
-        pixel_filter=pixel_filter,
-        pixel_fit=pixel_fit,
-        pixel_straylight=pixel_straylight,
-        pixel_dc=pixel_dc
+        filter.window = filter.window,
+        fit.window = fit.window,
+        straylight.window = straylight.window,
+        filter.type = filter.type,
+        filter.strength = filter.strength,
+        filter.rev = filter.rev,
+        tau.shift = tau.shift,
+        pixel_filter = pixel_filter,
+        pixel_fit = pixel_fit,
+        pixel_straylight = pixel_straylight,
+        pixel_dc = pixel_dc
     )
 }
 
@@ -978,27 +976,19 @@ fitConc <- function(meas.doascurve, DOAS.win, path.length, Cal.dc, robust=FALSE)
 
 
 inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
-    filter.type = "BmHarris", fit.type = "OLS",doubleAVG=TRUE, robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
+    filter.type = "BmHarris", fit.type = "OLS",filter.rev=TRUE, robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
     filter.strength = NULL, tau.shift = NULL, correct.dark = TRUE, correct.linearity = TRUE, 
     correct.straylight = c("avg", "linear", "none"), use.ref = TRUE,
     Edinburgh_correction = TRUE) {
-    require(shiny)
 
-    # # cal/ref specs:
-    # CalRefSpecs <- getSpecSet(spec.dir, ref.spec, ref.dark.spec, 
-    #     dark.spec, NH3.cal.spec, SO2.cal.spec, 
-    #     NO.cal.spec, N2.NH3.cal.spec, N2.SO2.cal.spec, 
-    #     N2.NO.cal.spec, N2.dark.cal.spec, 
-    #     DOAS.model=rawdat$DOASinfo$DOASmodel
-    #     )
-    # require(data.table)
-    require(IDPmisc)
+    require(shiny)
     require(lubridate)
     require(robustbase)
+    require(MASS)
 
     # windows first time:
     DOASwindows <- getWindows(rawdat$DOASinfo,filter.type = filter.type, straylight.window = straylight.window, 
-        filter.window = filter.window, fit.window = fit.window, filter.strength = filter.strength, double = doubleAVG,
+        filter.window = filter.window, fit.window = fit.window, filter.strength = filter.strength, filter.rev = filter.rev,
         tau.shift = tau.shift)
 
     # correct cal/ref specs:
@@ -1073,10 +1063,10 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                                     ,"Gauss","Kaiser","DolphChebyshev","BmHarris","Tukey","Poisson","Exp","ExpHamming"),
                                 selected = DOASwindows$filter.type
                             )
-                            ,selectInput("double", 
-                                label = "doubleAVG:",
+                            ,selectInput("filter.rev", 
+                                label = "filter.rev:",
                                 choices = c(TRUE,FALSE),
-                                selected = DOASwindows$double
+                                selected = DOASwindows$filter.rev
                             )
                             ,sliderInput("filter.window", 
                                 label = "filter.window:", 
@@ -1167,7 +1157,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             filter_strength <- filter.strength
                         }
                         getWindows(rawdat$DOASinfo, filter.type = input$filter.type, straylight.window = straylight.window, 
-                            filter.window = input$filter.window, fit.window = fit_window, double = input$double,
+                            filter.window = input$filter.window, fit.window = fit_window, filter.rev = input$filter.rev,
                             filter.strength = filter_strength, tau.shift = input$tau.shift)
                     })
 
@@ -1548,7 +1538,7 @@ evalOffline <- function(
     use.robust=TRUE,
     filter.window=NULL, 
     filter.strength=NULL,
-    double.AVG=TRUE,
+    filter.rev=TRUE,
     fit.window=NULL,
     straylight.window=NULL,
     skip.check.daily=FALSE,
@@ -1623,7 +1613,7 @@ evalOffline <- function(
     ### ******************************************************************************
     DOAS.win <- getWindows(DOAS.info, filter.type, timerange, 
         straylight.window, filter.window, fit.window, 
-        filter.strength, tau.shift, double.AVG)
+        filter.strength, tau.shift, filter.rev)
 
 
     ### read (average) reference, calibration & noise spectra
@@ -1810,7 +1800,7 @@ evalOffline <- function(
         "DolphChebyshev" = winDolphChebyshev)
     DOAS.win$filt <- winFUN(DOAS.win$filter.strength,...)
     C_cfilter <- getFromNamespace('C_cfilter', 'stats')
-    if (DOAS.win$double) {
+    if (DOAS.win$filter.rev) {
         # old double filter
         highpass.filter2 <- function(dat,DOAS.win) {
             dat - rev(.Call(C_cfilter, rev(.Call(C_cfilter, dat, DOAS.win$filt, 2L, FALSE)), DOAS.win$filt, 2L, FALSE))
@@ -1853,8 +1843,8 @@ evalOffline <- function(
         pindex <- parallel::clusterSplit(cl,seq(files))
 
         if (use.robust) {
-            parallel::clusterCall(cl, library, robustbase)
-            parallel::clusterCall(cl, library, MASS)
+            parallel::clusterCall(cl, library, package = 'robustbase', character.only = TRUE)
+            parallel::clusterCall(cl, library, package = 'MASS', character.only = TRUE)
         }
         parallel::clusterExport(cl, list("highpass.filter2","fitcurve","AICc","fitparallel"))
 

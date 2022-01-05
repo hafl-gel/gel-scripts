@@ -163,9 +163,9 @@ kaiser <- function(n, beta){
     w
 }
 
-double.filter <- function(x.dat, filter.strength, winFUN, double = FALSE, ...){
+double.filter <- function(x.dat, filter.strength, winFUN, filter.rev = FALSE, ...){
     filt <- winFUN(filter.strength, ...)
-    if(double){
+    if(filter.rev){
         # old double filter
         x.dat - rev(filter(
                 rev(filter(x.dat, filt, "convolution", 2, circular = FALSE)), 
@@ -184,20 +184,20 @@ double.filter <- function(x.dat, filter.strength, winFUN, double = FALSE, ...){
 highpass.filter <- function(dat, DOAS.win, ...){
   dat <- dat[DOAS.win$pixel_filter]
   switch(DOAS.win$filter.type,
-    "Rect" = double.filter(dat,DOAS.win$filter.strength, winRect, DOAS.win$double, ...),
-    "Hann" = double.filter(dat,DOAS.win$filter.strength, winHann, DOAS.win$double, ...),
-    "Hamming" = double.filter(dat,DOAS.win$filter.strength, winHamming, DOAS.win$double, ...),
-    "Blackman" = double.filter(dat,DOAS.win$filter.strength, winBlackman, DOAS.win$double, ...),
-    "BmNuttall" = double.filter(dat,DOAS.win$filter.strength, winBmNuttall, DOAS.win$double, ...),
-    "Sin" = double.filter(dat,DOAS.win$filter.strength, winSin, DOAS.win$double, ...),
-    "Gauss" = double.filter(dat,DOAS.win$filter.strength, winGauss, DOAS.win$double, ...),
-    "Kaiser" = double.filter(dat,DOAS.win$filter.strength, winKaiser, DOAS.win$double, ...),
-    "DolphChebyshev" = double.filter(dat,DOAS.win$filter.strength, winDolphChebyshev, DOAS.win$double, ...),
-    "BmHarris" = double.filter(dat,DOAS.win$filter.strength, winBmHarris, DOAS.win$double, ...),
-    "Tukey" = double.filter(dat,DOAS.win$filter.strength, winTukey, DOAS.win$double, ...),
-    "Poisson" = double.filter(dat,DOAS.win$filter.strength, winPoisson, DOAS.win$double, ...),
-    "Exp" = double.filter(dat,DOAS.win$filter.strength, winExp, DOAS.win$double, ...),
-    "ExpHamming" = double.filter(dat,DOAS.win$filter.strength, winExpHamming, DOAS.win$double, ...),
+    "Rect" = double.filter(dat,DOAS.win$filter.strength, winRect, DOAS.win$filter.rev, ...),
+    "Hann" = double.filter(dat,DOAS.win$filter.strength, winHann, DOAS.win$filter.rev, ...),
+    "Hamming" = double.filter(dat,DOAS.win$filter.strength, winHamming, DOAS.win$filter.rev, ...),
+    "Blackman" = double.filter(dat,DOAS.win$filter.strength, winBlackman, DOAS.win$filter.rev, ...),
+    "BmNuttall" = double.filter(dat,DOAS.win$filter.strength, winBmNuttall, DOAS.win$filter.rev, ...),
+    "Sin" = double.filter(dat,DOAS.win$filter.strength, winSin, DOAS.win$filter.rev, ...),
+    "Gauss" = double.filter(dat,DOAS.win$filter.strength, winGauss, DOAS.win$filter.rev, ...),
+    "Kaiser" = double.filter(dat,DOAS.win$filter.strength, winKaiser, DOAS.win$filter.rev, ...),
+    "DolphChebyshev" = double.filter(dat,DOAS.win$filter.strength, winDolphChebyshev, DOAS.win$filter.rev, ...),
+    "BmHarris" = double.filter(dat,DOAS.win$filter.strength, winBmHarris, DOAS.win$filter.rev, ...),
+    "Tukey" = double.filter(dat,DOAS.win$filter.strength, winTukey, DOAS.win$filter.rev, ...),
+    "Poisson" = double.filter(dat,DOAS.win$filter.strength, winPoisson, DOAS.win$filter.rev, ...),
+    "Exp" = double.filter(dat,DOAS.win$filter.strength, winExp, DOAS.win$filter.rev, ...),
+    "ExpHamming" = double.filter(dat,DOAS.win$filter.strength, winExpHamming, DOAS.win$filter.rev, ...),
   )
 }
 

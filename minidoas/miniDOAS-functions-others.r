@@ -1700,7 +1700,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
         "Hamming" = formals(winHamming),
         "Blackman" = formals(winBlackman),
         "BmNuttall" = formals(winBmNuttall),
-        "FlatTop" = formals(winFlatTop),
         "Sin" = formals(winSin),
         "Gauss" = formals(winGauss),
         "Kaiser" = formals(winKaiser),
@@ -1738,12 +1737,11 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                                 max = index.max, 
                                 value = index
                             )             
-                            ,uiOutput("filter_strength")
-                            # ,numericInput("filter.strength", 
-                            #   label = "filter.strength:",
-                            #   step = 0.01,
-                            #   value = DOASwindows$filter.strength
-                            # )
+                            ,numericInput("filter.strength", 
+                              label = "filter.strength:",
+                              step = 2,
+                              value = DOASwindows$filter.strength
+                            )
                             ,selectInput("filter.type", 
                                 label = "filter.type:",
                                 choices = c("Hamming","Rect","Hann","Blackman","BmNuttall","Sin"
@@ -1812,15 +1810,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
             # server
             server={
                 function(input, output, session) {
-
-                    # # observe DOASwindows:
-                    # observe({
-                    #   DOASwindows <- DOASwindows_reactive()
-                    #   # SpecCorr <- SpecCorr_reactive()
-                    #   # DiffSpec <- DiffSpec_reactive()
-                    #   # Cal.dc <- Cal.dc_reactive()
-                    # })
-
 
                     # windows:
                     DOASwindows_reactive <- reactive({
@@ -1903,16 +1892,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         }            
                     )
 
-                    output$filter_strength <- renderUI({
-                        DOASwindows <- DOASwindows_reactive()
-
-                        numericInput("filter.strength", 
-                            label = "filter.strength:",
-                            step = 2,
-                            value = DOASwindows$filter.strength
-                        )
-                    })
-
                     output$fit_window <- renderUI({
                         DOASwindows <- DOASwindows_reactive()
                         sliderInput("fit.window", 
@@ -1928,10 +1907,11 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                     plot_reactive <- reactive({
                         i <- input$index
                         RawDat <- rawdat
-                        RawDat[[1]] <- rawdat[[1]][,i,drop=FALSE]
+                        RawDat[[1]] <- rawdat[[1]][[i]]
                         DOASwindows <- DOASwindows_reactive()
-                        SpecCorr <- process_spectra(CalRefSpecs,RawDat,correct.dark = input$correct.dark, correct.linearity = input$correct.linearity, 
-                            correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel_straylight)
+                        SpecCorr <- process_spectra(CalRefSpecs,RawDat,correct.dark = input$correct.dark, 
+                            correct.linearity = input$correct.linearity, correct.straylight = input$correct.straylight, 
+                            straylight.pix=DOASwindows$pixel_straylight)
                         DiffSpec <- diffSpecs(SpecCorr,use.ref=input$use.ref)
                         Cal.dc <- getCalCurves(DiffSpec,DOASwindows,CalRefSpecs,warn=FALSE,input$p1,input$p2,input$p3,input$p4)
                         wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel_filter]
@@ -1945,7 +1925,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         # main <- rawdat$Header[i,]
 
                         # I.meas + I.ref
-                        ylim <- range(SpecCorr$I.meas[DOASwindows$pixel_filter,],SpecCorr$I.ref[DOASwindows$pixel_filter],na.rm=TRUE)
+                        ylim <- range(SpecCorr$I.meas[[1]][DOASwindows$pixel_filter,],SpecCorr$I.ref[DOASwindows$pixel_filter],na.rm=TRUE)
                         if (!all(is.finite(ylim))) {
                             ylim <- c(0.01,2)
                         } else if (any(ylimBelow <- ylim<0)) {
@@ -1954,28 +1934,23 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         # windows(width=10,height=7)
                         plot(1,1,xlim=xlim,ylim=ylim,log="y",type="n",ylab="counts",xlab="",main="spectra")
                         if (input$use.ref)lines(wavelength,SpecCorr$I.ref[DOASwindows$pixel_filter],col="darkgrey",lwd=2)
-                        lines(wavelength,SpecCorr$I.meas[DOASwindows$pixel_filter,],col="black",lwd=2)
+                        lines(wavelength,SpecCorr$I.meas[[1]][DOASwindows$pixel_filter,],col="black",lwd=2)
                         legend("bottomright",c("meas.","ref."),lwd=2,col=c("black","darkgrey"),bty="n")
 
                         # log(I.meas/I.ref)
-                        ylim <- range(DiffSpec$diffspec[DOASwindows$pixel_filter,],na.rm=TRUE)
+                        ylim <- range(DiffSpec$diffspec[[1]][DOASwindows$pixel_filter,],na.rm=TRUE)
                         if (!all(is.finite(ylim))) ylim <- c(0,1)
-                        meas.dc <- highpass.filter(DiffSpec$diffspec,DOASwindows,input$p1,input$p2,input$p3,input$p4)
+                        meas.dc <- highpass.filter(DiffSpec$diffspec[[1]],DOASwindows,input$p1,input$p2,input$p3,input$p4)
                         # isna <- is.na(meas.dc)
                         # windows(width=10,height=7)
                         plot(1,1,xlim=xlim,ylim=ylim,type="n",ylab="log(I.meas/I.ref)",xlab="",main="diffspec")
-                        lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,] - meas.dc,lwd=2,col="orange")
-                        lines(wavelength,DiffSpec$diffspec[DOASwindows$pixel_filter,],col="black")
+                        lines(wavelength,DiffSpec$diffspec[[1]][DOASwindows$pixel_filter,] - meas.dc,lwd=2,col="orange")
+                        lines(wavelength,DiffSpec$diffspec[[1]][DOASwindows$pixel_filter,],col="black")
                         fit <- fitConc(meas.dc, DOASwindows, path.length, Cal.dc, robust=input$robust)
 
-                        cfs <- fit[[5]]
-                        fit.SO2 <- cfs[2]*path.length*Cal.dc$SO2.dc
-                        fit.NO <- cfs[3]*path.length*Cal.dc$NO.dc
-                        fit.NH3 <- cfs[1]*path.length*Cal.dc$NH3.dc
-
-                        # fit.SO2[isna] <- NA
-                        # fit.NO[isna] <- NA
-                        # fit.NH3[isna] <- NA
+                        fit.NH3 <- fit[1]*path.length*Cal.dc$NH3.dc
+                        fit.SO2 <- fit[2]*path.length*Cal.dc$SO2.dc
+                        fit.NO <- fit[3]*path.length*Cal.dc$NO.dc
 
                         if (input$tau.shift>0) {
                             meas.dc <- c(meas.dc[-seq.int(input$tau.shift)],rep(NA,abs(input$tau.shift)))
@@ -2026,10 +2001,12 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         lines(wavelength,Cal.dc$Xreg[,1],lwd=2,col="blue")
 
                         if (Edinburgh_correction) {
-                            cfs <- cfs * 1.16
+                            fit[1] <- fit[1] * 1.16
                         }
 
-                        msg1 <- sprintf("index %i/%i:  %s  --  NH3: %1.1f +/- %1.1f  --  SO2: %1.1f +/- %1.1f  --  NO: %1.1f +/- %1.1f",i,index.max,format(rawdat$Header[i,"st"]),cfs[1],fit[[6]][1],cfs[2],fit[[6]][2],cfs[3],fit[[6]][3])
+                        msg1 <- sprintf("index %i/%i:  %s  --  NH3: %1.1f +/- %1.1f  --  SO2: %1.1f +/- %1.1f  --  NO: %1.1f +/- %1.1f",
+                            i,index.max,format(rawdat$Header[i,"st"]),
+                            fit[1],fit[4],fit[2],fit[5],fit[3],fit[6])
                         # mtext(as.expression(substitute(italic(msg), list(msg=msg))), line=-1.25, outer=TRUE, cex=0.5)
                         # mtext(substitute(italic(msg), list(msg=msg1)), line=1, outer=TRUE, cex=0.75)
                         # mtext(substitute(italic(msg), list(msg=msg2)), line=-0.5, outer=TRUE, cex=0.75)

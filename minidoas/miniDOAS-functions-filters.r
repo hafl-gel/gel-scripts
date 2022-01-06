@@ -175,8 +175,8 @@ double.filter <- function(x.dat, filter.strength, winFUN, filter.rev = FALSE, ..
         # x.dat - filter(x.dat, filt, "convolution", 2, circular = FALSE)
         # new double filter
         x.dat - as.numeric(
-            filter(x.dat, filt2, 'convolution', 2, circular = FALSE) +
-                rev(filter(rev(x.dat), filt2, 'convolution', 2, circular = FALSE))
+            filter(x.dat, filt, 'convolution', 2, circular = FALSE) +
+                rev(filter(rev(x.dat), filt, 'convolution', 2, circular = FALSE))
             ) / 2
     }
 }

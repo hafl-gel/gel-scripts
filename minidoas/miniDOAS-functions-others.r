@@ -1227,7 +1227,7 @@ evalOffline <- function(
         fit_parallel <- function(index, ds, doas_win, xreg, path_length) {
             lapply(index, function(i) {
                 # check if light
-                if (median(ds[[i]], na.rm = TRUE) > -5) {
+                if (isTRUE(median(ds[[i]], na.rm = TRUE) > -5)) {
                     # highpass filter and fit curve to calibration
                     fitcurve(
                         hpf2(ds[[i]], doas_win$filt), 
@@ -1289,7 +1289,7 @@ evalOffline <- function(
             # verbose
             cat("\r", i, "/", n_files)
             # check if light
-            if (median(DiffSpec$diffspec[[i]], na.rm = TRUE) > -5) {
+            if (isTRUE(median(DiffSpec$diffspec[[i]], na.rm = TRUE) > -5)) {
                 # highpass filter and fit curve to calibration
                 fitcurve(
                     highpass.filter2(DiffSpec$diffspec[[i]], DOAS.win$filt), 

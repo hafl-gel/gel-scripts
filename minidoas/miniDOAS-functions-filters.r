@@ -163,53 +163,26 @@ kaiser <- function(n, beta){
     w
 }
 
-double.filter <- function(x.dat, filter.strength, winFUN, filter.rev = FALSE, ...){
-    filt <- winFUN(filter.strength, ...)
-    if(filter.rev){
-        # old double filter
-        x.dat - rev(filter(
-                rev(filter(x.dat, filt, "convolution", 2, circular = FALSE)), 
-                filt, "convolution", 2, circular = FALSE))
-    } else {
-        # old 'single' filter
-        # x.dat - filter(x.dat, filt, "convolution", 2, circular = FALSE)
-        # new double filter
-        x.dat - as.numeric(
-            filter(x.dat, filt, 'convolution', 2, circular = FALSE) +
-                rev(filter(rev(x.dat), filt, 'convolution', 2, circular = FALSE))
-            ) / 2
-    }
-}
+filter.functions <- list(
+    "Rect" = winRect,
+    "Hann" = winHann,
+    "Hamming" = winHamming,
+    "Blackman" = winBlackman,
+    "BmNuttall" = winBmNuttall,
+    "Sin" = winSin,
+    "Gauss" = winGauss,
+    "Kaiser" = winKaiser,
+    "DolphChebyshev" = winDolphChebyshev,
+    "BmHarris" = winBmHarris,
+    "Tukey" = winTukey,
+    "Poisson" = winPoisson,
+    "Exp" = winExp,
+    "ExpHamming" = winExpHamming,
+)
+
 
 highpass.filter <- function(dat, DOAS.win, ...){
-  dat <- dat[DOAS.win$pixel_filter]
-  switch(DOAS.win$filter.type,
-    "Rect" = double.filter(dat,DOAS.win$filter.strength, winRect, DOAS.win$filter.rev, ...),
-    "Hann" = double.filter(dat,DOAS.win$filter.strength, winHann, DOAS.win$filter.rev, ...),
-    "Hamming" = double.filter(dat,DOAS.win$filter.strength, winHamming, DOAS.win$filter.rev, ...),
-    "Blackman" = double.filter(dat,DOAS.win$filter.strength, winBlackman, DOAS.win$filter.rev, ...),
-    "BmNuttall" = double.filter(dat,DOAS.win$filter.strength, winBmNuttall, DOAS.win$filter.rev, ...),
-    "Sin" = double.filter(dat,DOAS.win$filter.strength, winSin, DOAS.win$filter.rev, ...),
-    "Gauss" = double.filter(dat,DOAS.win$filter.strength, winGauss, DOAS.win$filter.rev, ...),
-    "Kaiser" = double.filter(dat,DOAS.win$filter.strength, winKaiser, DOAS.win$filter.rev, ...),
-    "DolphChebyshev" = double.filter(dat,DOAS.win$filter.strength, winDolphChebyshev, DOAS.win$filter.rev, ...),
-    "BmHarris" = double.filter(dat,DOAS.win$filter.strength, winBmHarris, DOAS.win$filter.rev, ...),
-    "Tukey" = double.filter(dat,DOAS.win$filter.strength, winTukey, DOAS.win$filter.rev, ...),
-    "Poisson" = double.filter(dat,DOAS.win$filter.strength, winPoisson, DOAS.win$filter.rev, ...),
-    "Exp" = double.filter(dat,DOAS.win$filter.strength, winExp, DOAS.win$filter.rev, ...),
-    "ExpHamming" = double.filter(dat,DOAS.win$filter.strength, winExpHamming, DOAS.win$filter.rev, ...),
-  )
+    dat <- dat[DOAS.win$pixel_filter]
+    filt <- filter.functions[[DOAS.win$filter.type]](DOAS.win$filter.strength, ...)
+    x.dat - filter(x.dat, filt, 'convolution', 2, circular = FALSE)
 }
-
-
-# ######## testing:
-# fsAVG <- 25
-# fs <- 0.25
-# DOAS.win <- getWindows(DOAS.info, "special", timerange, 
-# straylight.window, c(202,229.1), fit.window, 
-# filter.strength, tau.shift)
-# # DOAS.win3 <- getWindows(DOAS.info, "specialAVG", timerange, 
-# # DOAS.win3 <- getWindows(DOAS.info, "specialMED", timerange, 
-# # DOAS.win3 <- getWindows(DOAS.info, "specialHamming", timerange, 
-# straylight.window, c(202,229.1), fit.window, 
-# fs, tau.shift)

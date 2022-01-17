@@ -30,7 +30,17 @@ gatherSingleOML <- function(x){
 	uRank <- sort(unique(rInt))
 	setNames(lapply(uRank,function(i,oml){
 		ind <- which(rInt == i)
-		if(!all(ns[ind] - ns[ind[1]] == 0)) stop("data sets are of different lengths (abfangen, falls irgendwann auftreten sollte)")
+		if (!all(ns[ind] - ns[ind[1]] == 0)) {
+            # browser()
+            # stop("data sets are of different lengths (abfangen, falls irgendwann auftreten sollte)")
+            mind <- which.max(ns[ind])
+            mTime <- oml[[ind[mind]]]$data[, Time]
+            oml[ind] <- lapply(oml[ind], function(z) {
+                out <- z
+                out$data <- merge(data.table(Time = mTime), z$data, all = TRUE)
+                out
+                })
+        }
 		Time <- oml[[ind[1]]]$data[,Time]
 		list(
 			storageInterval = sInt[ind[1]]
@@ -78,6 +88,7 @@ readSingleOML <- function(File){
 		Values <- as.numeric(gsub(".*\\\">(.*)</VT>","\\1",txt))
 		# check for 999.9 values
 		Values[Values == 999.9] <- NA
+        isnotna <- !is.na(Times)
 		Errorcode <- rep("00",length(Values))
 		Errorind <- grep("errorcode",txt)
 		Errorcode[Errorind] <- gsub(".*errorcode=\\\"(.*)\\\">.*","\\1",txt[Errorind])
@@ -92,9 +103,9 @@ readSingleOML <- function(File){
 				storageInterval = as.numeric(storageInterval)
 				),
 			data = data.table(
-				Time = Times,
-				Value = Values,
-				Errorcode = Errorcode
+				Time = Times[isnotna],
+				Value = Values[isnotna],
+				Errorcode = Errorcode[isnotna]
 				)
 			)
 	})

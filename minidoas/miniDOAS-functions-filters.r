@@ -182,7 +182,6 @@ filter.functions <- list(
 
 
 highpass.filter <- function(dat, DOAS.win, ...){
-    dat <- dat[DOAS.win$pixel_filter]
     filt <- filter.functions[[DOAS.win$filter.type]](DOAS.win$filter.strength, ...)
-    x.dat - filter(x.dat, filt, 'convolution', 2, circular = FALSE)
+    dat - filter(dat[DOAS.win$pixel_filter], filt, 'convolution', 2, circular = FALSE)
 }

@@ -177,7 +177,7 @@ filter.functions <- list(
     "Tukey" = winTukey,
     "Poisson" = winPoisson,
     "Exp" = winExp,
-    "ExpHamming" = winExpHamming,
+    "ExpHamming" = winExpHamming
 )
 
 

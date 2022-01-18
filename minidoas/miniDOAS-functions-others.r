@@ -1128,6 +1128,8 @@ evalOffline <- function(
         cat("argument 'CalRefSpecs' supplied...\n")
     }
 
+    if (is.null(CalRefSpecs$dat.ref)) stop('Invalid reference spectrum...')
+
     ### calibration concentrations in ppb
     cat(
         sprintf(

@@ -867,9 +867,10 @@ evalREddy <- function(
 				} else {
 					folder <- paste0("REddy-",filename,"-eval",now0,"-avg",avg_period)
 				}
-				dir.create(paste0(save_directory,"/",folder),recursive=FALSE)
-				on.exit(setwd(former_wd))
-				setwd(paste0(save_directory,"/",folder))
+                path_folder <- file.path(save_directory, folder)
+				dir.create(path_folder, recursive = FALSE)
+				# on.exit(setwd(former_wd))
+				# setwd(paste0(save_directory,"/",folder))
 			}
 
 			read_rawdata <- get(rawdata_function,mode="function")
@@ -1332,7 +1333,7 @@ evalREddy <- function(
 						# ------------------------------------------------------------------------
 						time2 <- format(Int_End,format="%H%M%S")
 						plotname <- paste("timeseries", filename, time2, sep="-") 
-						jpeg(file=paste0(plotname,".jpg"),width=600, height=(sum(variables_timeseries))*100, quality=60)
+						jpeg(file=paste0(path_folder, '/', plotname,".jpg"),width=600, height=(sum(variables_timeseries))*100, quality=60)
 							ts_plot <- plot.tseries(Data[index,],wind,detrended_scalars,names(variables_timeseries)[variables_timeseries],variables_cols,variables_units)
 							print(ts_plot)
 						dev.off()
@@ -1342,7 +1343,7 @@ evalREddy <- function(
 						for(i in covariances){
 							# i <- "w'TDL CH4'"
 							plotname <- paste("plots",filename,time2,covariances_plotnames[i],sep="-")
-							jpeg(file=paste0(plotname,".jpg"),width=1350, height=900, quality=60)
+							jpeg(file=paste0(path_folder, '/', plotname,".jpg"),width=1350, height=900, quality=60)
 								par(mfrow=c(2,3))
 								# ----------------------- Covariance -------------------------------------
 								plot_covfunc(Covars[[i]],Int_Time,dyn_lag_max[,i],fix_lag[i],ylab=i, xlim = c(-50,50), cx=1.5, cxmt=1.25, cl=covariances_cols[i])
@@ -1364,13 +1365,8 @@ evalREddy <- function(
 				}
 			} # end for loop intval	
 
-			if(!isFALSE(save_directory)){
-				# write results
-				# ------------------------------------------------------------------------
-				write.table(results,file=paste0("_Reddy-",filename,".csv"),sep=";",row.names=FALSE)
-			}
 		} # end inner doCalc
-		setwd(former_wd)	
+		# setwd(former_wd)	
 	} # end outer doCalc
 
 

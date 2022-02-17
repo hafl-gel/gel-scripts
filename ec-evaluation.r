@@ -479,8 +479,11 @@ reduce_cospec <- function(cospec,freq,length.out=100){
 	log_freq <- log(freq)
 	log_cuts <- seq(min(log_freq),max(log_freq),length.out=length.out+1)
 	ind_cuts <- findInterval(log_freq,log_cuts,rightmost.closed=TRUE)
-	freq_out <- exp(log_cuts[-1] - diff(log_cuts))
-	list(cospec=tapply(cospec,ind_cuts,sum),freq=freq_out[unique(ind_cuts)],d_freq=diff(exp(log_cuts))[unique(ind_cuts)])
+	freq_out <- exp(log_cuts[-1] - diff(log_cuts) / 2)
+	list(
+        cospec = tapply(cospec * freq,ind_cuts,mean),
+        freq = freq_out[unique(ind_cuts)]
+    )
 }
 
 damp_hac5 <- function(ogive, freq, freq.limits, ogive_ref){
@@ -644,12 +647,10 @@ plot_covfunc <- function(cov_func,avg_t,dynLag,fixLag, ylab=NULL, xlim = NULL, c
 plot_cospec_ogive <- function(ogive,cospec,freq,ylab=NULL,xlim=NULL,cx=1.5,col="lightblue",nred=floor(sqrt(sqrt(length(ogive)))*3)){
 	# reduced cospec 1:
 	cospec_reduced0 <- reduce_cospec(cospec,freq,nred*10)
-	freq_r0 <- cospec_reduced0$freq
-	cospec_f <- cospec_reduced0$cospec/cospec_reduced0$d_freq*freq_r0
+	cospec_f <- cospec_reduced0$cospec
 	# reduced cospec 2:
 	cospec_reduced <- reduce_cospec(cospec,freq,nred)
-	freq_rm <- cospec_reduced$freq
-	cospec_rm <- cospec_reduced$cospec/cospec_reduced$d_freq*freq_rm
+	cospec_rm <- cospec_reduced$cospec
 
 	rCo <- range(cospec_rm,na.rm=TRUE)
 	if(is.null(xlim))xlim <- rev(range(freq))
@@ -670,15 +671,8 @@ plot_cospec_ogive <- function(ogive,cospec,freq,ylab=NULL,xlim=NULL,cx=1.5,col="
 	title(ylab=ylab,col.lab=col, cex.lab=cx,font.lab=2)
 	axis(4,at=py2,labels=prCo, cex.axis=cx, cex.lab=cx)
 	axis(3,at=1/c(0.02,0.05,0.1,1,10,60,120,300,600,1800,3600,7200),labels=c("20ms","50ms","100ms","1s","10s","1min","2min","5min","10min","30min","1hr","2hrs"), cex.axis=cx, cex.lab=cx)
-	lines(freq_r0,y_cf,col="lightgrey")
-	# # ref cospec:
-	# if(!is.null(cospec_ref)){
-	# 	cospec_refred <- reduce_cospec(cospec_ref,freq,nred)
-	# 	cospec_rf <- cospec_refred$cospec/cospec_refred$d_freq*freq_rm
-	# 	y_crf <- (cospec_rf - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1]
-	# 	lines(freq_rm,y_crf,type="b",col="darkgrey",lwd=2)
-	# }
-	lines(freq_rm,y_crm,type="b",col="black",lwd=2)
+	lines(cospec_reduced0$freq,y_cf,col="lightgrey")
+	lines(cospec_reduced$freq,y_crm,type="b",col="black",lwd=2)
 	lines(freq,ogive,col=col,lwd=2)
 }
 
@@ -1037,8 +1031,8 @@ evalREddy <- function(
 			unique_ind <- unique(ind_interval) %w/o% 0
 
 			if(ogives_out){
-				Ogive_fix_Out <- Ogive_dyn_Out <- vector("list",length(et_interval))
-				names(Ogive_fix_Out) <- names(Ogive_dyn_Out) <- format(et_interval,format="%H%M")
+				Cospec_dyn_Out <- Cospec_fix_Out <- Covars_Out <- Ogive_fix_Out <- Ogive_dyn_Out <- vector("list",length(st_interval))
+				names(Cospec_fix_Out) <- names(Cospec_dyn_Out) <- names(Covars_Out) <- names(Ogive_fix_Out) <- names(Ogive_dyn_Out) <- format(st_interval,format="%H%M")
 			}
 
 			# browser()
@@ -1067,17 +1061,18 @@ evalREddy <- function(
 					Int_End <- Time[length(Time)] + Data_int[length(Time),2]/1000
 					Int_Time <- as.numeric(Int_End - Int_Start,units="secs")
 					d_t <- diff(as.numeric(Time))
-					Hz <- 1/summary(d_t)
-					freq <- seq(floor(Int_length/2))*2/Int_Time
+					Hz <- round(1/summary(d_t)[['Median']])
+					# freq <- seq(floor(Int_length/2))*2/Int_Time
+					freq <- Hz * seq(floor(Int_length / 2)) / floor(Int_length / 2)
 					# for later: include NA where d_t>2*mean, remove entries where d_t < 0.5*mean
 
 					# fix and dyn lags:                                      
 					# ------------------------------------------------------------------------------ 
 					fix_raw <- unlist(df.lag.fix.sec[format(Data[1,1],"%y%m%d"),])
-					fix_lag <- round(fix_raw*Hz["Mean"])
+					fix_lag <- round(fix_raw*Hz)
 					dyn_lag <- rbind(
-						lower=round((fix_raw - lag_dev)*Hz["Mean"])
-						,upper=round((fix_raw + lag_dev)*Hz["Mean"])
+						lower=round((fix_raw - lag_dev)*Hz)
+						,upper=round((fix_raw + lag_dev)*Hz)
 						)
 					# # check dyn lag <= 0 for scalars:
 					# dyn_lag[2,scalar_covariances] <- pmin(dyn_lag[2,scalar_covariances],0)
@@ -1086,7 +1081,7 @@ evalREddy <- function(
 					# --------------------------------------------------------------------------
 					cat("~~~\nchecking hard flags...\n")
 					if(any(hard_flag)){
-						Data_int[,variables[hard_flag]] <- H.flags(Data_int[,variables[hard_flag],drop=FALSE],Time,Hz["Mean"],lim_range[,variables[hard_flag],drop=FALSE],hf_window,hf_method)
+						Data_int[,variables[hard_flag]] <- H.flags(Data_int[,variables[hard_flag],drop=FALSE],Time,Hz,lim_range[,variables[hard_flag],drop=FALSE],hf_window,hf_method)
 					} 
 
 					# check for remaining NA values
@@ -1098,14 +1093,14 @@ evalREddy <- function(
 					# calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
 					# -------------------------------------------------------------------------- 
 					cat("~~~\nrotating and deterending sonic data...\n")
-					wind <- rotate_detrend(Data_int[,"u"],Data_int[,"v"],Data_int[,"w"],Data_int[,"T"],phi=if(rotation_method %in% "two_axis") NULL else 0,method=detrending_method[c("u","v","w","T")],c.system=sonic_type,Hz_ts=Hz["Mean"])
+					wind <- rotate_detrend(Data_int[,"u"],Data_int[,"v"],Data_int[,"w"],Data_int[,"T"],phi=if(rotation_method %in% "two_axis") NULL else 0,method=detrending_method[c("u","v","w","T")],c.system=sonic_type,Hz_ts=Hz)
 					Data_int[,c("u","v","w","T")] <- wind[c("uprot","vprot","wprot","Tdet")]
 
 					# detrend scalars
 					# -------------------------------------------------------------------------- 
 					if(length(scalars)){
 						cat("~~~\ndetrending scalars...\n")
-						detrended_scalars <- mapply(trend,y=Data_int[,scalars, drop = FALSE],method=detrending_method[scalars],MoreArgs=list(Hz_ts=Hz["Mean"]),SIMPLIFY=FALSE)
+						detrended_scalars <- mapply(trend,y=Data_int[,scalars, drop = FALSE],method=detrending_method[scalars],MoreArgs=list(Hz_ts=Hz),SIMPLIFY=FALSE)
 						Data_int[,scalars] <- lapply(detrended_scalars,"[[","residuals")
 					} else {
 						detrended_scalars <- NULL
@@ -1170,8 +1165,11 @@ evalREddy <- function(
 					Ogive_fix <- lapply(Cospec_fix,function(x)rev(cumsum(rev(x))))
 					Ogive_dyn <- lapply(Cospec_dyn,function(x)rev(cumsum(rev(x))))		
 					if(ogives_out){
-						Ogive_fix_Out[[intval]] <- c(list(freq=freq),Ogive_fix)
-						Ogive_dyn_Out[[intval]] <- c(list(freq=freq),Ogive_dyn)
+						Cospec_fix_Out[[intval]] <- c(list(freq = freq), Cospec_fix)
+						Cospec_dyn_Out[[intval]] <- c(list(freq = freq), Cospec_dyn)
+						Ogive_fix_Out[[intval]] <- c(list(freq = freq), Ogive_fix)
+						Ogive_dyn_Out[[intval]] <- c(list(freq = freq), Ogive_dyn)
+						Covars_Out[[intval]] <- c(list(Hz = Hz), Covars)
 					}
 
 
@@ -1193,7 +1191,7 @@ evalREddy <- function(
 
 					# sub-int: calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
 					# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-					sub_wind <- lapply(sub_Data,function(x)rotate_detrend(x[,"u"],x[,"v"],x[,"w"],x[,"T"],phi=if(rotation_method %in% "two_axis") NULL else 0,method=subint_detrending_method[c("u","v","w","T")],c.system=sonic_type,Hz_ts=Hz["Mean"]))
+					sub_wind <- lapply(sub_Data,function(x)rotate_detrend(x[,"u"],x[,"v"],x[,"w"],x[,"T"],phi=if(rotation_method %in% "two_axis") NULL else 0,method=subint_detrending_method[c("u","v","w","T")],c.system=sonic_type,Hz_ts=Hz))
 					for(sub in seq_along(sub_wind)){
 						sub_Data[[sub]][,c("u","v","w","T")] <- sub_wind[[sub]][c("uprot","vprot","wprot","Tdet")]
 					}
@@ -1201,7 +1199,7 @@ evalREddy <- function(
 					# sub-int: detrend scalars
 					# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
 					if(length(scalars)){
-						sub_detrended_scalars <- lapply(sub_Data,function(x)mapply(trend,y=x[,scalars, drop = FALSE],method=subint_detrending_method[scalars],MoreArgs=list(Hz_ts=Hz["Mean"]),SIMPLIFY=FALSE))
+						sub_detrended_scalars <- lapply(sub_Data,function(x)mapply(trend,y=x[,scalars, drop = FALSE],method=subint_detrending_method[scalars],MoreArgs=list(Hz_ts=Hz),SIMPLIFY=FALSE))
 						Data_int[,scalars] <- lapply(detrended_scalars,"[[","residuals")
 						for(sub in seq_along(sub_wind)){
 							sub_Data[[sub]][,scalars] <- lapply(sub_detrended_scalars[[sub]],"[[","residuals")
@@ -1375,7 +1373,14 @@ evalREddy <- function(
 	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"),"time elapsed: ", difftime(Sys.time(), script.start, unit="mins"),"minutes\n")
 	cat("************************************************************\n")  
 	if(ogives_out){
-		return(list(results=results,ogv_fix=Ogive_fix_Out,ogv_dyn=Ogive_dyn_Out))
+		return(list(
+                results = results, 
+                covars = Covars_Out,
+                cospec_fix = Cospec_fix_Out, 
+                cospec_dyn = Cospec_dyn_Out,
+                ogv_fix = Ogive_fix_Out, 
+                ogv_dyn = Ogive_dyn_Out
+                ))
 	} else {
 		return(results)
 	}

@@ -499,21 +499,17 @@ damp_hac5 <- function(ogive, freq, freq.limits, ogive_ref){
 		ogive_ref <- -ogive_ref
 	}	
 	# linear regression + prediction:
-	# mod <- lm(undamped_ogv~undamped_ogvref,weights=1/freq[undamped_ind])
-	# pred_ogv_lm <- predict(mod,newdata=list(undamped_ogvref=ogive_ref))
-	mod <- deming::deming(undamped_ogv~undamped_ogvref,weights=1/freq[undamped_ind])
+	# mod <- deming::deming(undamped_ogv~undamped_ogvref,weights=1/freq[undamped_ind])
+	mod <- deming::deming(undamped_ogv ~ undamped_ogvref)
 	cfs <- coef(mod)
 	pred_ogv_deming <- cfs[2]*ogive_ref + cfs[1]
 
 	# robust linear regression + prediction:
-	# mod2 <- MASS::rlm(undamped_ogv~undamped_ogvref,weights=1/freq[undamped_ind])
-	# pred_ogv_rlm <- predict(mod2,newdata=list(undamped_ogvref=ogive_ref))
-
-	mod2 <- deming::pbreg(undamped_ogv~undamped_ogvref,method=3,eps=min(abs(undamped_ogv))*1E-8)
+	mod2 <- deming::pbreg(undamped_ogv ~ undamped_ogvref,method=3,eps=min(abs(undamped_ogv))*1E-8)
 	cfs2 <- coef(mod2)
 	pred_ogv_pbreg <- cfs2[2]*ogive_ref + cfs2[1]
 	
-	list(dampf_pbreg=ogive[1]/(ogive[1] - cfs2[1]),dampf_deming=ogive[1]/(ogive[1] - coef(mod)[1]),freq.limits=freq.limits,ogive=ogive,ogive_ref_pbreg=pred_ogv_pbreg,ogive_ref_deming=pred_ogv_deming)	
+	list(dampf_pbreg=ogive[1]/(ogive[1] - cfs2[1]),dampf_deming=ogive[1]/(ogive[1] - cfs[1]),freq.limits=freq.limits,ogive=ogive,ogive_ref_pbreg=pred_ogv_pbreg,ogive_ref_deming=pred_ogv_deming)	
 }
 
 # -cfs2 = og1/dp - og1 = (1/dp - 1)*og1

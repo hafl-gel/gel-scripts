@@ -182,7 +182,7 @@ CH.to.WGS <- function(x,y=NULL){
 
 
 ##
-WGS.to.xy <- function(MyMap, lat, lon=NULL, zoom){
+WGS.to.map <- function(MyMap, lat, lon=NULL, zoom){
 	if(inherits(lat,"Sources")&&ncol(lat)==4){
 		out <- lat
 		dummy <- LatLon2XY.centered(MyMap, lat[,3], lat[,2], zoom)
@@ -209,9 +209,9 @@ WGS.to.xy <- function(MyMap, lat, lon=NULL, zoom){
 }
 
 ##
-CH.to.xy <- function(MyMap,x,y=NULL,...){
+CH.to.map <- function(MyMap,x,y=NULL,...){
 	WGS84 <- CH.to.WGS(x,y,...)
-	WGS.to.xy(MyMap,WGS84)
+	WGS.to.map(MyMap,WGS84)
 } 
 
 

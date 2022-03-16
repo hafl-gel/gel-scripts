@@ -496,13 +496,19 @@ cheng2dc <- function(dc, cheng = NULL, shift = FALSE) {
 
 #### plot method for caldat
 plot.caldat <- function(x, type = 'l', ...) {
-    x$data[, plot(wl, cnt, type = 'l', ...)]
+    x$data[, plot(wl, cnt, type = type, ...)]
 }
 lines.caldat <- function(x, ...) {
     x$data[, lines(wl, cnt, ...)]
 }
 
-
+#### plot method for dc
+plot.dc <- function(x, type = 'l', xlab = 'nm', ylab = 'doascurve', ...) {
+    plot(x$wl, x$cnt, type = type, xlab = xlab, ylab = ylab, ...)
+}
+lines.dc <- function(x, ...) {
+    lines(x$wl, x$cnt, ...)
+}
 
 
 

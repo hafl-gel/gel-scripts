@@ -121,6 +121,20 @@ plot.single_spec <- function(x, y, lo = 190, hi = 230, ylab = 'counts', xlab = '
     x <- get_wl(x)
     plot(x, y, xlab = xlab, ylab = ylab, ...)
 }
+lines.single_spec <- function(x, lo = 190, hi = 230, ...) {
+    x <- cut_wl(x, lo, hi)
+    y <- x
+    class(y) <- 'numeric'
+    x <- get_wl(x)
+    lines(x, y, ...)
+}
+points.single_spec <- function(x, lo = 190, hi = 230, ...) {
+    x <- cut_wl(x, lo, hi)
+    y <- x
+    class(y) <- 'numeric'
+    x <- get_wl(x)
+    points(x, y, ...)
+}
 
 
 #### average raw data

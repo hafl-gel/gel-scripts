@@ -67,7 +67,7 @@ get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
     structure(
         folder$RawData
         , RawData = folder
-        , class = 'avgdat'
+        , class = 'specs'
         , dark.corrected = correct.dark
         , linearity.corrected = correct.linearity
         )
@@ -96,13 +96,25 @@ single_specs <- function(folder, at, tz = 'Etc/GMT-1',
         folder$RawData <- correct_linearity(folder)
     }
     structure(
-        folder$RawData
+        folder$RawData[[1]]
         , RawData = folder
-        , class = 'avgdat'
+        , class = 'single_spec'
         , dark.corrected = correct.dark
         , linearity.corrected = correct.linearity
         )
 }
+
+### get spec within wavelength range
+
+### methods for single_spec class
+print.single_spec <- function(x, lo = 200, hi = 230, ...) {
+    rd <- attr(x, 'RawData')
+    xi <- cut_wl(x, lo, hi)
+    cat('***\nSingle spectrum:\n')
+    cat('   recorded between', format(rd$Header[['st']]), 'and', format(rd$Header[['et']]), '\n')
+    cat(sprintf('   I (%i to %i nm) min/avg/max: %1.0f/%1.0f/%1.0f\n***\n', lo, hi, min(xi, na.rm = TRUE), mean(xi, na.rm = TRUE), max(xi, na.rm = TRUE)))
+}
+
 
 #### average raw data
 avg_spec <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', 
@@ -135,16 +147,21 @@ cut_wl <- function(x, lo = 190, hi = 230) {
     if (inherits(x, 'rawdat')) {
         out <- x
         out$RawData <- x$RawData[ind, , drop = FALSE]
+        out$DOASinfo$Spectrometer$pixel <- x$DOASinfo$Spectrometer$pixel[ind]
+        out$DOASinfo$Spectrometer$wavelength <- wl[ind]
     } else if (inherits(x, 'avgdat')) {
         out <- x[ind]
         attr(out, 'RawData') <- cut_wl(attr(x, 'RawData'), lo, hi)
         class(out) <- 'avgdat'
+    } else if (inherits(x, 'single_spec')) {
+        out <- x[ind]
+        attr(out, 'RawData') <- cut_wl(attr(x, 'RawData'), lo, hi)
+        class(out) <- 'single_spec'
     } else if (inherits(x, 'caldat') || inherits(x, 'chen')) {
         out <- x
         out$data <- x$data[ind, ]
+        stop('fix caldat method')
     }
-    out$DOASinfo$Spectrometer$pixel <- x$DOASinfo$Spectrometer$pixel[ind]
-    out$DOASinfo$Spectrometer$wavelength <- wl[ind]
     out
 }
 
@@ -152,7 +169,7 @@ cut_wl <- function(x, lo = 190, hi = 230) {
 get_wl <- function(x) {
     if (inherits(x, 'rawdat')) {
         x$DOASinfo$Spectrometer$wavelength
-    } else if (inherits(x, 'avgdat')) {
+    } else if (inherits(x, 'avgdat') || inherits(x, 'single_spec')) {
         attr(x, 'RawData')$DOASinfo$Spectrometer$wavelength
     } else if (inherits(x, 'caldat') || inherits(x, 'chen')) {
         x$data[, wl]

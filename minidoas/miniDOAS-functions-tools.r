@@ -269,7 +269,12 @@ lines.avgdat <- function(x, y = NULL, what = c('avg', 'resid'), ...) {
 #### helper function to correct for dark current
 correct_dark <- function(x) {
     win <- getWindows(x$DOASinfo)
-    x$RawData - mean(x$RawData[win$pixel_dc, ])
+    if (is.data.frame(x$RawData)) {
+        sweep(x$RawData, 2, colMeans(x$RawData[win$pixel_straylight, ]))
+    } else {
+        stop('Fix correct_dark for non-data.frames')
+        x$RawData - mean(x$RawData[win$pixel_straylight, ])
+    }
 }
 
 #### helper function to correct for non-linearity
@@ -337,7 +342,7 @@ read_cal <- function(file, tz = 'Etc/GMT-1', Serial = NULL,
     # correct.dark
     if (correct.dark) {
         win <- getWindows(out$DOASinfo)
-        dark <- out$data[, mean(cnt[win$pixel_dc])]
+        dark <- out$data[, mean(cnt[win$pixel_straylight])]
         if (!lin_before_dark) {
             out$data[, cnt := cnt - dark]
         }
@@ -570,7 +575,7 @@ if (FALSE) {
 
 
     # hier bin ich!!!!!
-    # -> to do: check Abzug blinds anstatt pixel_dc, ev mit linearity vorher (oder gar ohne lin?)...
+    # -> to do: check Abzug blinds anstatt pixel_straylight, ev mit linearity vorher (oder gar ohne lin?)...
 
 
     cheng <- -cheng2doas(get_Cheng(), nh3)

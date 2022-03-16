@@ -114,6 +114,13 @@ print.single_spec <- function(x, lo = 200, hi = 230, ...) {
     cat('   recorded between', format(rd$Header[['st']]), 'and', format(rd$Header[['et']]), '\n')
     cat(sprintf('   I (%i to %i nm) min/avg/max: %1.0f/%1.0f/%1.0f\n***\n', lo, hi, min(xi, na.rm = TRUE), mean(xi, na.rm = TRUE), max(xi, na.rm = TRUE)))
 }
+plot.single_spec <- function(x, y, lo = 190, hi = 230, ylab = 'counts', xlab = 'nm', ...) {
+    x <- cut_wl(x, lo, hi)
+    y <- x
+    class(y) <- 'numeric'
+    x <- get_wl(x)
+    plot(x, y, xlab = xlab, ylab = ylab, ...)
+}
 
 
 #### average raw data

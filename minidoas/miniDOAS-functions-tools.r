@@ -296,48 +296,69 @@ get_Cheng <- function() {
 }
 
 #### read calibration spectrum
-read_cal <- function(file, tz = 'Etc/GMT-1', Serial = NULL, 
+read_cal <- function(file, tz = 'Etc/GMT-1', Serial = NULL, spec = NULL,
     correct.dark = TRUE, correct.linearity = TRUE, lin_before_dark = FALSE) {
-    cal <- fread(file, sep = '\n', header = FALSE)
-    if (nrow(cal) == 1069) {
-        info <- cal[, {
-            x <- strsplit(grep(': ', V1, value = TRUE) , split = ': ')
-            list(
-                var = sapply(x, '[', 1),
-                val = sapply(x, function(y) paste(y[-1], collapse = ': '))
-                )
-        }]
-        tracer <- info[7, val]
+    if (is.character(file)) {
+        cal <- fread(file, sep = '\n', header = FALSE)
+        if (nrow(cal) == 1069) {
+            info <- cal[, {
+                x <- strsplit(grep(': ', V1, value = TRUE) , split = ': ')
+                list(
+                    var = sapply(x, '[', 1),
+                    val = sapply(x, function(y) paste(y[-1], collapse = ': '))
+                    )
+            }]
+            tracer <- info[7, val]
+            out <- list(
+                data = cal[, fread(text = V1[26:1069], col.names = c('wl', 'cnt'))],
+                Calinfo = list(
+                    info = info,
+                    cuvette.gas = tracer,
+                    cuvette.conc = if (tracer == 'N2') '-' else info[8, as.numeric(val)],
+                    cuvette.path = info[9, as.numeric(val)]
+                    ),
+                DOASinfo = getDOASinfo(info[2, val], timerange = info[1, val], tzone = tz, Serial = Serial)
+            )
+        } else if (nrow(cal) == 1054) {
+            info <- cal[, {
+                x <- strsplit(grep(': ', V1, value = TRUE) , split = ': ')
+                list(
+                    var = sapply(x, '[', 1),
+                    val = sapply(x, function(y) paste(y[-1], collapse = ': '))
+                    )
+            }]
+            DOASinfo <- getDOASinfo(sub('.*(S[1-6]).*', '\\1', file), timerange = info[1, fast_strptime(val, '%Y%m%d%H%M', tz = tz, lt = FALSE)], tzone = tz, Serial = Serial)
+            tracer <- info[3, sub('.*(NH3|SO2|NO|N2).*', '\\1', val)]
+            out <- list(
+                data = cal[11:1054, .(wl = DOASinfo$Spectrometer$wavelength, cnt = as.numeric(V1))],
+                Calinfo = list(
+                    info = info,
+                    cuvette.gas = tracer,
+                    cuvette.conc = if (tracer == 'N2') '-' else info[3, convert2mg(val, tracer)],
+                    cuvette.path = info[4, as.numeric(val)]
+                    ),
+                DOASinfo = DOASinfo
+            )
+        }
+    } else {
+        # if file is result from getSpecSet
+        if (is.null(spec)) {
+            stop('argument spec is unset. spec defines which SpecSet list entry will be selected')
+        }
+        # get entry
+        spec_out <- file[[spec]]
+        # get doas info
+        DOASinfo <- getDOASinfo(file[[1]], timerange = spec_out$timerange)
         out <- list(
-            data = cal[, fread(text = V1[26:1069], col.names = c('wl', 'cnt'))],
+            data = data.table(wl = DOASinfo$Spectrometer$wavelength, cnt = as.numeric(spec_out[['dat.spec']])),
             Calinfo = list(
-                info = info,
-                cuvette.gas = tracer,
-                cuvette.conc = if (tracer == 'N2') '-' else info[8, as.numeric(val)],
-                cuvette.path = info[9, as.numeric(val)]
-                ),
-            DOASinfo = getDOASinfo(info[2, val], timerange = info[1, val], tzone = tz, Serial = Serial)
-        )
-    } else if (nrow(cal) == 1054) {
-        info <- cal[, {
-            x <- strsplit(grep(': ', V1, value = TRUE) , split = ': ')
-            list(
-                var = sapply(x, '[', 1),
-                val = sapply(x, function(y) paste(y[-1], collapse = ': '))
-                )
-        }]
-        DOASinfo <- getDOASinfo(sub('.*(S[1-6]).*', '\\1', file), timerange = info[1, fast_strptime(val, '%Y%m%d%H%M', tz = tz, lt = FALSE)], tzone = tz, Serial = Serial)
-        tracer <- info[3, sub('.*(NH3|SO2|NO|N2).*', '\\1', val)]
-        out <- list(
-            data = cal[11:1054, .(wl = DOASinfo$Spectrometer$wavelength, cnt = as.numeric(V1))],
-            Calinfo = list(
-                info = info,
-                cuvette.gas = tracer,
-                cuvette.conc = if (tracer == 'N2') '-' else info[3, convert2mg(val, tracer)],
-                cuvette.path = info[4, as.numeric(val)]
+                info = data.table(var = 'timerange', val = paste0(spec_out$timerange, collapse = ' and ')),
+                cuvette.gas = spec_out[['cuvette']][['cuvetteGas']],
+                cuvette.conc = spec_out[['cuvette']][['cuvetteConc_mg']],
+                cuvette.path = spec_out[['cuvette']][['cuvetteLength']]
                 ),
             DOASinfo = DOASinfo
-        )
+            )
     }
     # correct.dark
     if (correct.dark) {
@@ -373,11 +394,11 @@ print.caldat <- function(x, ...){
     cat('\t cuvette concentration (mg/m3):', x$Calinfo$cuvette.conc, '\n')
     cat('\t cuvette length (m):', x$Calinfo$cuvette.path, '\n')
     cat('\t', min(wl), 'to', max(wl), 'nm', sprintf('(%s pixel)\n', length(wl)))
-    if (nrow(x$Calinfo$info) > 9) {
-        cat('\t recorded between', x$Calinfo$info[14, val], '\n')
-    } else {
-        cat('\t recorded between', x$Calinfo$info[6, val], '\n')
-    }
+    switch(as.character(nrow(x$Calinfo$info))
+        , '1' = cat('\t recorded between', x$Calinfo$info[1, val], '\n')
+        , '9' = cat('\t recorded between', x$Calinfo$info[14, val], '\n')
+        , cat('\t recorded between', x$Calinfo$info[6, val], '\n')
+    )
     cat('~~~~\n')
 }
 

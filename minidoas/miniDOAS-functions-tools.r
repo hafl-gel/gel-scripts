@@ -36,6 +36,74 @@ print.rawdat <- function(x, ...){
     cat('~~~~\n')
 }
 
+#### extract raw spectra
+get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', 
+    doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
+    correct.dark = FALSE, correct.linearity = FALSE) {
+    # get rawdata or subset
+    if(!inherits(folder, 'rawdat')){
+        folder <- read_data(folder, from, to, tz, doas, Serial)
+    } else {
+        # convert from/to to POSIXct
+        from <- parse_date_time3(from, tz = tz)
+        to <- parse_date_time3(to, tz = tz)
+        # get indices
+        ind <- which(folder$Header[['et']] > from & folder$Header[['st']] < to)
+        if (length(ind)) {
+            folder$RawData <- folder$RawData[, ind, drop = FALSE]
+            folder$Header <- folder$Header[ind, , drop = FALSE]
+        } else {
+            stop('No data within specified timerange available')
+        }
+    }
+    # correct for dark current
+    if (correct.dark) {
+        folder$RawData <- correct_dark(folder)
+    }
+    # correct linearity
+    if (correct.linearity) {
+        folder$RawData <- correct_linearity(folder)
+    }
+    structure(
+        folder$RawData
+        , RawData = folder
+        , class = 'avgdat'
+        , dark.corrected = correct.dark
+        , linearity.corrected = correct.linearity
+        )
+}
+
+#### extract single spectrum
+single_specs <- function(folder, at, tz = 'Etc/GMT-1', 
+    doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
+    correct.dark = FALSE, correct.linearity = FALSE) {
+    # convert at to POSIXct
+    at <- parse_date_time3(at, tz = tz)
+    # get indices
+    ind <- which(folder$Header[['et']] >= at & folder$Header[['st']] <= at)
+    if (length(ind)) {
+        folder$RawData <- folder$RawData[, ind, drop = FALSE]
+        folder$Header <- folder$Header[ind, , drop = FALSE]
+    } else {
+        stop('No data at specified time available')
+    }
+    # correct for dark current
+    if (correct.dark) {
+        folder$RawData <- correct_dark(folder)
+    }
+    # correct linearity
+    if (correct.linearity) {
+        folder$RawData <- correct_linearity(folder)
+    }
+    structure(
+        folder$RawData
+        , RawData = folder
+        , class = 'avgdat'
+        , dark.corrected = correct.dark
+        , linearity.corrected = correct.linearity
+        )
+}
+
 #### average raw data
 avg_spec <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 

@@ -394,6 +394,12 @@ get_cnt <- function(x) {
         as.numeric(x)
     } else if (inherits(x, 'caldat') || inherits(x, 'chen')) {
         x$data[, cnt]
+    } else if (inherits(x, 'rawdat')){
+        if (NCOL(x) > 1) {
+            x$RawData
+        } else {
+            x$RawData[[1]]
+        }
     }
 }
 
@@ -410,7 +416,7 @@ calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
         } else {
             meas <- read_cal(meas, correct.dark = correct.dark, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
         }
-    } else if (inherits(meas, 'single_spec')) {
+    } else if (inherits(meas, 'single_spec') || inherits(meas, 'avgdat')) {
         meas <- attr(meas, 'RawData')
     }
     if (is.character(ref)) ref <- read_cal(ref, correct.dark = correct.dark, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
@@ -495,6 +501,12 @@ plot.caldat <- function(x, type = 'l', ...) {
 lines.caldat <- function(x, ...) {
     x$data[, lines(wl, cnt, ...)]
 }
+
+
+
+
+
+
 
 if (FALSE) {
     FileAulaNH3 <- '~/repos/3_Scripts/4_MiniDOASAuswertung/ReferenceSpectras/S5/miniDOAS_S5_hafl_aula_spectra_2104081407/miniDOAS_S5_NH3_cal_spec_210222592007-210222172106_202104081407.txt'

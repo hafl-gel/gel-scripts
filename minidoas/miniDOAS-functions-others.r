@@ -692,6 +692,8 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE) {
             } else {
                 cuvette <- list(cuvetteLength=ifelse(tracer=="ambient",NA,0.075),cuvetteConc_mg=NA,cuvetteGas=ifelse(type=="ref",ifelse(tracer=="ambient","none","N2"),NA))
             }
+            # get timerange from file names
+            timerange <- strptime(unlist(strsplit(sub('miniDOAS.*_([0-9]{12}[-][0-9]{12})[-]Eval.*', '\\1', basename(dir.spec[which(ind)])), split = '[-]')), '%Y%m%d%H%M', tz = 'Etc/GMT-1')
         } else {
             ind <- grepl(SpecName_new,dir.spec,fixed=TRUE)
             if (all(!ind)) {
@@ -715,10 +717,10 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE) {
                     ,cuvetteConc_mg=as.numeric(gsub("cuvette concentration (mg/m3): ","",info.spec[10],fixed=TRUE))
                     ,cuvetteGas=gsub("cuvette gas: ","",info.spec[9],fixed=TRUE)
                     ))  
+            # get timerange from file names
+            timerange <- strptime(unlist(strsplit(sub('miniDOAS.*_([0-9]{12}[-][0-9]{12})[.]txt', '\\1', basename(dir.spec[which(ind)])), split = '[-]')), '%Y%m%d%H%M', tz = 'Etc/GMT-1')
         }
         lite <- TRUE
-        timerange <- NA
-        cat("getSpec: timerange weitergeben!\n")
     }
 
     if (DOASmodel=="S1"&&lite&&(is.na(timerange[1]) || timerange[1] < parse_date_time("20170101","Ymd",tz=tz(timerange[1])))) {

@@ -141,7 +141,19 @@ points.single_spec <- function(x, lo = 190, hi = 230, ...) {
 avg_spec <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
     correct.dark = TRUE, correct.linearity = TRUE) {
-    if(!inherits(folder, 'rawdat')){
+    if(inherits(folder, 'rawdat')){
+        # convert from/to to POSIXct
+        from <- parse_date_time3(from, tz = tz)
+        to <- parse_date_time3(to, tz = tz)
+        # get indices
+        ind <- which(folder$Header[['et']] > from & folder$Header[['st']] < to)
+        if (length(ind)) {
+            folder$RawData <- folder$RawData[, ind, drop = FALSE]
+            folder$Header <- folder$Header[ind, , drop = FALSE]
+        } else {
+            stop('No data within specified timerange available')
+        }
+    } else {
         folder <- read_data(folder, from, to, tz, doas, Serial)
     }
     # correct for dark current
@@ -393,6 +405,8 @@ calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
         } else {
             meas <- read_cal(meas, correct.dark = correct.dark, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
         }
+    } else if (inherits(meas, 'single_spec')) {
+        meas <- attr(meas, 'RawData')
     }
     if (is.character(ref)) ref <- read_cal(ref, correct.dark = correct.dark, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
     # get counts

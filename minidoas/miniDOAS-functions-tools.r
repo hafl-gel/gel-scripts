@@ -542,7 +542,7 @@ ann_time <- function(obj, x = NULL, y = NULL, x_adj = 0, y_adj = 0, cex = 0.6, .
     timerange <- switch(class(obj)[1]
         , 'avgdat' = 
         , 'single_spec' = attr(obj, 'RawData')[['DOASinfo']][['timerange']]
-        , 'dc' = attr(attr(obj, 'meas'), 'RawData')[['DOASinfo']][['timerange']]
+        , 'dc' = attr(obj, 'meas')[['DOASinfo']][['timerange']]
         , 'rawdat' = obj[['DOASinfo']][['timerange']]
         , stop('class not yet implemented')
     )

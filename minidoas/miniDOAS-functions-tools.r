@@ -76,7 +76,7 @@ get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
 #### extract single spectrum
 single_specs <- function(folder, at, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
-    correct.dark = FALSE, correct.linearity = FALSE) {
+    correct.dark = TRUE, correct.linearity = TRUE) {
     # convert at to POSIXct
     at <- parse_date_time3(at, tz = tz)
     # get indices

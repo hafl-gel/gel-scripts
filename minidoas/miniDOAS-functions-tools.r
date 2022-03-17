@@ -85,7 +85,7 @@ single_specs <- function(folder, at, tz = 'Etc/GMT-1',
         folder$RawData <- folder$RawData[, ind, drop = FALSE]
         folder$Header <- folder$Header[ind, , drop = FALSE]
         # update timerange
-        folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][ind, 'st'], folder[['Header']][ind, 'et'])
+        folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][1, 'st'], folder[['Header']][1, 'et'])
     } else {
         stop('No data at specified time available')
     }
@@ -153,7 +153,7 @@ avg_spec <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
             folder$RawData <- folder$RawData[, ind, drop = FALSE]
             folder$Header <- folder$Header[ind, , drop = FALSE]
             # update timerange
-            folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][ind[1], 'st'], folder[['Header']][ind[length(ind)], 'et'])
+            folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][1, 'st'], folder[['Header']][length(ind), 'et'])
         } else {
             stop('No data within specified timerange available')
         }

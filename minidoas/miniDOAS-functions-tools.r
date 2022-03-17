@@ -89,7 +89,7 @@ get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
 #### extract single spectrum
 single_specs <- function(folder, at, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
-    correct.straylight = TRUE, correct.linearity = TRUE) {
+    correct.straylight = TRUE, correct.linearity = TRUE, dark = NULL) {
     # convert at to POSIXct
     at <- parse_date_time3(at, tz = tz)
     # get indices
@@ -101,6 +101,12 @@ single_specs <- function(folder, at, tz = 'Etc/GMT-1',
         folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][1, 'st'], folder[['Header']][1, 'et'])
     } else {
         stop('No data at specified time available')
+    }
+    # correct dark current
+    if (is.null(dark)) {
+        warning('no dark spectrum provided')
+    } else {
+        folder$RawData <- correct_dark(folder, dark)
     }
     # correct for dark current
     if (correct.straylight) {
@@ -324,7 +330,7 @@ get_Cheng <- function() {
 
 #### read calibration spectrum
 read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL,
-    correct.straylight = TRUE, correct.linearity = TRUE, lin_before_dark = FALSE) {
+    correct.straylight = TRUE, correct.linearity = TRUE, lin_before_dark = FALSE, dark = NULL) {
     if (is.character(file)) {
         cal <- fread(file, sep = '\n', header = FALSE)
         if (nrow(cal) == 1069) {
@@ -387,7 +393,14 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL,
             DOASinfo = DOASinfo
             )
     }
-    # correct.straylight
+    # correct dark
+    if (is.null(dark)) {
+        warning('no dark spectrum provided')
+    } else {
+        cdark <- dark$data[, cnt]
+        out$data[, cnt := cnt - cdark]
+    }
+    # correct straylight
     if (correct.straylight) {
         win <- getWindows(out$DOASinfo)
         dark <- out$data[, mean(cnt[win$pixel_straylight])]

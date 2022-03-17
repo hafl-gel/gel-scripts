@@ -537,7 +537,7 @@ lines.dc <- function(x, ...) {
 
 
 #### further plotting helpers
-ann_time <- function(obj, x, y = NULL, ...) {
+ann_time <- function(obj, x = NULL, y = NULL, x_adj = 0, y_adj = 0, cex = 0.6, ...) {
     # get timerange
     timerange <- switch(class(obj)[1]
         , 'avgdat' = 
@@ -546,8 +546,34 @@ ann_time <- function(obj, x, y = NULL, ...) {
         , 'rawdat' = obj[['DOASinfo']][['timerange']]
         , stop('class not yet implemented')
     )
-    # add text
-    text(x, y, labels = ibts::deparse_timerange(timerange, sep = ' to '))
+    if (is.character(x)) {
+        text(x, labels = ibts::deparse_timerange(timerange, sep = ' to '), cex = cex, ...)
+    } else {
+        # get usr coordinates
+        usr <- par('usr')
+        # default position
+        if (is.null(x)) {
+            # 3/4 of range
+            x <- usr[1] + (usr[2] - usr[1]) * 3 / 4
+        }
+        if (is.null(y)) {
+            # 3/4 of usr range
+            if (par('ylog')) {
+                y <- 10 ^ (usr[3] + (usr[4] - usr[3]) * 3 / 4)
+            } else {
+                y <- usr[3] + (usr[4] - usr[3]) * 3 / 4
+            }
+        }
+        # adjustments
+        x_add <- (usr[2] - usr[1]) * x_adj
+        if (par('ylog')) {
+            y_add <- 10 ^ (log(y, 10) + (usr[4] - usr[3]) * y_adj) - y
+        } else {
+            y_add <- (usr[4] - usr[3]) * y_adj
+        }
+        # add text
+        text(x + x_add, y + y_add, labels = ibts::deparse_timerange(timerange, sep = ' to '), cex = cex, ...)
+    }
 }
 
 

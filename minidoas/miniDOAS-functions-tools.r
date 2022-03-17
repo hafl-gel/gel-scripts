@@ -36,6 +36,19 @@ print.rawdat <- function(x, ...){
     cat('~~~~\n')
 }
 
+#### print avgdat method
+print.avgdat <- function(x, ...) {
+    x <- attr(x, 'RawData')
+    nc <- ncol(x$RawData)
+    wl <- get_wl(x)
+    cat('~~~~\n')
+    cat('\t', x$DOASinfo$DOASmodel, '/', x$DOASinfo$Spectrometer$Serial, '- average spectrum\n')
+    cat('\t', nc, 'spectra averaged\n')
+    cat('\t', min(wl), 'to', max(wl), 'nm', sprintf('(%s pixel)\n', length(wl)))
+    cat('\t recorded between', format(x$Header$st[1]),'and', format(x$Header$et[nc]),'\n')
+    cat('~~~~\n')
+}
+
 #### extract raw spectra
 get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 

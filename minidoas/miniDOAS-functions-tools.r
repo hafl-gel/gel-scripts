@@ -532,6 +532,34 @@ lines.dc <- function(x, ...) {
 }
 
 
+#### save calibration to files
+save_calspec <- function(x, save_cal = FALSE, save_online = FALSE) {
+    md <- sub('^(S[1-6])_.*', '\\1', deparse(substitute(x)))
+    folder <- file.path(calsave_dir, 'Calibration-Aula-Feb2021', md)
+    dir.create(folder, showWarnings = FALSE, recursive = TRUE)
+    rawdat <- readDOASdata(md, x$dir, TRUE, timerange = x$timerange, timezone = x$tz)
+    out <- avgSpec(
+        rawdat,
+        type = x$type,
+        tracer = x$tracer,
+        cuvetteConc_mg = x$cuvetteConc_mg,
+        Dirname = folder,
+        saveToFile = save_cal && !save_online
+    )
+    if (save_cal) {
+        if (save_online) {
+            folder <- file.path(refDir, 'OnlineSpectra', md)
+            dir.create(folder, showWarnings = FALSE, recursive = TRUE)
+            fwrite(rbind(data.frame(a = rep('', 7)),
+                    'Number of accumulations=1', data.frame(a = out$SpecAvg)), file.path(refDir, 'OnlineSpectra', md, 
+                    paste0('calibration-aula-feb2021-', x$tracer, '-', x$type)), 
+                col.names = FALSE)
+        }
+        invisible(NULL)
+    } else {
+        out
+    }
+}
 
 
 

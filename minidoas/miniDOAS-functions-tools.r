@@ -84,6 +84,8 @@ single_specs <- function(folder, at, tz = 'Etc/GMT-1',
     if (length(ind)) {
         folder$RawData <- folder$RawData[, ind, drop = FALSE]
         folder$Header <- folder$Header[ind, , drop = FALSE]
+        # update timerange
+        folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][ind, 'st'], folder[['Header']][ind, 'et'])
     } else {
         stop('No data at specified time available')
     }
@@ -150,6 +152,8 @@ avg_spec <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
         if (length(ind)) {
             folder$RawData <- folder$RawData[, ind, drop = FALSE]
             folder$Header <- folder$Header[ind, , drop = FALSE]
+            # update timerange
+            folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][ind[1], 'st'], folder[['Header']][ind[length(ind)], 'et'])
         } else {
             stop('No data within specified timerange available')
         }
@@ -530,6 +534,22 @@ plot.dc <- function(x, type = 'l', xlab = 'nm', ylab = 'doascurve', ...) {
 lines.dc <- function(x, ...) {
     lines(x$wl, x$cnt, ...)
 }
+
+
+#### further plotting helpers
+ann_time <- function(obj, x, y = NULL, ...) {
+    # get timerange
+    timerange <- switch(class(obj)[1]
+        , 'avgdat' = 
+        , 'single_spec' = attr(obj, 'RawData')[['DOASinfo']][['timerange']]
+        , 'dc' = attr(attr(obj, 'meas'), 'RawData')[['DOASinfo']][['timerange']]
+        , 'rawdat' = obj[['DOASinfo']][['timerange']]
+        , stop('class not yet implemented')
+    )
+    # add text
+    text(x, y, labels = ibts::deparse_timerange(timerange, sep = ' to '))
+}
+
 
 
 #### save calibration to files

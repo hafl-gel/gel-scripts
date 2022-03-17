@@ -39,7 +39,7 @@ print.rawdat <- function(x, ...){
 #### extract raw spectra
 get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
-    correct.dark = FALSE, correct.linearity = FALSE) {
+    correct.straylight = FALSE, correct.linearity = FALSE) {
     # get rawdata or subset
     if(!inherits(folder, 'rawdat')){
         folder <- read_data(folder, from, to, tz, doas, Serial)
@@ -57,7 +57,7 @@ get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
         }
     }
     # correct for dark current
-    if (correct.dark) {
+    if (correct.straylight) {
         folder$RawData <- correct_dark(folder)
     }
     # correct linearity
@@ -68,7 +68,7 @@ get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
         folder$RawData
         , RawData = folder
         , class = 'specs'
-        , dark.corrected = correct.dark
+        , straylight.corrected = correct.straylight
         , linearity.corrected = correct.linearity
         )
 }
@@ -76,7 +76,7 @@ get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
 #### extract single spectrum
 single_specs <- function(folder, at, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
-    correct.dark = TRUE, correct.linearity = TRUE) {
+    correct.straylight = TRUE, correct.linearity = TRUE) {
     # convert at to POSIXct
     at <- parse_date_time3(at, tz = tz)
     # get indices
@@ -90,7 +90,7 @@ single_specs <- function(folder, at, tz = 'Etc/GMT-1',
         stop('No data at specified time available')
     }
     # correct for dark current
-    if (correct.dark) {
+    if (correct.straylight) {
         folder$RawData <- correct_dark(folder)
     }
     # correct linearity
@@ -101,7 +101,7 @@ single_specs <- function(folder, at, tz = 'Etc/GMT-1',
         folder$RawData[[1]]
         , RawData = folder
         , class = 'single_spec'
-        , dark.corrected = correct.dark
+        , straylight.corrected = correct.straylight
         , linearity.corrected = correct.linearity
         )
 }
@@ -142,7 +142,7 @@ points.single_spec <- function(x, lo = 190, hi = 230, ...) {
 #### average raw data
 avg_spec <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
-    correct.dark = TRUE, correct.linearity = TRUE) {
+    correct.straylight = TRUE, correct.linearity = TRUE, dark = NULL) {
     if(inherits(folder, 'rawdat')){
         # convert from/to to POSIXct
         from <- parse_date_time3(from, tz = tz)
@@ -161,7 +161,7 @@ avg_spec <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
         folder <- read_data(folder, from, to, tz, doas, Serial)
     }
     # correct for dark current
-    if (correct.dark) {
+    if (correct.straylight) {
         folder$RawData <- correct_dark(folder)
     }
     # correct linearity
@@ -172,7 +172,7 @@ avg_spec <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
         rowMeans(folder$RawData)
         , RawData = folder
         , class = 'avgdat'
-        , dark.corrected = correct.dark
+        , straylight.corrected = correct.straylight
         , linearity.corrected = correct.linearity
         )
 }
@@ -301,7 +301,7 @@ get_Cheng <- function() {
 
 #### read calibration spectrum
 read_cal <- function(file, tz = 'Etc/GMT-1', Serial = NULL, spec = NULL,
-    correct.dark = TRUE, correct.linearity = TRUE, lin_before_dark = FALSE) {
+    correct.straylight = TRUE, correct.linearity = TRUE, lin_before_dark = FALSE) {
     if (is.character(file)) {
         cal <- fread(file, sep = '\n', header = FALSE)
         if (nrow(cal) == 1069) {
@@ -364,8 +364,8 @@ read_cal <- function(file, tz = 'Etc/GMT-1', Serial = NULL, spec = NULL,
             DOASinfo = DOASinfo
             )
     }
-    # correct.dark
-    if (correct.dark) {
+    # correct.straylight
+    if (correct.straylight) {
         win <- getWindows(out$DOASinfo)
         dark <- out$data[, mean(cnt[win$pixel_straylight])]
         if (!lin_before_dark) {
@@ -377,14 +377,14 @@ read_cal <- function(file, tz = 'Etc/GMT-1', Serial = NULL, spec = NULL,
         lin.coef <- out$DOASinfo$Spectrometer$'Linearity Coefficients'
         out$data[, cnt := cnt / linearity.func(cnt, lin.coef)]
     }
-    # correct.dark afterwards
-    if (correct.dark && lin_before_dark) {
+    # correct.straylight afterwards
+    if (correct.straylight && lin_before_dark) {
         out$data[, cnt := cnt - dark]
     }
     structure(
         out,
         class = 'caldat'
-        , dark.corrected = correct.dark
+        , straylight.corrected = correct.straylight
         , linearity.corrected = correct.linearity
         )
 }
@@ -431,7 +431,7 @@ get_cnt <- function(x) {
 
 #### doascurve
 calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
-    fitwin = NULL, shift = NULL, correct.dark = TRUE, correct.linearity = TRUE,
+    fitwin = NULL, shift = NULL, correct.straylight = TRUE, correct.linearity = TRUE,
     lin_before_dark = FALSE) {
     if (is.character(meas)) {
         # file path or chen
@@ -439,12 +439,12 @@ calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
             # call chen2dc
             chen2dc(meas, ref, ftype, fstrength, fwin, fitwin, shift)
         } else {
-            meas <- read_cal(meas, correct.dark = correct.dark, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
+            meas <- read_cal(meas, correct.straylight = correct.straylight, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
         }
     } else if (inherits(meas, 'single_spec') || inherits(meas, 'avgdat')) {
         meas <- attr(meas, 'RawData')
     }
-    if (is.character(ref)) ref <- read_cal(ref, correct.dark = correct.dark, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
+    if (is.character(ref)) ref <- read_cal(ref, correct.straylight = correct.straylight, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
     # get counts
     m <- get_cnt(meas)
     r <- get_cnt(ref)
@@ -620,8 +620,8 @@ if (FALSE) {
     # c_dark <- FALSE
     # c_lin <- FALSE
     # lin_first <- TRUE
-    dcAula <- calc_dc(FileAulaNH3, FileAulaN2, correct.dark = c_dark, correct.linearity = c_lin, lin_before_dark = lin_first)
-    dcOld <- calc_dc(FileOldNH3, FileOldN2, correct.dark = c_dark, correct.linearity = c_lin, lin_before_dark = lin_first)
+    dcAula <- calc_dc(FileAulaNH3, FileAulaN2, correct.straylight = c_dark, correct.linearity = c_lin, lin_before_dark = lin_first)
+    dcOld <- calc_dc(FileOldNH3, FileOldN2, correct.straylight = c_dark, correct.linearity = c_lin, lin_before_dark = lin_first)
     dsAula <- attr(dcAula, 'ds')[attr(dcAula, 'win')$pixel_filter]
     dsOld <- attr(dcOld, 'ds')[attr(dcOld, 'win')$pixel_filter]
     chAula <- cheng2dc(dcAula)
@@ -636,8 +636,8 @@ if (FALSE) {
     plot(calc_wl(attr(dcAula, 'meas'), attr(dcAula, 'win')$pixel_filter - 10), dsAula, type = 'l', ylim = c(-0.8, 0))
     lines(get_wl(nh3), cheng * 193e3 * 0.075, col = 'orange')
 
-    dc1 <- calc_dc(FileAulaNH3, FileAulaN2, correct.dark = c_dark, correct.linearity = c_lin, lin_before_dark = FALSE)
-    dc2 <- calc_dc(FileAulaNH3, FileAulaN2, correct.dark = c_dark, correct.linearity = c_lin, lin_before_dark = TRUE)
+    dc1 <- calc_dc(FileAulaNH3, FileAulaN2, correct.straylight = c_dark, correct.linearity = c_lin, lin_before_dark = FALSE)
+    dc2 <- calc_dc(FileAulaNH3, FileAulaN2, correct.straylight = c_dark, correct.linearity = c_lin, lin_before_dark = TRUE)
     type <- 'l'
     plot(dc1$wl, dc1$cnt, type = type)
     lines(dc2$wl, dc2$cnt, col = 'orange', type = type)
@@ -664,10 +664,10 @@ if (FALSE) {
 
     # -> rohe, unkorrigierte Spektren noch vergleichen!!!
 
-    Anh3 <- read_cal(FileAulaNH3, correct.dark = FALSE, correct.linearity = FALSE)
-    Onh3 <- read_cal(FileOldNH3, correct.dark = FALSE, correct.linearity = FALSE)
-    An2 <- read_cal(FileAulaN2, correct.dark = FALSE, correct.linearity = FALSE)
-    On2 <- read_cal(FileOldN2, correct.dark = FALSE, correct.linearity = FALSE)
+    Anh3 <- read_cal(FileAulaNH3, correct.straylight = FALSE, correct.linearity = FALSE)
+    Onh3 <- read_cal(FileOldNH3, correct.straylight = FALSE, correct.linearity = FALSE)
+    An2 <- read_cal(FileAulaN2, correct.straylight = FALSE, correct.linearity = FALSE)
+    On2 <- read_cal(FileOldN2, correct.straylight = FALSE, correct.linearity = FALSE)
     # plot(Anh3, xlim = c(137, 200), ylim = c(0, 400))
 
     ylim <- c(2000, 2700); xlim <- c(137, 190)

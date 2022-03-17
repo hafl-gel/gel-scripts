@@ -58,7 +58,7 @@ get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
     }
     # correct for dark current
     if (correct.straylight) {
-        folder$RawData <- correct_dark(folder)
+        folder$RawData <- correct_straylight(folder)
     }
     # correct linearity
     if (correct.linearity) {
@@ -91,7 +91,7 @@ single_specs <- function(folder, at, tz = 'Etc/GMT-1',
     }
     # correct for dark current
     if (correct.straylight) {
-        folder$RawData <- correct_dark(folder)
+        folder$RawData <- correct_straylight(folder)
     }
     # correct linearity
     if (correct.linearity) {
@@ -161,8 +161,14 @@ avg_spec <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
         folder <- read_data(folder, from, to, tz, doas, Serial)
     }
     # correct for dark current
+    if (is.null(dark)) {
+        warning('no dark spectrum provided')
+    } else {
+        folder$RawData <- correct_dark(folder, dark)
+    }
+    # correct for straylight
     if (correct.straylight) {
-        folder$RawData <- correct_dark(folder)
+        folder$RawData <- correct_straylight(folder)
     }
     # correct linearity
     if (correct.linearity) {
@@ -271,12 +277,16 @@ lines.avgdat <- function(x, y = NULL, what = c('avg', 'resid'), ...) {
 }
 
 #### helper function to correct for dark current
-correct_dark <- function(x) {
+correct_dark <- function(x, y) {
+    x$RawData - y$data[, cnt]
+}
+
+correct_straylight <- function(x) {
     win <- getWindows(x$DOASinfo)
     if (is.data.frame(x$RawData)) {
         sweep(x$RawData, 2, colMeans(x$RawData[win$pixel_straylight, , drop = FALSE]))
     } else {
-        stop('Fix correct_dark for non-data.frames')
+        stop('Fix correct_straylight for non-data.frames')
         x$RawData - mean(x$RawData[win$pixel_straylight, ])
     }
 }
@@ -300,7 +310,7 @@ get_Cheng <- function() {
 }
 
 #### read calibration spectrum
-read_cal <- function(file, tz = 'Etc/GMT-1', Serial = NULL, spec = NULL,
+read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL,
     correct.straylight = TRUE, correct.linearity = TRUE, lin_before_dark = FALSE) {
     if (is.character(file)) {
         cal <- fread(file, sep = '\n', header = FALSE)

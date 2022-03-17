@@ -36,6 +36,19 @@ print.rawdat <- function(x, ...){
     cat('~~~~\n')
 }
 
+#### print avgdat method
+print.avgdat <- function(x, ...) {
+    x <- attr(x, 'RawData')
+    nc <- ncol(x$RawData)
+    wl <- get_wl(x)
+    cat('~~~~\n')
+    cat('\t', x$DOASinfo$DOASmodel, '/', x$DOASinfo$Spectrometer$Serial, '- average spectrum\n')
+    cat('\t', nc, 'spectra averaged\n')
+    cat('\t', min(wl), 'to', max(wl), 'nm', sprintf('(%s pixel)\n', length(wl)))
+    cat('\t recorded between', format(x$Header$st[1]),'and', format(x$Header$et[nc]),'\n')
+    cat('~~~~\n')
+}
+
 #### extract raw spectra
 get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
@@ -58,7 +71,7 @@ get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
     }
     # correct for dark current
     if (correct.straylight) {
-        folder$RawData <- correct_dark(folder)
+        folder$RawData <- correct_straylight(folder)
     }
     # correct linearity
     if (correct.linearity) {
@@ -76,7 +89,7 @@ get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
 #### extract single spectrum
 single_specs <- function(folder, at, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
-    correct.straylight = TRUE, correct.linearity = TRUE) {
+    correct.straylight = TRUE, correct.linearity = TRUE, dark = NULL) {
     # convert at to POSIXct
     at <- parse_date_time3(at, tz = tz)
     # get indices
@@ -89,9 +102,15 @@ single_specs <- function(folder, at, tz = 'Etc/GMT-1',
     } else {
         stop('No data at specified time available')
     }
+    # correct dark current
+    if (is.null(dark)) {
+        warning('no dark spectrum provided')
+    } else {
+        folder$RawData <- correct_dark(folder, dark)
+    }
     # correct for dark current
     if (correct.straylight) {
-        folder$RawData <- correct_dark(folder)
+        folder$RawData <- correct_straylight(folder)
     }
     # correct linearity
     if (correct.linearity) {
@@ -161,8 +180,14 @@ avg_spec <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
         folder <- read_data(folder, from, to, tz, doas, Serial)
     }
     # correct for dark current
+    if (is.null(dark)) {
+        warning('no dark spectrum provided')
+    } else {
+        folder$RawData <- correct_dark(folder, dark)
+    }
+    # correct for straylight
     if (correct.straylight) {
-        folder$RawData <- correct_dark(folder)
+        folder$RawData <- correct_straylight(folder)
     }
     # correct linearity
     if (correct.linearity) {
@@ -271,12 +296,16 @@ lines.avgdat <- function(x, y = NULL, what = c('avg', 'resid'), ...) {
 }
 
 #### helper function to correct for dark current
-correct_dark <- function(x) {
+correct_dark <- function(x, y) {
+    x$RawData - y$data[, cnt]
+}
+
+correct_straylight <- function(x) {
     win <- getWindows(x$DOASinfo)
     if (is.data.frame(x$RawData)) {
         sweep(x$RawData, 2, colMeans(x$RawData[win$pixel_straylight, , drop = FALSE]))
     } else {
-        stop('Fix correct_dark for non-data.frames')
+        stop('Fix correct_straylight for non-data.frames')
         x$RawData - mean(x$RawData[win$pixel_straylight, ])
     }
 }
@@ -300,8 +329,8 @@ get_Cheng <- function() {
 }
 
 #### read calibration spectrum
-read_cal <- function(file, tz = 'Etc/GMT-1', Serial = NULL, spec = NULL,
-    correct.straylight = TRUE, correct.linearity = TRUE, lin_before_dark = FALSE) {
+read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL,
+    correct.straylight = TRUE, correct.linearity = TRUE, lin_before_dark = FALSE, dark = NULL) {
     if (is.character(file)) {
         cal <- fread(file, sep = '\n', header = FALSE)
         if (nrow(cal) == 1069) {
@@ -364,7 +393,14 @@ read_cal <- function(file, tz = 'Etc/GMT-1', Serial = NULL, spec = NULL,
             DOASinfo = DOASinfo
             )
     }
-    # correct.straylight
+    # correct dark
+    if (is.null(dark)) {
+        warning('no dark spectrum provided')
+    } else {
+        cdark <- dark$data[, cnt]
+        out$data[, cnt := cnt - cdark]
+    }
+    # correct straylight
     if (correct.straylight) {
         win <- getWindows(out$DOASinfo)
         dark <- out$data[, mean(cnt[win$pixel_straylight])]

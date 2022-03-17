@@ -274,7 +274,7 @@ lines.avgdat <- function(x, y = NULL, what = c('avg', 'resid'), ...) {
 correct_dark <- function(x) {
     win <- getWindows(x$DOASinfo)
     if (is.data.frame(x$RawData)) {
-        sweep(x$RawData, 2, colMeans(x$RawData[win$pixel_straylight, ]))
+        sweep(x$RawData, 2, colMeans(x$RawData[win$pixel_straylight, , drop = FALSE]))
     } else {
         stop('Fix correct_dark for non-data.frames')
         x$RawData - mean(x$RawData[win$pixel_straylight, ])

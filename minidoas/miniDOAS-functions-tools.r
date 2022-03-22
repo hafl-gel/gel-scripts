@@ -495,7 +495,7 @@ calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
     structure(
         list(
             wl = get_wl(meas)[win$pixel_filter],
-            cnt = dc
+            cnt = as.numeric(dc)
             ),
         class = 'dc',
         win = win,
@@ -564,10 +564,32 @@ lines.caldat <- function(x, ...) {
 }
 
 #### plot method for dc
-plot.dc <- function(x, type = 'l', xlab = 'nm', ylab = 'doascurve', ...) {
+plot.dc <- function(x, fctr = 1, tau = 0, type = 'l', xlab = 'nm', ylab = 'doascurve', ...) {
+    x$cnt <- x$cnt * fctr
+    if (tau != 0) {
+        # fix tau shift
+        ind <- match(x$wl, attr(x, 'meas')[['DOASinfo']][['Spectrometer']][['wavelength']])
+        # shift indices
+        ind_shifted <- ind - tau
+        # < 1 should give NA
+        ind_shifted[ind_shifted < 1] <- length(ind) + 1
+        # get new wavelengths
+        x$wl <- attr(x, 'meas')[['DOASinfo']][['Spectrometer']][['wavelength']][ind_shifted]
+    }
     plot(x$wl, x$cnt, type = type, xlab = xlab, ylab = ylab, ...)
 }
-lines.dc <- function(x, ...) {
+lines.dc <- function(x, fctr = 1, tau = 0, ...) {
+    x$cnt <- x$cnt * fctr
+    if (tau != 0) {
+        # fix tau shift
+        ind <- match(x$wl, attr(x, 'meas')[['DOASinfo']][['Spectrometer']][['wavelength']])
+        # shift indices
+        ind_shifted <- ind - tau
+        # < 1 should give NA
+        ind_shifted[ind_shifted < 1] <- length(ind) + 1
+        # get new wavelengths
+        x$wl <- attr(x, 'meas')[['DOASinfo']][['Spectrometer']][['wavelength']][ind_shifted]
+    }
     lines(x$wl, x$cnt, ...)
 }
 
@@ -642,6 +664,55 @@ save_calspec <- function(x, save_cal = FALSE, save_online = FALSE) {
         out
     }
 }
+
+#### get windows
+get_wins <- function(x) {
+    switch(class(x)[1]
+        , 'character' = {
+            doas_info <- getDOASinfo(x)
+            getWindows(doas_info)
+        }
+        , 'single_spec' = {
+            getWindows(attr(x, 'RawData')[['DOASinfo']])
+        }
+        , 'dc' = {
+            getWindows(attr(x, 'meas')[['DOASinfo']])
+        }
+        , stop('no method definded for current class')
+        )
+}
+
+#### fit calibration spectra to measured single spectrum
+fit_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
+    dcnh3 = NULL, dcno = NULL, dcso2 = NULL) {
+    wins <- get_wins(x)
+    if (!is.null(calrefspecs)) {
+        # get doascurves from calibration spectra
+        # nh3
+        if (is.null(dcnh3)) {
+            snh3 <- read_cal(calrefspecs, spec = 'dat.NH3')
+            snh3_ref <- read_cal(calrefspecs, spec = 'dat.N2.NH3')
+            dcnh3 <- calc_dc(snh3, snh3_ref)
+        }
+        # no
+        if (is.null(dcno)) {
+            sno <- read_cal(calrefspecs, spec = 'dat.NO')
+            sno_ref <- read_cal(calrefspecs, spec = 'dat.N2.NO')
+            dcno <- calc_dc(sno, sno_ref)
+        }
+        # so2
+        if (is.null(dcso2)) {
+            sso2 <- read_cal(calrefspecs, spec = 'dat.SO2')
+            sso2_ref <- read_cal(calrefspecs, spec = 'dat.N2.SO2')
+            dcso2 <- calc_dc(sso2, sso2_ref)
+        }
+    }
+    xreg <- cbind(nh3 = dcnh3[['cnt']], no = dcno[['cnt']], so2 = dcso2[['cnt']])[wins[['pixel_dc']], ]
+    out <- fit.curves.rob(x[['cnt']], wins[['pixel_dc']], xreg, tau.shift, path.length) 
+    names(out) <- c(colnames(xreg), paste0(colnames(xreg), '_se'), 'tau.best')
+    out
+}
+
 
 
 

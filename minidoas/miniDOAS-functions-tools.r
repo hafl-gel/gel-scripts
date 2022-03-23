@@ -684,7 +684,7 @@ get_wins <- function(x) {
 
 #### fit calibration spectra to measured single spectrum
 fit_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
-    dcnh3 = NULL, dcno = NULL, dcso2 = NULL) {
+    dcnh3 = NULL, dcno = NULL, dcso2 = NULL, corNH3 = 1.16) {
     wins <- get_wins(x)
     if (!is.null(calrefspecs)) {
         # get doascurves from calibration spectra
@@ -710,9 +710,25 @@ fit_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
     xreg <- cbind(nh3 = dcnh3[['cnt']], no = dcno[['cnt']], so2 = dcso2[['cnt']])[wins[['pixel_dc']], ]
     out <- fit.curves.rob(x[['cnt']], wins[['pixel_dc']], xreg, tau.shift, path.length) 
     names(out) <- c(colnames(xreg), paste0(colnames(xreg), '_se'), 'tau.best')
-    out
+    # return result incl calibration
+    structure(out,
+        nh3_cal = attr(dcnh3, 'meas')[['Calinfo']][['cuvette.conc']] * attr(dcnh3, 'meas')[['Calinfo']][['cuvette.path']] * 1e3 * corNH3,
+        no_cal = attr(dcno, 'meas')[['Calinfo']][['cuvette.conc']] * attr(dcno, 'meas')[['Calinfo']][['cuvette.path']] * 1e3,
+        so2_cal = attr(dcso2, 'meas')[['Calinfo']][['cuvette.conc']] * attr(dcso2, 'meas')[['Calinfo']][['cuvette.path']] * 1e3,
+        path = path.length,
+        class = 'doas.fit'
+    )
 }
 
+fit2ug <- function(fit, path.length = 1) {
+    out <- fit
+    ind <- grep('nh3|no|so2', names(fit))
+    for (i in ind) {
+        cal <- sub('(nh3|no|so2).*', '\\1_cal', names(fit)[i])
+        out[[i]] <- out[[i]] * attr(fit, cal) * attr(fit, 'path') / path.length
+    }
+    out
+}
 
 
 

@@ -1206,9 +1206,16 @@ evalOffline <- function(
     DOAS.win$filt <- winFUN(DOAS.win$filter.strength,...)
     C_cfilter <- getFromNamespace('C_cfilter', 'stats')
     if (DOAS.win$filter.rev) {
-        # old double filter
+        # # old double filter
+        # highpass.filter2 <- function(dat, filt) {
+        #     dat - rev(.Call(C_cfilter, rev(.Call(C_cfilter, dat, filt, 2L, FALSE)), filt, 2L, FALSE))
+        # }
+        # new double filter
         highpass.filter2 <- function(dat, filt) {
-            dat - rev(.Call(C_cfilter, rev(.Call(C_cfilter, dat, filt, 2L, FALSE)), filt, 2L, FALSE))
+            dat - (
+                .Call(C_cfilter, dat, filt, 2L, FALSE) +
+                    rev(.Call(C_cfilter, rev(dat), filt, 2L, FALSE))
+                ) / 2
         }
     } else {
         # new double filter

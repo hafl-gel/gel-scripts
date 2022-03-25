@@ -1,6 +1,6 @@
 
 
-fit.curves <- function(meas.doascurve, ind_fit, Xreg, tau.shift, path.length){
+fit.curves <- function(meas.doascurve, ind_fit, Xreg, tau.shift, path.length, all_coefs = FALSE, return_resid = FALSE){
     # fit lm
     if (length(tau.shift) > 1) {
         fitcurves <- lapply(tau.shift, function(x) lm(as.numeric(meas.doascurve[ind_fit + x]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], model=FALSE))
@@ -13,17 +13,23 @@ fit.curves <- function(meas.doascurve, ind_fit, Xreg, tau.shift, path.length){
         tau.best <- tau.shift
     }
     # return result
-    as.list(c(
+    out <- as.list(c(
         # coefficients NH3/SO2/NO
         coefficients(fitcurves)[2:4] / path.length,
         # standard errors NH3/SO2/NO
         sqrt(diag(vcov(fitcurves))[2:4]) / path.length,
         tau.best,
+        # intercept
+        if (all_coefs) coefficients(fitcurves)[1],
         use.names = FALSE
     ))
+    if (return_resid) {
+        out <- c(out, list(resid(fitcurves)))
+    }
+    out
 }   
 
-fit.curves.rob <- function(meas.doascurve, ind_fit, Xreg, tau.shift, path.length){
+fit.curves.rob <- function(meas.doascurve, ind_fit, Xreg, tau.shift, path.length, all_coefs = FALSE, return_resid = FALSE){
     # tau shift?
     if (length(tau.shift) > 1) {
         fitcurves <- lapply(tau.shift, function(x) lm(as.numeric(meas.doascurve[ind_fit + x]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3],  model=FALSE))
@@ -47,17 +53,26 @@ fit.curves.rob <- function(meas.doascurve, ind_fit, Xreg, tau.shift, path.length
     # return result
     if(inherits(fitcurves,"try-error") || !fitcurves$converged){
         # was not able to fit - return NAs
-        as.list(c(rep(NA_real_, 6), NA_integer_))
+        out <- as.list(c(rep(NA_real_, 6), NA_integer_))
+        if (return_resid) {
+            out <- c(out, list(rep(NA_real_, length(ind_fit))))
+        }
     } else {  
-        as.list(c(
+        out <- as.list(c(
             # coefficients NH3/SO2/NO
             coefficients(fitcurves)[2:4] / path.length,
             # standard errors NH3/SO2/NO
             sqrt(diag(vcov(fitcurves))[2:4]) / path.length,
             tau.best,
+            # intercept
+            if (all_coefs) coefficients(fitcurves)[1],
             use.names = FALSE
         ))
+        if (return_resid) {
+            out <- c(out, list(resid(fitcurves)))
+        }
     }
+    out
 }     
 
 AICc <- function(x){

@@ -708,18 +708,25 @@ fit_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
         }
     }
     xreg <- cbind(nh3 = dcnh3[['cnt']], no = dcno[['cnt']], so2 = dcso2[['cnt']])[wins[['pixel_dc']], ]
-    out <- fit.curves.rob(x[['cnt']], wins[['pixel_dc']], xreg, tau.shift, path.length) 
-    names(out) <- c(colnames(xreg), paste0(colnames(xreg), '_se'), 'tau.best')
+    out <- fit.curves.rob(x[['cnt']], wins[['pixel_dc']], xreg, tau.shift, path.length, all_coefs = TRUE)
+    names(out) <- c(colnames(xreg), paste0(colnames(xreg), '_se'), 'tau.best', 'intercept')
     # return result incl calibration
     structure(out,
         nh3_cal = attr(dcnh3, 'meas')[['Calinfo']][['cuvette.conc']] * attr(dcnh3, 'meas')[['Calinfo']][['cuvette.path']] * 1e3 * corNH3,
         no_cal = attr(dcno, 'meas')[['Calinfo']][['cuvette.conc']] * attr(dcno, 'meas')[['Calinfo']][['cuvette.path']] * 1e3,
         so2_cal = attr(dcso2, 'meas')[['Calinfo']][['cuvette.conc']] * attr(dcso2, 'meas')[['Calinfo']][['cuvette.path']] * 1e3,
+        tau = tau.shift,
         path = path.length,
+        dc_nh3 = dcnh3,
+        dc_no = dcno,
+        dc_so2 = dcso2,
+        dc_meas = x,
+        cor_nh3 = corNH3,
         class = 'doas.fit'
     )
 }
 
+#### convert fit result to ug/m3
 fit2ug <- function(fit, path.length = 1) {
     out <- fit
     ind <- grep('nh3|no|so2', names(fit))
@@ -730,7 +737,82 @@ fit2ug <- function(fit, path.length = 1) {
     out
 }
 
+#### get residues
+resid_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
+    dcnh3 = NULL, dcno = NULL, dcso2 = NULL, corNH3 = 1.16) {
+    if (inherits(x, 'doas.fit')) {
+        tau.shift <- attr(x, 'tau')
+        path.length <- attr(x, 'path')
+        fitted <- x
+        x <- attr(x, 'dc_meas')
+    } else {
+        fitted <- fit_dc(x, calrefspecs, tau.shift, path.length,
+            dcnh3, dcno, dcso2, corNH3)
+    }
+    structure(
+        list(
+            wl = x$wl,
+            cnt = shift_tau(x[['cnt']], tau.shift) - 
+                fitted[['nh3']] * attr(fitted, 'dc_nh3')[['cnt']] -
+                fitted[['no']] * attr(fitted, 'dc_no')[['cnt']] -
+                fitted[['so2']] * attr(fitted, 'dc_so2')[['cnt']] - 
+                fitted[['intercept']]
+            ),
+        fit = fitted,
+        class = 'dc_resid')
+}
+#### helper to shift by tau
+shift_tau <- function(x, tau) {
+    ind <- seq_along(x) + tau
+    ind[ind < 1] <- NA
+    x[ind]
+}
 
+#### dc operators
+Ops.dc <- function(e1, e2) {
+    # get classes
+    cl1 <- class(e1)
+    cl2 <- class(e2)
+    if ('dc' %in% cl1 && 'dc' %in% cl2) {
+        if (.Generic == '-') {
+            e <- e1
+            e[['cnt']] <- e1[['cnt']] - e2[['cnt']]
+            return(e)
+        }
+    }
+    if (any(which_resid <- c(cl1, cl2) %in% 'dc_resid')) {
+        if (which_resid[1]) {
+            e <- e2
+            # shift resid
+            t1 <- -attr(attr(e1, 'fit'), 'tau')
+            t2 <- 0
+        } else {
+            e <- e1
+            # shift resid
+            t1 <- 0
+            t2 <- -attr(attr(e2, 'fit'), 'tau')
+        }
+        fun <- get(.Generic)
+        e[['cnt']] <- fun(shift_tau(e1[['cnt']], t1), shift_tau(e2[['cnt']], t2))
+        return(e)
+    }
+}
+
+
+#### plot method for dc_resid
+plot.dc_resid <- function(x, type = 'l', xlab = 'nm', ylab = 'doascurve', ...) {
+    plot(x$wl, x$cnt, type = type, xlab = xlab, ylab = ylab, ...)
+}
+lines.dc_resid <- function(x, ...) {
+    lines(x$wl, x$cnt, ...)
+}
+
+print.doas.fit <- function(x, ...) {
+    for (nms in names(x)) {
+        cat(nms, ':', x[[nms]], '\n')
+    }
+    invisible(NULL)
+}
 
 if (FALSE) {
     FileAulaNH3 <- '~/repos/3_Scripts/4_MiniDOASAuswertung/ReferenceSpectras/S5/miniDOAS_S5_hafl_aula_spectra_2104081407/miniDOAS_S5_NH3_cal_spec_210222592007-210222172106_202104081407.txt'

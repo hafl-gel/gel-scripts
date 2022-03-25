@@ -1304,21 +1304,36 @@ evalOffline <- function(
                 # highpass filter and fit curve to calibration
                 fitcurve(
                     highpass.filter2(DiffSpec$diffspec[[i]], DOAS.win$filt), 
-                    DOAS.win$pixel_dc, xreg, DOAS.win$tau.shift, path.length)
+                    DOAS.win$pixel_dc, xreg, DOAS.win$tau.shift, path.length, 
+                    return_resid = !lite)
             } else {
                 # return NAs if too few light
-                as.list(c(
+                out <- as.list(c(
                         rep(NA_real_, 6),
                         NA_integer_
                         ))
+                if (!lite) {
+                    out <- c(out, list(rep(NA_real_, length(DOAS.win$pixel_dc))))
+                }
+                out
             }
             })
         cat("\n")
 
     }
 
-    # rbind results
-    out <- rbindlist(out)
+    if (lite) {
+        # rbind results
+        out <- rbindlist(out)
+    } else {
+        # residuals
+        residuals <- sapply(out, '[[', 8)
+        colnames(residuals) <- format(RawData$Header[, 'st'])
+        # rbind results
+        out <- rbindlist(lapply(out, '[', -8))
+    }
+
+
 
     # name them
     setnames(out, c('nh3', 'so2', 'no', 'nh3_se', 'so2_se', 'no_se', 'tau'))
@@ -1356,12 +1371,19 @@ evalOffline <- function(
             results
             ,CalRefSpecs = CalRefSpecs
             ,RawData = RawData
+            ,residuals = residuals
+            ,DOASinfo = DOAS.info
+            ,DOASwin = DOAS.win
             ,callEval = match.call()
             ,class = c("DOASeval", 'data.table', "data.frame")
         )
     }
 }
 
+# add resid method
+residuals.DOASeval <- function(object, ...) {
+    attr(object, 'residuals')
+}
 
 
 runAppDOAS <- function(ShinyInput) {

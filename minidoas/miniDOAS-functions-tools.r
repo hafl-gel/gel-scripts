@@ -796,6 +796,27 @@ Ops.dc <- function(e1, e2) {
         e[['cnt']] <- fun(shift_tau(e1[['cnt']], t1), shift_tau(e2[['cnt']], t2))
         return(e)
     }
+    if (any(which_fp <- c(cl1, cl2) %in% 'fix_pattern')) {
+        if (which_fp[1]) {
+            stop('add/substract fix patterns from doascurves, not vice versa')
+        } else {
+            # check dimension of e2
+            if (NCOL(e2) > 1) stop('Only one fix pattern can be substracted')
+            e <- e1
+            # get fp tau shift
+            t1 <- 0
+            t2 <- -attr(e2, 'DOASwin')[['tau.shift']]
+            # get fp indices
+            ind_fp <- attr(e2, 'DOASwin')[['pixel_dc']]
+            f <- e1
+            f[['cnt']][] <- 0
+            f[['cnt']][ind_fp] <- as.numeric(e2)
+            fun <- get(.Generic)
+            e[['cnt']] <- fun(shift_tau(e1[['cnt']], t1), shift_tau(f[['cnt']], t2))
+            return(e)
+        }
+    }
+    stop('Ops.dc method not yet implemented')
 }
 
 
@@ -812,6 +833,98 @@ print.doas.fit <- function(x, ...) {
         cat(nms, ':', x[[nms]], '\n')
     }
     invisible(NULL)
+}
+
+get_fixpattern <- function(x, granularity = '1days', ref.time = colnames(x)[1], fun = NULL, ...) {
+    # parse ref time
+    t_zero <- parse_date_time3(ref.time)
+    # get times (st)
+    nms <- colnames(x)
+    abs_times <- parse_date_time3(nms)
+    rel_times <- abs_times - t_zero
+    # binning intervals
+    gr_time <- parse_time_diff(granularity)
+    st_bins <- floor(rel_times / gr_time)
+    # get times
+    d_bins <- which(diff(st_bins) > 0)
+    u_times <- paste0(abs_times[c(1, d_bins + 1)], ' to ', abs_times[c(d_bins, length(abs_times))])
+    # loop over bins
+    u_bins <- unique(st_bins)
+    out <- matrix(NA_real_, nrow = nrow(x), ncol = length(u_bins), dimnames = list(NULL, u_times))
+    for (b in u_bins) {
+        if (is.null(fun)) {
+            out[, u_bins == b] <- rowMeans(x[, st_bins == b, drop = FALSE])
+        } else {
+            out[, u_bins == b] <- apply(x[, st_bins == b, drop = FALSE], 1, fun, ...)
+        }
+    }
+    structure(out
+        , DOASinfo = attr(x, 'DOASinfo')
+        , DOASwin = attr(x, 'DOASwin')
+        , class = 'fix_pattern'
+        )
+}
+
+plot.fix_pattern <- function(x, max.plots = 15, scale_y = TRUE, ylim = NULL, ylab = '', tau = NULL, ...) {
+    nc <- NCOL(x)
+    # do we have to many plots to display at once?
+    if (nc > max.plots) {
+        devAskNewPage(TRUE)
+        cols <- rows <- 2
+    } else {
+        # get number of cols & rows
+        cols <- floor(sqrt(nc))
+        rows <- ceiling(nc / cols)
+    }
+    # start plotting
+    if (nc > 1) {
+        opar <- par()
+        par(mfrow = c(rows, cols))
+    }
+    if (scale_y && is.null(ylim)) ylim <- range(x, na.rm = TRUE)
+    if (is.null(tau)) tau <- 0
+    ind <- attr(x, 'DOASwin')[['pixel_fit']] + tau
+    wl <- attr(x, 'DOASinfo')[['Spectrometer']][['wavelength']][ind]
+    cnms <- colnames(x)
+    class(x) <- 'matrix'
+    for (i in seq.int(nc)) {
+        plot(wl, x[, i], type = 'l', ylim = ylim, ylab = ylab, main = cnms[i], ...)
+    }
+    if (nc > 1) {
+        suppressWarnings(par(opar))
+    }
+    invisible(NULL)
+}
+lines.fix_pattern <- function(x, tau = NULL, ...) {
+    nc <- NCOL(x)
+    # start plotting
+    if (is.null(tau)) tau <- 0
+    ind <- attr(x, 'DOASwin')[['pixel_fit']] + tau
+    wl <- attr(x, 'DOASinfo')[['Spectrometer']][['wavelength']][ind]
+    cnms <- colnames(x)
+    class(x) <- 'matrix'
+    for (i in seq.int(nc)) {
+        lines(wl, x[, i], ...)
+    }
+    invisible(NULL)
+}
+
+print.dc <- function(x, ...) {
+    meas <- attr(x, 'meas')
+    ref <- attr(attr(x, 'ref'), 'RawData')
+    cat('***\ndoascurve:\n')
+    cat('   measurement spectrum recorded between', format(meas$Header[['st']]), 'and', format(meas$Header[['et']]), '\n')
+    cat('   reference spectrum recorded between', format(ref$Header[['st']][1]), 'and', format(ref$Header[['et']][length(ref$Header[['et']])]), '\n')
+    cat('***\n')
+}
+
+print.fix_pattern <- function(x, ...) {
+    cat('***\nfix patterns calculated for:\n')
+    cnms <- colnames(x)
+    for (i in seq_along(cnms)) {
+        cat('   ', sprintf('%2i', i), ': ', cnms[i], '\n')
+    }
+    cat('***\n')
 }
 
 if (FALSE) {

@@ -1382,7 +1382,11 @@ evalOffline <- function(
 
 # add resid method
 residuals.DOASeval <- function(object, ...) {
-    attr(object, 'residuals')
+    structure(attr(object, 'residuals')
+        , DOASinfo = attr(object, 'DOASinfo')
+        , DOASwin = attr(object, 'DOASwin')
+        , class = 'DOAS.resid'
+        )
 }
 
 

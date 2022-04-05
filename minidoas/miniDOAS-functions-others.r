@@ -589,9 +589,11 @@ getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #~~ function; get calibration and reference spectra:
 # TODO:
-getSpec <- function(spec, DOASmodel = NULL, lite = FALSE) {
+getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
 
-    SpecName <- as.character(substitute(spec))
+    if (is.null(SpecName)) {
+        SpecName <- as.character(substitute(spec))
+    }
 
     tracer <- switch(SpecName,
         "ref.spec"="ambient",
@@ -649,10 +651,15 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE) {
             }
 
             if (is.null(spec$tz)) spec$tz <- "Etc/GMT-1"
-            spec$rawdat <- try(readDOASdata(DOASmodel,timerange=spec$timerange,dataDir=spec$dir,rawdataOnly=TRUE,timezone=spec$tz))
-
-            if (inherits(spec$rawdat,"try-error")) {
-                stop(paste0(SpecName,": ",unlist(strsplit(spec$rawdat," : "))[2]))
+            if (is.character(spec$dir)) {
+                spec$rawdat <- try(readDOASdata(DOASmodel,timerange=spec$timerange,dataDir=spec$dir,rawdataOnly=TRUE,timezone=spec$tz))
+                if (inherits(spec$rawdat,"try-error")) {
+                    stop(paste0(SpecName,": ",unlist(strsplit(spec$rawdat," : "))[2]))
+                }
+            } else if (!is.list(spec$dir) && !all(c('RawData', 'Header', 'DOASinfo') %in% names(spec$dir))) {
+                    stop('list entry "dir" should either contain the path to the raw data or the raw data itself')
+            } else {
+                spec$rawdat <- spec$dir
             }
 
             AvgSpec <- do.call(avgSpec,spec[names(spec) %in% names(formals(avgSpec))])

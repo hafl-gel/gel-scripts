@@ -172,13 +172,13 @@ read_ida <- function(File) {
         # m.asl = Höhe.ü..M...m.
         m.asl = get('H\u00f6he.\u00fc..M...m.')
         )]
-    out <- merge(Data, Stat2, all = TRUE)[, time := NULL]
+    out <- merge(Data, Stat2, all = TRUE)[, time := NULL][]
 
     # set key column
     setkey(out, id)
 
     # prepare output columns
-    nms0 <- c('id', 'stn', 'name', 'ch.x', 'ch.y', 'm.asl', 'st', 'et')
+    nms0 <- c('id', 'stn', 'name', 'ch.x', 'ch.y', 'm.asl', 'granularity', 'st', 'et')
     nms1 <- names(out)[!(names(out) %in% nms0)]
 
     # change column order

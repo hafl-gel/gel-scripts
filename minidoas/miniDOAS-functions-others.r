@@ -609,7 +609,8 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
         "N2.NH3.cal.spec"="NH3",
         "N2.SO2.cal.spec"="SO2",
         "N2.NO.cal.spec"="NO",
-        "N2.dark.cal.spec"="N2"
+        "N2.dark.cal.spec"="N2",
+        'unknown spec.name'
     )
 
     type <- switch(SpecName,
@@ -622,7 +623,8 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
         "N2.NH3.cal.spec"="ref",
         "N2.SO2.cal.spec"="ref",
         "N2.NO.cal.spec"="ref",
-        "N2.dark.cal.spec"="dark"
+        "N2.dark.cal.spec"="dark",
+        'unknown spec.name'
     ) 
 
     if (is.list(spec)) {
@@ -633,30 +635,31 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
             timerange <- spec$timerange
             lite <- TRUE    
         } else {
-            if (!is.null(spec$type)) {
-                stopifnot(spec$type==type)
-            } else {
+
+            if (type != 'unknown spec.name') {
                 spec$type <- type
+            } else if (is.null(spec$type)) {
+                stop('list entry "type" is needed if spec.name is not recognized')
             }
 
             if (type=="cal") {
-                stopifnot(
-                    !is.null(spec$cuvetteConc_mg),
-                    spec$cuvetteConc_mg>0,
-                    is.null(spec$cuvetteLength)||spec$cuvetteLength>0
-                )
+                if(
+                    !is.null(spec$cuvetteConc_mg) ||
+                    spec$cuvetteConc_mg>0 ||
+                    is.null(spec$cuvetteLength) ||
+                    spec$cuvetteLength>0
+                ) stop('Please provide valid info on cuvette length and concentration')
             }
 
-            if (!is.null(spec$tracer)) {
-                if (SpecName == "N2.dark.cal.spec") spec$tracer <- "N2"
-                stopifnot(spec$tracer==tracer)
-            } else {
+            if (tracer != 'unknown spec.name') {
                 spec$tracer <- tracer
+            } else if (is.null(spec$tracer)) {
+                stop('list entry "tracer" is needed if spec.name is not recognized')
             }
-
-            if (is.null(spec$tz)) spec$tz <- "Etc/GMT-1"
 
             if (is.null(spec$rawdat)) {
+                if (is.null(spec$tz)) spec$tz <- "Etc/GMT-1"
+
                 if (is.character(spec$dir)) {
                     spec$rawdat <- try(readDOASdata(DOASmodel,timerange=spec$timerange,dataDir=spec$dir,rawdataOnly=TRUE,timezone=spec$tz))
                     if (inherits(spec$rawdat,"try-error")) {
@@ -753,16 +756,16 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
 getSpecSet <- function(
     spec.dir="",  
     ref.spec=NULL,
-    ref.dark.spec=NULL,
     dark.spec=NULL,
+    ref.dark.spec=dark.spec,
     NH3.cal.spec=NULL,
+    N2.cal.spec=NULL,
     SO2.cal.spec=NULL,
     NO.cal.spec=NULL,
     N2.NH3.cal.spec=N2.cal.spec,
     N2.SO2.cal.spec=N2.cal.spec,
     N2.NO.cal.spec=N2.cal.spec,
-    N2.dark.cal.spec=NULL,
-    N2.cal.spec=NULL,
+    N2.dark.cal.spec=dark.spec,
     DOAS.model=NULL) {
 
     # if (is.null(ref.spec))ref.spec <- spec.dir

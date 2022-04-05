@@ -651,15 +651,16 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
             }
 
             if (is.null(spec$tz)) spec$tz <- "Etc/GMT-1"
-            if (is.character(spec$dir)) {
-                spec$rawdat <- try(readDOASdata(DOASmodel,timerange=spec$timerange,dataDir=spec$dir,rawdataOnly=TRUE,timezone=spec$tz))
-                if (inherits(spec$rawdat,"try-error")) {
-                    stop(paste0(SpecName,": ",unlist(strsplit(spec$rawdat," : "))[2]))
+
+            if (is.null(spec$rawdat)) {
+                if (is.character(spec$dir)) {
+                    spec$rawdat <- try(readDOASdata(DOASmodel,timerange=spec$timerange,dataDir=spec$dir,rawdataOnly=TRUE,timezone=spec$tz))
+                    if (inherits(spec$rawdat,"try-error")) {
+                        stop(paste0(SpecName,": ",unlist(strsplit(spec$rawdat," : "))[2]))
+                    }
+                } else {
+                    stop('list entry "dir" should contain the path to the raw data if "rawdat" is not provided itself')
                 }
-            } else if (!is.list(spec$dir) && !all(c('RawData', 'Header', 'DOASinfo') %in% names(spec$dir))) {
-                    stop('list entry "dir" should either contain the path to the raw data or the raw data itself')
-            } else {
-                spec$rawdat <- spec$dir
             }
 
             AvgSpec <- do.call(avgSpec,spec[names(spec) %in% names(formals(avgSpec))])

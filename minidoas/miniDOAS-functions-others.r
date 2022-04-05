@@ -592,7 +592,11 @@ getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(
 getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
 
     if (is.null(SpecName)) {
-        SpecName <- as.character(substitute(spec))
+        if (is.null(spec$spec.name)) {
+            SpecName <- as.character(substitute(spec))
+        } else {
+            SpecName <- spec$spec.name
+        }
     }
 
     tracer <- switch(SpecName,

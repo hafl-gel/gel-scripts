@@ -1,6 +1,4 @@
 
-require(data.table)
-require(ibts)
 # source('~/repos/3_Scripts/4_MiniDOASAuswertung/RScripts/miniDOAS_functions_hac5.R')
 
 

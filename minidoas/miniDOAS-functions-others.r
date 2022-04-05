@@ -1076,12 +1076,6 @@ evalOffline <- function(
     ### verbose
     cat("\n************\nevaluating miniDOAS model", DOAS.model, "\n")
 
-    ### prepare time range:
-    timerange <- prepTimeRange(evalperiod,tz.DOAS)
-
-    ### get DOAS information:
-    DOAS.info <- getDOASinfo(DOAS.model,timerange, Serial = Serial)
-
     ### initialize parallelism:
     if (parl <- (is.list(ncores) || ncores > 1)) {
         require(parallel)
@@ -1095,12 +1089,25 @@ evalOffline <- function(
 
     ### read raw data:
     if (is.null(RawData)) {
+        ### prepare time range:
+        timerange <- prepTimeRange(evalperiod,tz.DOAS)
+
+        ### get DOAS information:
+        DOAS.info <- getDOASinfo(DOAS.model,timerange, Serial = Serial)
+
         cat("read raw data\n")
         RawData <- readDOASdata(DOAS.info, rawdata.dir, skip.check.daily = skip.check.daily, 
             force.write.daily = force.write.daily, ncores = ncores)
     } else {
-        cat("raw data supplied - ignoring argument 'evalperiod'...\n")
+        cat("raw data supplied - ignoring arguments 'evalperiod', 'DOAS.model', etc. ...\n")
         # NOTE: get time subset?
+        ### get DOAS information:
+        DOAS.info <- RawData[['DOASinfo']]
+        ### prepare time range:
+        timerange <- DOAS.info[['timerange']]
+        # overwrite arguments provided with raw data
+        tz.DOAS <- tzone(timerange)
+        DOAS.model <- DOAS.info[['DOASmodel']]
     }
 
     ### get DOAS windows:

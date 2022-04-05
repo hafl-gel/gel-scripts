@@ -8,10 +8,11 @@ programVersion <- "v5.2 (26.12.2020)"
 
 ### libraries etc
 ### ******************************************************************************
-# library(data.table)
 library(lubridate)
 library(robustbase)
 require(MASS)
+require(data.table)
+require(ibts)
 # options(shiny.trace=FALSE)
 
 

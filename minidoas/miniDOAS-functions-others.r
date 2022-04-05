@@ -1379,7 +1379,6 @@ evalOffline <- function(
             ,CalRefSpecs = CalRefSpecs
             ,RawData = RawData
             ,residuals = residuals
-            ,DOASinfo = DOAS.info
             ,DOASwin = DOAS.win
             ,callEval = match.call()
             ,class = c("DOASeval", 'data.table', "data.frame")
@@ -1390,7 +1389,7 @@ evalOffline <- function(
 # add resid method
 residuals.DOASeval <- function(object, ...) {
     structure(attr(object, 'residuals')
-        , DOASinfo = attr(object, 'DOASinfo')
+        , DOASinfo = attr(object, 'RawData')[['DOASinfo']]
         , DOASwin = attr(object, 'DOASwin')
         , class = 'DOAS.resid'
         )

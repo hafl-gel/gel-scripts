@@ -1,10 +1,34 @@
 
-library(lubridate)
-library(data.table)
-library(ibts)
+# transition from require/library to box::use
+if ('box' %in% .packages(TRUE) && length(box::name()) != 0) {
+    # although considered bad praxis, we want all
+    # data.table functions available in .GlobalEnv:
+    evalq(box::use(data.table[...]), .GlobalEnv)
+    # load ibts/data.table package for module
+    cat(paste0('*** ibts namespace not available ***\n-> Consider adding:\n\n',
+        'box::use(ibts[...])\n\n',
+        'to your script...\n*** ~~~~~~~~~~~~~~~~~~ ***\n'))
+    # import necessary functions
+    box::use(
+        data.table[...], 
+        ibts[as.ibts], 
+        lubridate[fast_strptime],
+        utils[unzip],
+        graphics[par]
+        )
+} else {
+    library(lubridate)
+    library(data.table)
+    library(ibts)
+}
 
-####### functions
-
+#' Print IDA data summary 
+#'
+#' This function prints a short summary of a idaweb data set.
+#'
+#' @param x A `data.table` containing idaweb data
+#' @return A `data.table` with a data summary (one row per id)
+#' @export
 smry_ida <- function(x) {
     nms0 <- names(x[, id:et])
     nms1 <- names(x)[!(names(x) %in% nms0)]
@@ -25,6 +49,14 @@ smry_ida <- function(x) {
         ), by = .(id, stn, name)]
 }
 
+#' Check IDA data coverage
+#'
+#' This function prints the percentage of available data in
+#' an idaweb data set.
+#'
+#' @param x A `data.table` containing idaweb data
+#' @return A `data.table` with data coverage summary (one row per id)
+#' @export
 check_ida <- function(x) {
     nms0 <- names(x[, id:et])
     nms1 <- names(x)[!(names(x) %in% nms0)]
@@ -34,6 +66,13 @@ check_ida <- function(x) {
             }) , by = id]
 }
 
+#' Plot IDA data time series
+#'
+#' This function plots the columns of an idaweb data set as 
+#' time series plots.
+#'
+#' @param x A `data.table` containing idaweb data
+#' @export
 plot_ida <- function(x) {
     ch <- check_ida(x)
     nms1 <- names(ch[, -1])
@@ -55,6 +94,13 @@ plot_ida <- function(x) {
     invisible(NULL)
 }
 
+#' Read IDA data from an idaweb zip file 
+#'
+#' This function reads data from an idaweb zip file.
+#'
+#' @param File character. The path to an idaweb zip file.
+#' @return A `data.table` containing idaweb data
+#' @export
 read_ida <- function(File) {
 
     # get zipped file names

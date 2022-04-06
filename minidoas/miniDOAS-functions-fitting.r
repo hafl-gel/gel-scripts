@@ -9,7 +9,7 @@ fit.curves <- function(meas.doascurve, ind_fit, Xreg, tau.shift, path.length, al
         tau.best <- tau.shift[index]
         fitcurves <- fitcurves[[index]]
     } else {
-        fitcurves <- lm(as.numeric(meas.doascurve[ind_fit]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], model=FALSE)
+        fitcurves <- lm(as.numeric(meas.doascurve[ind_fit + tau.shift]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], model=FALSE)
         tau.best <- tau.shift
     }
     # return result

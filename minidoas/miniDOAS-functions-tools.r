@@ -925,6 +925,102 @@ print.fix_pattern <- function(x, ...) {
     cat('***\n')
 }
 
+#' Filter miniDOAS Raw Data By Time
+#'
+#' function to select a subset (filter) from a miniDOAS raw data list
+#' by providing either a time range or individual times
+#'
+#' @param rawdat     A \code{list} with entries \code{'RawData'}, \code{'Header'}, 
+#'                   \code{'DOASinfo'}, obtained from a call to \code{readDOASdata} 
+#'                   or \code{read_data}.
+#' @param index      A vector of time indices used to subset
+#' @param to         An optional time index providing the end of a time range. 
+#'                   Argument \code{index} has to be of length 1 to provide
+#'                   the start of the time range. Defaults to \code{NULL}.
+#' @param including  logical. Only used if time range is provided. Should
+#'                   data at the range edges be included?
+#' @return A subset of the initial \code{rawdat} object
+filter_time <- function(rawdat, index, to = NULL, including = TRUE) {
+    # check to
+    if (length(to) > 1) stop('argument "to" should be NULL or of length 1')
+    rd_st <- rawdat[['Header']][['st']]
+    rd_et <- rawdat[['Header']][['et']]
+    rd_tz <- tzone(rd_st)
+    # check from
+    if (!is.null(to)) {
+        if (length(index) != 1) stop('argument "index" should be of length 1 if providing "to"')
+        # parse from/to
+        if (is.character(index)) {
+            index <- parse_date_time3(index, tz = rd_tz)
+        }
+        if (is.character(to)) {
+            to <- parse_date_time3(to, tz = rd_tz)
+        }
+        # from / to
+        if (including) {
+           ind <- which(rd_et > index & rd_st < to) 
+        } else {
+           ind <- which(rd_st >= index & rd_et <= to) 
+        }
+    } else {
+        # index only
+        # parse index
+        if (is.character(index)) {
+            index <- parse_date_time3(index, tz = rd_tz)
+        }
+        # find intervals
+        ind <- ibts::findI_st(as.numeric(index), as.numeric(rd_st), as.numeric(rd_et))
+    }
+    # return rawdat class
+    structure(
+        list(
+            RawData = rawdat[['RawData']][, ind],
+            Header = rawdat[['Header']][ind, ],
+            DOASinfo = rawdat[['DOASinfo']]
+            ),
+        class = 'rawdat'
+        )
+}
+
+# filter raw data by revolver position
+filter_position <- function(rawdat, position) {
+    # get indices
+    ind <- which(rawdat[['Header']][['RevPos']] %in% position)
+    # throw error if position doesn't exist
+    if (length(ind) == 0) {
+        stop(
+            'Revovler position ', position, ' does not exist!\n',
+            '  Existing positions are:\n    ', 
+            paste(unique(rawdat[['Header']][['RevPos']]), collapse = ', ')
+            )
+    }
+    # check any unlikely errors
+    stopifnot(
+        length(unique(rawdat[['Header']][ind, 'Spectrometer'])) == 1 || 
+        length(unique(rawdat[['Header']][ind, 'DOASmodel'])) == 1
+    )
+    # return rawdat class
+    structure(
+        list(
+            RawData = rawdat[['RawData']][, ind],
+            Header = rawdat[['Header']][ind, ],
+            DOASinfo = rawdat[['DOASinfo']]
+            ),
+        class = 'rawdat'
+        )
+}
+# evaluate rawdata
+eval_raw <- function(rawdat, calspecs, path.length, tau.shift = 0, lite = TRUE, ...) {
+    evalOffline(
+        path.length = path.length,
+        tau.shift = tau.shift,
+        RawData = rawdat,
+        CalRefSpecs = calspecs,
+        lite = lite,
+        ...
+        )
+}
+
 if (FALSE) {
     FileAulaNH3 <- '~/repos/3_Scripts/4_MiniDOASAuswertung/ReferenceSpectras/S5/miniDOAS_S5_hafl_aula_spectra_2104081407/miniDOAS_S5_NH3_cal_spec_210222592007-210222172106_202104081407.txt'
     FileAulaN2 <- '~/repos/3_Scripts/4_MiniDOASAuswertung/ReferenceSpectras/S5/miniDOAS_S5_hafl_aula_spectra_2104081407/miniDOAS_S5_NH3_ref_spec_210222052205-210222212205_202104081407.txt'

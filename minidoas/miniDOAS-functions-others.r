@@ -592,10 +592,10 @@ getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(
 getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
 
     if (is.null(SpecName)) {
-        if (is.null(spec$spec.name)) {
-            SpecName <- as.character(substitute(spec))
-        } else {
+        if (is.list(spec) && !is.null(spec$spec.name)) {
             SpecName <- spec$spec.name
+        } else {
+            SpecName <- as.character(substitute(spec))
         }
     }
 
@@ -626,6 +626,7 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
         "N2.dark.cal.spec"="dark",
         'unknown spec.name'
     ) 
+
 
     if (is.list(spec)) {
         if (all(names(spec)%in%c("dat.spec","ambient","cuvette","timerange"))) {

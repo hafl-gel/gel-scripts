@@ -688,7 +688,7 @@ get_wins <- function(x) {
 
 #### fit calibration spectra to measured single spectrum
 fit_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
-    dcnh3 = NULL, dcno = NULL, dcso2 = NULL, corNH3 = 1.16) {
+    dcnh3 = NULL, dcno = NULL, dcso2 = NULL, corNH3 = 1.16, robust = TRUE) {
     wins <- get_wins(x)
     if (!is.null(calrefspecs)) {
         # get doascurves from calibration spectra
@@ -712,7 +712,11 @@ fit_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
         }
     }
     xreg <- cbind(nh3 = dcnh3[['cnt']], no = dcno[['cnt']], so2 = dcso2[['cnt']])[wins[['pixel_dc']], ]
-    out <- fit.curves.rob(x[['cnt']], wins[['pixel_dc']], xreg, tau.shift, path.length, all_coefs = TRUE)
+    if (robust) {
+        out <- fit.curves.rob(x[['cnt']], wins[['pixel_dc']], xreg, tau.shift, path.length, all_coefs = TRUE)
+    } else {
+        out <- fit.curves(x[['cnt']], wins[['pixel_dc']], xreg, tau.shift, path.length, all_coefs = TRUE)
+    }
     names(out) <- c(colnames(xreg), paste0(colnames(xreg), '_se'), 'tau.best', 'intercept')
     # return result incl calibration
     structure(out,

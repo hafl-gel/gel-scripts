@@ -466,7 +466,7 @@ get_cnt <- function(x) {
 #### doascurve
 calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
     fitwin = NULL, shift = NULL, correct.straylight = TRUE, correct.linearity = TRUE,
-    lin_before_dark = FALSE) {
+    lin_before_dark = FALSE, do_lowpass_filtering = FALSE, lp.type = 'Rect', lp.strength = 5) {
     if (is.character(meas)) {
         # file path or chen
         if (tolower(meas) == 'chen') {
@@ -482,13 +482,19 @@ calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
     # get counts
     m <- get_cnt(meas)
     r <- get_cnt(ref)
+    # get windows
+    win <- getWindows(meas$DOASinfo, filter.type = ftype, 
+        filter.strength = fstrength, filter.window = fwin, fit.window = fitwin,
+        tau.shift = shift)
+    # lowpass filtering
+    if (do_lowpass_filtering) {
+        m <- lowpass.filter(m, lp.type, lp.strength)
+        r <- lowpass.filter(r, lp.type, lp.strength)
+    }
     # calc diffspec
     ds <- suppressWarnings(log(m / r))
     ds[!is.finite(ds)] <- NA_real_
     # calc dc
-    win <- getWindows(meas$DOASinfo, filter.type = ftype, 
-        filter.strength = fstrength, filter.window = fwin, fit.window = fitwin,
-        tau.shift = shift)
     dc <- highpass.filter(ds, win)
     structure(
         list(

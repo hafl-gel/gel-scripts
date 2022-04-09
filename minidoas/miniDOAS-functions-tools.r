@@ -781,13 +781,14 @@ Ops.dc <- function(e1, e2) {
     # get classes
     cl1 <- class(e1)
     cl2 <- class(e2)
+    # dc
     if ('dc' %in% cl1 && 'dc' %in% cl2) {
-        if (.Generic == '-') {
-            e <- e1
-            e[['cnt']] <- e1[['cnt']] - e2[['cnt']]
-            return(e)
-        }
+        gfun <- get(.Generic)
+        e <- e1
+        e[['cnt']] <- gfun(e1[['cnt']], e2[['cnt']])
+        return(e)
     }
+    # dc_resid
     if (any(which_resid <- c(cl1, cl2) %in% 'dc_resid')) {
         if (which_resid[1]) {
             e <- e2
@@ -804,6 +805,7 @@ Ops.dc <- function(e1, e2) {
         e[['cnt']] <- fun(shift_tau(e1[['cnt']], t1), shift_tau(e2[['cnt']], t2))
         return(e)
     }
+    # fix_pattern
     if (any(which_fp <- c(cl1, cl2) %in% 'fix_pattern')) {
         if (which_fp[1]) {
             stop('add/substract fix patterns from doascurves, not vice versa')
@@ -823,6 +825,18 @@ Ops.dc <- function(e1, e2) {
             e[['cnt']] <- fun(shift_tau(e1[['cnt']], t1), shift_tau(f[['cnt']], t2))
             return(e)
         }
+    }
+    # numeric
+    if (any(which_num <- c(cl1, cl2) %in% c('numeric', 'integer'))) {
+        gfun <- get(.Generic)
+        if (which_num[1]) {
+            e <- e2
+            e[['cnt']] <- gfun(e1, e2[['cnt']])
+        } else {
+            e <- e1
+            e[['cnt']] <- gfun(e1[['cnt']], e2)
+        }
+        return(e)
     }
     stop('Ops.dc method not yet implemented')
 }

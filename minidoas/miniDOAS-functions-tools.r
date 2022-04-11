@@ -157,23 +157,33 @@ points.single_spec <- function(x, lo = 190, hi = 230, ...) {
 
 
 #### average raw data
-avg_spec <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', 
+avg_spec <- function(folder, from = NULL, to = NULL, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
     correct.straylight = TRUE, correct.linearity = TRUE, dark = NULL) {
     if(inherits(folder, 'rawdat')){
-        # convert from/to to POSIXct
-        from <- parse_date_time3(from, tz = tz)
-        to <- parse_date_time3(to, tz = tz)
-        # get indices
-        ind <- which(folder$Header[['et']] > from & folder$Header[['st']] < to)
-        if (length(ind)) {
-            folder$RawData <- folder$RawData[, ind, drop = FALSE]
-            folder$Header <- folder$Header[ind, , drop = FALSE]
-            # update timerange
-            folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][1, 'st'], folder[['Header']][length(ind), 'et'])
-        } else {
-            stop('No data within specified timerange available')
+        if (!is.null(from)) {
+            # convert from/to to POSIXct
+            from <- parse_date_time3(from, tz = tz)
+            to <- parse_date_time3(to, tz = tz)
+            # get indices
+            ind <- which(folder$Header[['et']] > from & folder$Header[['st']] < to)
+            if (length(ind)) {
+                folder$RawData <- folder$RawData[, ind, drop = FALSE]
+                folder$Header <- folder$Header[ind, , drop = FALSE]
+                # update timerange
+                folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][1, 'st'], folder[['Header']][length(ind), 'et'])
+            } else {
+                stop('No data within specified timerange available')
+            }
         }
+    } else if (is.list(folder) && 'SpecAvg' %in% names(folder)) {
+        folder <- structure(
+            list(
+                RawData = folder[['Specs']],
+                Header = folder[['Info']],
+                DOASinfo = folder[['DOASinfo']]
+            ), class = 'rawdat'
+        )
     } else {
         folder <- read_data(folder, from, to, tz, doas, Serial)
     }
@@ -237,18 +247,20 @@ get_wl <- function(x) {
 }
 
 #### plot method avgdat (use y as ref spec, types, xlim)
-plot.avgdat <- function(x, y = NULL, what = c('avg', 'resid'), xlim = c(190, 230), 
+plot.avgdat <- function(x, y = NULL, what = c('average', 'residuals', 'originals'), xlim = c(190, 230), 
     ylim = NULL, type = 'l', main = NULL, ylab = NULL, ...) {
     # cut to xlim
     lo <- xlim[1] - diff(xlim) * 0.04
     hi <- xlim[2] + diff(xlim) * 0.04
     x <- cut_wl(x, lo = lo, hi = hi)
     # switch plot kind
-    switch(pmatch(what[1], c('avg', 'resid'), nomatch = 3)
-        # avg
+    switch(pmatch(what[1], c('average', 'residuals', 'originals'), nomatch = 4)
+        # average
         , yp <- x
-        # resid
+        # residuals
         , yp <- sweep(attr(x, 'RawData')$RawData, 1, x)
+        # originals
+        , yp <- attr(x, 'RawData')[['RawData']]
         # nonsense
         , stop('argument "what" is not valid')
         )
@@ -259,26 +271,28 @@ plot.avgdat <- function(x, y = NULL, what = c('avg', 'resid'), xlim = c(190, 230
     xp <- get_wl(x)
     if (is.null(ylim)) ylim <- range(yp, na.rm = TRUE)
     if (NCOL(yp) > 1) {
-        plot(xp, x, type = 'n', xlim = xlim, ylim = ylim, xlab = '', ylab = ylab, main = main, ...)
+        plot(xp, x, type = 'n', xlim = xlim, ylim = ylim, xlab = 'nm', ylab = ylab, main = main, ...)
         for (i in seq_len(ncol(yp))) {
             lines(xp, yp[, i], type = type, ...)
         }
     } else {
-        plot(xp, yp, xlim = xlim, ylim = ylim, type = type, xlab = '', ylab = ylab, main = main, ...)
+        plot(xp, yp, xlim = xlim, ylim = ylim, type = type, xlab = 'nm', ylab = ylab, main = main, ...)
     }
 }
 
 #### lines method avgdat
-lines.avgdat <- function(x, y = NULL, what = c('avg', 'resid'), ...) {
+lines.avgdat <- function(x, y = NULL, what = c('average', 'residuals', 'originals'), ...) {
     # cut to xlim
     usr <- par('usr')[1:2]
     x <- cut_wl(x, lo = usr[1], hi = usr[2])
     # switch plot kind
-    switch(pmatch(what[1], c('avg', 'resid'), nomatch = 3)
-        # avg
+    switch(pmatch(what[1], c('average', 'residuals', 'originals'), nomatch = 4)
+        # average
         , yp <- x
-        # resid
+        # residuals
         , yp <- sweep(attr(x, 'RawData')$RawData, 1, x)
+        # originals
+        , yp <- attr(x, 'RawData')[['RawData']]
         # nonsense
         , stop('argument "what" is not valid')
         )
@@ -1044,6 +1058,96 @@ eval_raw <- function(rawdat, calspecs, path.length, tau.shift = 0, lite = TRUE, 
         ...
         )
 }
+
+# function to clean calibration blocks
+clean_cal <- function(x_dt, times, show = TRUE,
+    dev_med = function(x) 3 * mad(x, na.rm = TRUE), 
+    exclude_times = NULL, subset = NULL) {
+    # check x_dt
+    if (!is.data.table(x_dt)) {
+        stop('Please provide a data.table containing minidoas evaluation results')
+    }
+    # check dev_med
+    if (length(dev_med) != 4) {
+        dev_med <- setNames(lapply(1:4, function(i)
+            dev_med), c('nh3', 'no', 'so2', 'i_max'))
+    }
+    # exclude times
+    if (!is.null(exclude_times)) {
+        cat('Fix argument "exclude_times"!\n')
+        browser()
+    }
+    if (!missing(subset)) {
+        cat('Fix argument "subset"!\n')
+        browser()
+    }
+    # find blocks of cal (mt diff > 5? min)
+    x_dt[, cal_block := {
+        xs <- as.numeric(st)
+        xe <- as.numeric(et)
+        paste0(revolver, '_', cumsum(c(0, as.integer(xe[-1] - xs[-.N] > max_time_gap))))
+    }]
+    # find median values by block & highlight deviation > med +/- ?
+    nms <- names(dev_med)
+    x_dt[, paste0('dev_', nms) := {
+        lapply(nms, function(i) {
+            iv <- get(i)
+            abs(iv - median(iv, na.rm = TRUE)) > dev_med[[i]](iv)
+        })
+    }, by = cal_block]
+    # time excludes
+    # plot
+    if (show) {
+        x <- as.ibts(x_dt)
+        x_dev <- x[, c(nms, paste0('dev_', nms))]
+        x_all <- x[, c(nms, paste0('dev_', nms))]
+        x_dev[!x[['dev_nh3']], 'nh3'] <- NA_real_
+        x_dev[!x[['dev_no']], 'no'] <- NA_real_
+        x_dev[!x[['dev_so2']], 'so2'] <- NA_real_
+        x_dev[!x[['dev_i_max']], 'i_max'] <- NA_real_
+        x_all[x[['dev_nh3']] | x[['dev_no']] | x[['dev_so2']] | x[['dev_i_max']], ] <- NA_real_
+        # add_blocks <- function(){
+        #     usr <- par('usr')
+        #     md <- (usr[4] - usr[3]) * 0.05
+        #     m <- usr[4] + md
+        #     clip(usr[1], usr[2], usr[4], m + md * 2)
+        #     x_dt[, {
+        #         lines(c(st[1], et[.N]), rep(m, 2))
+        #         lines(rep(st[1], 2), m + c(-1 , 1) * md / 3)
+        #         lines(rep(et[.N], 2), m + c(-1 , 1) * md / 3)
+        #         text(mean(c(st[1], et[.N])), y = m + md, labels = .BY[[1]])
+        #     }, by = cal_block]
+        # }
+        par(mfrow = c(4, 1))
+        plot(x[, 'nh3'], gap.size.max = '1hours', col = 'lightgrey', ylim = range(x_all[, 'nh3'], na.rm = TRUE))
+        lines(x_dev[, 'nh3'], gap.size.max = '1hours', col = 'red')
+        lines(x_all[, 'nh3'], gap.size.max = '1hours')
+        # add_blocks()
+        plot(x[, 'no'], gap.size.max = '1hours', col = 'lightgrey', ylim = range(x_all[, 'no'], na.rm = TRUE))
+        lines(x_dev[, 'no'], gap.size.max = '1hours', col = 'red')
+        lines(x_all[, 'no'], gap.size.max = '1hours')
+        plot(x[, 'so2'], gap.size.max = '1hours', col = 'lightgrey', ylim = range(x_all[, 'so2'], na.rm = TRUE))
+        lines(x_dev[, 'so2'], gap.size.max = '1hours', col = 'red')
+        lines(x_all[, 'so2'], gap.size.max = '1hours')
+        plot(x[, 'i_max'], gap.size.max = '1hours', col = 'lightgrey', ylim = range(x_all[, 'i_max'], na.rm = TRUE))
+        lines(x_dev[, 'i_max'], gap.size.max = '1hours', col = 'red')
+        lines(x_all[, 'i_max'], gap.size.max = '1hours')
+        title(x[['revolver']][1], outer = TRUE, line = -1.5, cex.main = 1.5)
+    }
+    # add overall index
+    x_dt[, clean := !(dev_nh3 | dev_no | dev_so2 | dev_i_max)]
+    # return ibts
+    as.ibts(x_dt[(clean)])
+}
+# plot all important cal values
+plot_cal <- function(x, rev = if (length(unique(x[, 'revolver'])) == 1) x[['revolver']][1] else 'N2', ...) {
+    par(mfrow = c(4, 1))
+    plot(x[, 'nh3'], gap.size.max = '1hours', ylim = range(x[x$revolver %in% rev, 'nh3']), ...)
+    plot(x[, 'no'], gap.size.max = '1hours', ylim = range(x[x$revolver %in% rev, 'no']), ...)
+    plot(x[, 'so2'], gap.size.max = '1hours', ylim = range(x[x$revolver %in% rev, 'so2']), ...)
+    plot(x[, 'i_max'], gap.size.max = '1hours', ylim = range(x[x$revolver %in% rev, 'i_max']), ...)
+}
+
 
 if (FALSE) {
     FileAulaNH3 <- '~/repos/3_Scripts/4_MiniDOASAuswertung/ReferenceSpectras/S5/miniDOAS_S5_hafl_aula_spectra_2104081407/miniDOAS_S5_NH3_cal_spec_210222592007-210222172106_202104081407.txt'

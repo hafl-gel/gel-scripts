@@ -259,7 +259,7 @@ get_wl <- function(x) {
 
 #### plot method avgdat (use y as ref spec, types, xlim)
 plot.avgdat <- function(x, y = NULL, what = c('average', 'residuals', 'originals'), xlim = c(190, 230), 
-    ylim = NULL, type = 'l', main = NULL, ylab = NULL, ...) {
+    ylim = NULL, type = 'l', main = NULL, ylab = NULL, log = '', ...) {
     # cut to xlim
     lo <- xlim[1] - diff(xlim) * 0.04
     hi <- xlim[2] + diff(xlim) * 0.04
@@ -282,12 +282,12 @@ plot.avgdat <- function(x, y = NULL, what = c('average', 'residuals', 'originals
     xp <- get_wl(x)
     if (is.null(ylim)) ylim <- range(yp, na.rm = TRUE)
     if (NCOL(yp) > 1) {
-        plot(xp, x, type = 'n', xlim = xlim, ylim = ylim, xlab = 'nm', ylab = ylab, main = main, ...)
+        plot(xp, x, type = 'n', xlim = xlim, ylim = ylim, xlab = 'nm', ylab = ylab, main = main, log = log, ...)
         for (i in seq_len(ncol(yp))) {
             lines(xp, yp[, i], type = type, ...)
         }
     } else {
-        plot(xp, yp, xlim = xlim, ylim = ylim, type = type, xlab = 'nm', ylab = ylab, main = main, ...)
+        plot(xp, yp, xlim = xlim, ylim = ylim, type = type, xlab = 'nm', ylab = ylab, main = main, log = log, ...)
     }
 }
 

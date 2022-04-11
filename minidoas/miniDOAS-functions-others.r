@@ -420,7 +420,13 @@ avgSpec <- function(rawdat,type=c("raw","cal","ref","dark"),tracer=c("ambient","
     cuvetteGas <- switch(type,
         cal = {
             if (tracer=="ambient")stop("ambient & cal specified!")
-            if (is.na(cuvetteConc_mg))stop("Calibration concentration must be specified!")
+            if (is.na(cuvetteConc_mg))stop(
+                "Calibration concentration must be specified!\n",
+                "Cuvette revolver suisse 1-6:\n",
+                "   NH3: 193.4095 mg/m3 (not corrected with 1.16 Edinburgh correction)\n",
+                "   NO:  593.9938 mg/m3\n",
+                "   SO2: 76.29128 mg/m3\n"
+            )
             tracer
         },
         ref = ifelse(tracer=="ambient","none","N2")

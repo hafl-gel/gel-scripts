@@ -404,6 +404,11 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
         if (is.null(spec)) {
             stop('argument spec is unset. spec defines which SpecSet list entry will be selected')
         }
+        if (!(spec %in% names(file)[-1])) {
+            stop('Argument spec - recognized names are:', 
+                sprintf('    %s\n', names(file)[-1])
+                )
+        }
         if (spec %in% c('dat.ref.dark', 'dat.dark', 'dat.N2.dark')) is_dark <- TRUE
         # get entry
         spec_out <- file[[spec]]

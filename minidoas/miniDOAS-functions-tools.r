@@ -359,6 +359,7 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
                 data = cal[, fread(text = V1[26:1069], col.names = c('wl', 'cnt'))],
                 Calinfo = list(
                     info = info,
+                    spec.name = NULL,
                     cuvette.gas = tracer,
                     cuvette.conc = if (tracer == 'N2') '-' else info[8, as.numeric(val)],
                     cuvette.path = info[9, as.numeric(val)]
@@ -379,6 +380,7 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
                 data = cal[11:1054, .(wl = DOASinfo$Spectrometer$wavelength, cnt = as.numeric(V1))],
                 Calinfo = list(
                     info = info,
+                    spec.name = NULL,
                     cuvette.gas = tracer,
                     cuvette.conc = if (tracer == 'N2') '-' else info[3, convert2mg(val, tracer)],
                     cuvette.path = info[4, as.numeric(val)]
@@ -400,6 +402,7 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
             data = data.table(wl = DOASinfo$Spectrometer$wavelength, cnt = as.numeric(spec_out[['dat.spec']])),
             Calinfo = list(
                 info = data.table(var = 'timerange', val = paste0(spec_out$timerange, collapse = ' and ')),
+                spec.name = spec,
                 cuvette.gas = spec_out[['cuvette']][['cuvetteGas']],
                 cuvette.conc = spec_out[['cuvette']][['cuvetteConc_mg']],
                 cuvette.path = spec_out[['cuvette']][['cuvetteLength']]
@@ -408,24 +411,30 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
             )
     }
     # correct dark
-    if (is.null(dark)) {
+    out$Calinfo$dark.corrected = FALSE
+    if (!is_dark && is.null(dark)) {
         warning('no dark spectrum provided')
-    } else if(!isFALSE(dark)) {
+    } else if(!is_dark) {
         cdark <- dark$data[, cnt]
         out$data[, cnt := cnt - cdark]
+        out$Calinfo$dark.corrected = TRUE
     }
     # correct straylight
+    out$Calinfo$straylight.corrected = FALSE
     if (correct.straylight) {
         win <- getWindows(out$DOASinfo)
         dark <- out$data[, mean(cnt[win$pixel_straylight])]
         if (!lin_before_dark) {
             out$data[, cnt := cnt - dark]
         }
+        out$Calinfo$straylight.corrected = TRUE
     }
     # correct linearity
+    out$Calinfo$linearity.corrected = FALSE
     if (correct.linearity) {
         lin.coef <- out$DOASinfo$Spectrometer$'Linearity Coefficients'
         out$data[, cnt := cnt / linearity.func(cnt, lin.coef)]
+        out$Calinfo$linearity.corrected = TRUE
     }
     # correct.straylight afterwards
     if (correct.straylight && lin_before_dark) {
@@ -443,16 +452,19 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
 print.caldat <- function(x, ...){
     wl <- get_wl(x)
     cat('~~~~\n')
-    cat('\t', x$DOASinfo$DOASmodel, '/', x$DOASinfo$Spectrometer$Serial, '- calibration spectrum\n')
-    cat('\t cuvette gas:', x$Calinfo$cuvette.gas, '\n')
-    cat('\t cuvette concentration (mg/m3):', x$Calinfo$cuvette.conc, '\n')
-    cat('\t cuvette length (m):', x$Calinfo$cuvette.path, '\n')
-    cat('\t', min(wl), 'to', max(wl), 'nm', sprintf('(%s pixel)\n', length(wl)))
+    cat('\t', x$DOASinfo$DOASmodel, '/', x$DOASinfo$Spectrometer$Serial, '- calibration spectrum:', x$Calinfo$spec.name, '\n\n')
     switch(as.character(nrow(x$Calinfo$info))
         , '1' = cat('\t recorded between', x$Calinfo$info[1, val], '\n')
         , '9' = cat('\t recorded between', x$Calinfo$info[14, val], '\n')
         , cat('\t recorded between', x$Calinfo$info[6, val], '\n')
     )
+    cat('\t', min(wl), 'to', max(wl), 'nm', sprintf('(%s pixel)\n\n', length(wl)))
+    cat('\t cuvette gas:', x$Calinfo$cuvette.gas, '\n')
+    cat('\t cuvette concentration (mg/m3):', x$Calinfo$cuvette.conc, '\n')
+    cat('\t cuvette length (m):', x$Calinfo$cuvette.path, '\n\n')
+    cat('\t dark corrected:', x$Calinfo$dark.corrected, '\n')
+    cat('\t straylight corrected:', x$Calinfo$straylight.corrected, '\n')
+    cat('\t linearity corrected:', x$Calinfo$linearity.corrected, '\n')
     cat('~~~~\n')
 }
 

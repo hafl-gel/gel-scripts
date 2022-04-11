@@ -974,7 +974,7 @@ print.dc <- function(x, ...) {
     meas <- attr(x, 'meas')
     ref <- attr(attr(x, 'ref'), 'RawData')
     cat('***\ndoascurve:\n')
-    cat('   measurement spectrum recorded between', format(meas$Header[['st']]), 'and', format(meas$Header[['et']]), '\n')
+    cat('   measurement spectrum recorded between', format(meas$Header[['st']][1]), 'and', format(meas$Header[['et']][1]), '\n')
     cat('   reference spectrum recorded between', format(ref$Header[['st']][1]), 'and', format(ref$Header[['et']][length(ref$Header[['et']])]), '\n')
     cat('***\n')
 }

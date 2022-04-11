@@ -341,8 +341,9 @@ get_Cheng <- function() {
 }
 
 #### read calibration spectrum
-read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL,
-    correct.straylight = TRUE, correct.linearity = TRUE, lin_before_dark = FALSE, dark = NULL) {
+read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark = FALSE,
+    correct.straylight = !is_dark, correct.linearity = !is_dark, lin_before_dark = FALSE, 
+    dark = if (is_dark) is_dark else NULL) {
     if (is.character(file)) {
         cal <- fread(file, sep = '\n', header = FALSE)
         if (nrow(cal) == 1069) {
@@ -408,7 +409,7 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL,
     # correct dark
     if (is.null(dark)) {
         warning('no dark spectrum provided')
-    } else {
+    } else if(!isFALSE(dark)) {
         cdark <- dark$data[, cnt]
         out$data[, cnt := cnt - cdark]
     }

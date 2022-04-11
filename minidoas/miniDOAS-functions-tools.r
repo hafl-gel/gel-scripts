@@ -36,6 +36,9 @@ print.rawdat <- function(x, ...){
 
 #### print avgdat method
 print.avgdat <- function(x, ...) {
+    has_dc <- attr(x, 'dark.corrected')
+    has_sc <- attr(x, 'straylight.corrected')
+    has_lc <- attr(x, 'linearity.corrected')
     x <- attr(x, 'RawData')
     nc <- ncol(x$RawData)
     wl <- get_wl(x)
@@ -44,6 +47,9 @@ print.avgdat <- function(x, ...) {
     cat('\t', nc, 'spectra averaged\n')
     cat('\t', min(wl), 'to', max(wl), 'nm', sprintf('(%s pixel)\n', length(wl)))
     cat('\t recorded between', format(x$Header$st[1]),'and', format(x$Header$et[nc]),'\n')
+    cat('\t dark corrected:', has_dc, '\n')
+    cat('\t straylight corrected:', has_sc, '\n')
+    cat('\t linearity corrected:', has_lc, '\n')
     cat('~~~~\n')
 }
 
@@ -120,6 +126,7 @@ single_specs <- function(folder, at, tz = 'Etc/GMT-1',
         , class = 'single_spec'
         , straylight.corrected = correct.straylight
         , linearity.corrected = correct.linearity
+        , dark.corrected = !is.null(dark)
         )
 }
 
@@ -131,6 +138,9 @@ print.single_spec <- function(x, lo = 200, hi = 230, ...) {
     xi <- cut_wl(x, lo, hi)
     cat('***\nSingle spectrum:\n')
     cat('   recorded between', format(rd$Header[['st']]), 'and', format(rd$Header[['et']]), '\n')
+    cat('\t dark corrected:', attr(x, 'dark.corrected'), '\n')
+    cat('\t straylight corrected:', attr(x, 'straylight.corrected'), '\n')
+    cat('\t linearity corrected:', attr(x, 'linearity.corrected'), '\n')
     cat(sprintf('   I (%i to %i nm) min/avg/max: %1.0f/%1.0f/%1.0f\n***\n', lo, hi, min(xi, na.rm = TRUE), mean(xi, na.rm = TRUE), max(xi, na.rm = TRUE)))
 }
 plot.single_spec <- function(x, y, lo = 190, hi = 230, ylab = 'counts', xlab = 'nm', ...) {
@@ -207,6 +217,7 @@ avg_spec <- function(folder, from = NULL, to = NULL, tz = 'Etc/GMT-1',
         , class = 'avgdat'
         , straylight.corrected = correct.straylight
         , linearity.corrected = correct.linearity
+        , dark.corrected = !is.null(dark)
         )
 }
 

@@ -514,7 +514,7 @@ calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
         # file path or chen
         if (tolower(meas) == 'chen') {
             # call chen2dc
-            chen2dc(meas, ref, ftype, fstrength, fwin, fitwin, shift)
+            return(chen2dc(meas, ref, ftype, fstrength, fwin, fitwin, shift))
         } else {
             meas <- read_cal(meas, correct.straylight = correct.straylight, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
         }
@@ -563,6 +563,69 @@ calc_wl <- function(x, pixel = NULL) {
 get_pixel <- function(x) {
     x$DOASinfo$Spectrometer$pixel
 }
+
+# new version of cheng2dc (argh!!!)
+chen2dc <- function(cheng, ref, shift = 0, filter = TRUE, fstrength = 5, ftype = 'Rect', ...) {
+    # copy cheng data.table
+    dta <- copy(cheng$data)
+    # create synthetic cal spec
+    # -> log(ref) - 193 * cheng2mg_m3 (T = exp(-sum(t)), t = sigma_i * c_i)
+    # get/add 'straylight'
+    ref$data <- copy(ref$data)
+    win <- getWindows(ref$DOASinfo$DOASmodel)
+    stray <- ref$data[win$pixel_straylight, mean(cnt)]
+    if (stray > 1500) {
+        # stray <- 2400
+        ref$data[, cnt := cnt - stray]
+    }
+    # cheng (sigma in cm2 / molecule) to m2 / ug
+    dta[, cal := sigma2dc(cnt)]
+    # map cal to ref wl
+    cal_ref <- cnt2wl(dta[, wl], ref$data[, wl], dta[, cal], shift = shift)
+    # add cheng to ref spec
+    pseudo_meas <- ref
+    pseudo_meas$data <- copy(ref$data)
+    pseudo_cal <- ref$data[, exp(log(cnt) - cal_ref)]
+    pseudo_meas$data[, cnt := pseudo_cal]
+    # add filter
+    if (filter) {
+        pseudo_meas$data[, cnt := lowpass.filter(cnt, ftype, fstrength, ...)]
+        ref$data[, cnt := lowpass.filter(cnt, ftype, fstrength, ...)]
+    }
+    # calc dc
+    calc_dc(pseudo_meas, ref)
+}
+# cheng (sigma in cm2 / molecule) to m2 / ug -> dann mit cuvetten pfad integr. conc mult
+# dc werden jeweils durch cuvetten pfad conc in ug / m3 * m geteilt!
+sigma2dc <- function(sigma) {
+    # cm2 -> m2
+    sigma * 1e-4 *
+    # 1 / molecule -> 1 / mol
+    6.02214076e23 *
+    # 1 / mol -> mult mit cuvetten conc in mol / m3 * m
+    # cuvetten conc (pfad int.: mol / m3 * m)
+    193.4095 / 17e3 * 0.075
+}
+# map cnt to different wl
+cnt2wl <- function(wl_from, wl_to, cnt, shift_nm = 0) {
+    dfrom <- diff(wl_from) / 2
+    from1 <- wl_from - c(dfrom[1], dfrom) + shift_nm
+    from2 <- wl_from + c(dfrom, dfrom[length(dfrom)]) + shift_nm
+    dto <- diff(wl_to) / 2
+    to1 <- wl_to - c(dto[1], dto)
+    to2 <- wl_to + c(dto, dto[length(dto)])
+    bins <- cutIntervals(from1, from2, to1, to2)
+    unlist(
+        lapply(bins, function(b) {
+            if (is.null(b)) {
+                NA_real_
+            } else {
+                sum(cnt[b[, 1]] * b[, 2]) / sum(b[, 2])
+            }
+        })
+    )
+}
+
 
 #### average cheng to reference doas
 cheng2doas <- function(cheng, ref, wvlim = NULL) {

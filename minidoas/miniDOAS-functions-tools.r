@@ -143,22 +143,21 @@ print.single_spec <- function(x, lo = 200, hi = 230, ...) {
     cat('\t linearity corrected:', attr(x, 'linearity.corrected'), '\n')
     cat(sprintf('   I (%i to %i nm) min/avg/max: %1.0f/%1.0f/%1.0f\n***\n', lo, hi, min(xi, na.rm = TRUE), mean(xi, na.rm = TRUE), max(xi, na.rm = TRUE)))
 }
-plot.single_spec <- function(x, y, lo = 190, hi = 230, ylab = 'counts', xlab = 'nm', ...) {
-    x <- cut_wl(x, lo, hi)
+plot.single_spec <- function(x, y, ylab = 'counts', xlab = 'nm', xlim = c(190, 230), ...) {
+    if(is.null(xlim)) xlim <- range(get_wl(x))
+    x <- cut_wl(x, xlim[1], xlim[2])
     y <- x
     class(y) <- 'numeric'
     x <- get_wl(x)
     plot(x, y, xlab = xlab, ylab = ylab, ...)
 }
-lines.single_spec <- function(x, lo = 190, hi = 230, ...) {
-    x <- cut_wl(x, lo, hi)
+lines.single_spec <- function(x, ...) {
     y <- x
     class(y) <- 'numeric'
     x <- get_wl(x)
     lines(x, y, ...)
 }
-points.single_spec <- function(x, lo = 190, hi = 230, ...) {
-    x <- cut_wl(x, lo, hi)
+points.single_spec <- function(x, ...) {
     y <- x
     class(y) <- 'numeric'
     x <- get_wl(x)
@@ -604,10 +603,40 @@ cheng2dc <- function(dc, cheng = NULL, shift = FALSE) {
 }
 
 #### plot method for caldat
-plot.caldat <- function(x, type = 'l', ...) {
-    x$data[, plot(wl, cnt, type = type, ...)]
+plot.caldat <- function(x, tau = 0, type = 'l', xlim = c(190, 230), ...) {
+    if (tau != 0) {
+        # copy data.table!
+        x$data <- copy(x$data)
+        # fix tau shift
+        x$data[, wl := {
+            ind <- match(wl, x[['DOASinfo']][['Spectrometer']][['wavelength']])
+            # shift indices
+            ind_shifted <- ind - tau
+            # < 1 should give NA
+            ind_shifted[ind_shifted < 1] <- length(ind) + 1
+            # get new wavelengths
+            x$wl <- x[['DOASinfo']][['Spectrometer']][['wavelength']][ind_shifted]
+        }]
+    }
+    # fix xlim = NULL
+    if (is.null(xlim)) xlim <- x$data[, range(wl, na.rm = TRUE)]
+    x$data[wl >= xlim [1] & wl <= xlim[2], plot(wl, cnt, type = type, xlim = xlim, ...)]
 }
-lines.caldat <- function(x, ...) {
+lines.caldat <- function(x, tau = 0, ...) {
+    if (tau != 0) {
+        # copy data.table!
+        x$data <- copy(x$data)
+        # fix tau shift
+        x$data[, wl := {
+            ind <- match(wl, x[['DOASinfo']][['Spectrometer']][['wavelength']])
+            # shift indices
+            ind_shifted <- ind - tau
+            # < 1 should give NA
+            ind_shifted[ind_shifted < 1] <- length(ind) + 1
+            # get new wavelengths
+            x$wl <- x[['DOASinfo']][['Spectrometer']][['wavelength']][ind_shifted]
+        }]
+    }
     x$data[, lines(wl, cnt, ...)]
 }
 

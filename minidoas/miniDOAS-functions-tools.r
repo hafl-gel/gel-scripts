@@ -1192,7 +1192,7 @@ eval_raw <- function(rawdat, calspecs, path.length, tau.shift = 0, lite = TRUE, 
 }
 
 # function to clean calibration blocks
-clean_cal <- function(x_dt, times, show = TRUE,
+clean_cal <- function(x_dt, max_time_gap = 5 * 60, show = TRUE,
     dev_med = function(x) 3 * mad(x, na.rm = TRUE), 
     exclude_times = NULL, subset = NULL) {
     # check x_dt

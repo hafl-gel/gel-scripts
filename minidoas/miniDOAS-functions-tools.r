@@ -1271,8 +1271,14 @@ clean_cal <- function(x_dt, max_time_gap = 5 * 60, show = TRUE,
     # return ibts
     as.ibts(x_dt[(clean)])
 }
+
 # plot all important cal values
-plot_cal <- function(x, rev = if (length(unique(x[, 'revolver'])) == 1) x[['revolver']][1] else 'N2', ...) {
+plot_cal <- function(x, rev = if (length(unique(x[, 'revolver'])) == 1) x[['revolver']][1] else 'N2',
+    fac = c(nh3 = 1, so2 = 1, no = 1), ...) {
+    # scale before plotting
+    for (f in names(fac)) {
+        x[, f] <- x[, f] * fac[f]
+    }
     par(mfrow = c(4, 1))
     plot(x[, 'nh3'], gap.size.max = '1hours', ylim = range(x[x$revolver %in% rev, 'nh3']), ...)
     plot(x[, 'no'], gap.size.max = '1hours', ylim = range(x[x$revolver %in% rev, 'no']), ...)

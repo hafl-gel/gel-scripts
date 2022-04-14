@@ -1273,7 +1273,7 @@ clean_cal <- function(x_dt, max_time_gap = 5 * 60, show = TRUE,
 }
 
 # plot all important cal values
-plot_cal <- function(x, rev = if (length(unique(x[, 'revolver'])) == 1) x[['revolver']][1] else 'N2',
+plot_cal <- function(x, rev = if (length(unique(x[['revolver']])) == 1) x[['revolver']][1] else 'N2',
     fac = c(nh3 = 1, so2 = 1, no = 1), ...) {
     # scale before plotting
     for (f in names(fac)) {

@@ -1217,7 +1217,7 @@ clean_cal <- function(x_dt, max_time_gap = 5 * 60, show = TRUE,
     x_dt[, cal_block := {
         xs <- as.numeric(st)
         xe <- as.numeric(et)
-        paste0(revolver, '_', cumsum(c(0, as.integer(xe[-1] - xs[-.N] > max_time_gap))))
+        paste0(revolver, '_', cumsum(c(0, as.integer((xe[-1] - xs[-.N]) > max_time_gap))))
     }]
     # find median values by block & highlight deviation > med +/- ?
     nms <- names(dev_med)

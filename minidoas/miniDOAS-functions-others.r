@@ -650,12 +650,9 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
             }
 
             if (type=="cal") {
-                if(
-                    !is.null(spec$cuvetteConc_mg) ||
-                    spec$cuvetteConc_mg>0 ||
-                    is.null(spec$cuvetteLength) ||
-                    spec$cuvetteLength>0
-                ) stop('Please provide valid info on cuvette length and concentration')
+                if (is.null(spec$cuvetteLength)) spec$cuvetteLength <- 0.075
+                if ((!is.null(spec$cuvetteConc_mg) && spec$cuvetteConc_mg <= 0) ||
+                    spec$cuvetteLength <= 0) stop('Please provide valid info on cuvette length and concentration')
             }
 
             if (tracer != 'unknown spec.name') {

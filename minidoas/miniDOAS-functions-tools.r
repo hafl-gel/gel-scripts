@@ -1198,6 +1198,8 @@ clean_cal <- function(x_dt, max_time_gap = 5 * 60, show = TRUE,
     # check x_dt
     if (!is.data.table(x_dt)) {
         stop('Please provide a data.table containing minidoas evaluation results')
+    } else {
+        x_dt <- copy(x_dt)
     }
     # check dev_med
     if (length(dev_med) != 4) {
@@ -1210,8 +1212,8 @@ clean_cal <- function(x_dt, max_time_gap = 5 * 60, show = TRUE,
         browser()
     }
     if (!missing(subset)) {
-        cat('Fix argument "subset"!\n')
-        browser()
+        subs <- substitute(subset)
+        x_dt[, excl_subset := !eval(subs)]
     }
     # find blocks of cal (mt diff > 5? min)
     x_dt[, cal_block := {
@@ -1267,7 +1269,11 @@ clean_cal <- function(x_dt, max_time_gap = 5 * 60, show = TRUE,
         title(x[['revolver']][1], outer = TRUE, line = -1.5, cex.main = 1.5)
     }
     # add overall index
-    x_dt[, clean := !(dev_nh3 | dev_no | dev_so2 | dev_i_max)]
+    if ('excl_subset' %in% names(x_dt)) {
+        x_dt[, clean := !(dev_nh3 | dev_no | dev_so2 | dev_i_max | excl_subset)]
+    } else {
+        x_dt[, clean := !(dev_nh3 | dev_no | dev_so2 | dev_i_max)]
+    }
     # return ibts
     as.ibts(x_dt[(clean)])
 }

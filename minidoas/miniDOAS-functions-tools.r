@@ -1214,6 +1214,8 @@ clean_cal <- function(x_dt, max_time_gap = 5 * 60, show = TRUE,
     if (!missing(subset)) {
         subs <- substitute(subset)
         x_dt[, excl_subset := !eval(subs)]
+    } else {
+        x_dt[, excl_subset := FALSE]
     }
     # find blocks of cal (mt diff > 5? min)
     x_dt[, cal_block := {
@@ -1270,12 +1272,14 @@ clean_cal <- function(x_dt, max_time_gap = 5 * 60, show = TRUE,
     }
     # add overall index
     if ('excl_subset' %in% names(x_dt)) {
-        x_dt[, clean := !(dev_nh3 | dev_no | dev_so2 | dev_i_max | excl_subset)]
+        x_dt[, ok := !(dev_nh3 | dev_no | dev_so2 | dev_i_max | excl_subset)]
     } else {
-        x_dt[, clean := !(dev_nh3 | dev_no | dev_so2 | dev_i_max)]
+        x_dt[, ok := !(dev_nh3 | dev_no | dev_so2 | dev_i_max)]
     }
+    # add column block
+    x_dt[, block := NA_integer_][(ok), block := frank(as.integer(sub('.*_', '', cal_block)), ties.method = 'dense')]
     # return ibts
-    as.ibts(x_dt[(clean)])
+    as.ibts(x_dt[(ok)])
 }
 
 # plot all important cal values

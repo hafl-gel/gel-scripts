@@ -1078,7 +1078,7 @@ print.dc <- function(x, ...) {
     if (is.null(ref$Header[['st']])) {
         ref_txt <- attr(x, 'ref')$Calinfo$info[, val]
     } else {
-        ref_txt <- paste(format(ref$Header[['st']][1]), 'and', format(ref$Header[['et']][length(meas$Header[['et']])]))
+        ref_txt <- paste(format(ref$Header[['st']][1]), 'and', format(ref$Header[['et']][length(ref$Header[['et']])]))
     }
     cat('***\ndoascurve:\n')
     cat('   measurement spectrum recorded between', meas_txt, '\n')

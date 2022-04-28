@@ -737,7 +737,11 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
                     ,cuvetteGas=gsub("cuvette gas: ","",info.spec[9],fixed=TRUE)
                     ))  
             # get timerange from file names
-            timerange <- strptime(unlist(strsplit(sub('miniDOAS.*_([0-9]{12}[-][0-9]{12})[.]txt', '\\1', basename(dir.spec[which(ind)])), split = '[-]')), '%Y%m%d%H%M', tz = 'Etc/GMT-1')
+            tms <- unlist(strsplit(info.spec[18], split = ' to '))
+            timerange <- c(
+                fast_strptime(tms[1], 'averaging period: %Y-%m-%d %H:%M:%S', tz = 'Etc/GMT-1', lt = FALSE),
+                fast_strptime(tms[2], '%Y-%m-%d %H:%M:%S', tz = 'Etc/GMT-1', lt = FALSE)
+                )
         }
         lite <- TRUE
     }

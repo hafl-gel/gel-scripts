@@ -704,7 +704,7 @@ lines.caldat <- function(x, tau = 0, ...) {
 }
 
 #### plot method for dc
-plot.dc <- function(x, fctr = 1, tau = 0, type = 'l', xlab = 'nm', ylab = 'doascurve', ...) {
+plot.dc <- function(x, fctr = 1, tau = 0, per_molecule = FALSE, type = 'l', xlab = 'nm', ylab = 'doascurve', ...) {
     x$cnt <- x$cnt * fctr
     if (tau != 0) {
         # fix tau shift
@@ -715,10 +715,14 @@ plot.dc <- function(x, fctr = 1, tau = 0, type = 'l', xlab = 'nm', ylab = 'doasc
         ind_shifted[ind_shifted < 1] <- length(ind) + 1
         # get new wavelengths
         x$wl <- attr(x, 'meas')[['DOASinfo']][['Spectrometer']][['wavelength']][ind_shifted]
+    }
+    if (per_molecule) {
+        # sigma2dc inverse
+        x$cnt <- dc2sigma(x$cnt, attr(x, 'meas')[['Calinfo']][['cuvette.conc']]) 
     }
     plot(x$wl, x$cnt, type = type, xlab = xlab, ylab = ylab, ...)
 }
-lines.dc <- function(x, fctr = 1, tau = 0, ...) {
+lines.dc <- function(x, fctr = 1, tau = 0, per_molecule = FALSE, ...) {
     x$cnt <- x$cnt * fctr
     if (tau != 0) {
         # fix tau shift
@@ -730,8 +734,21 @@ lines.dc <- function(x, fctr = 1, tau = 0, ...) {
         # get new wavelengths
         x$wl <- attr(x, 'meas')[['DOASinfo']][['Spectrometer']][['wavelength']][ind_shifted]
     }
+    if (per_molecule) {
+        # sigma2dc inverse
+        x$cnt <- dc2sigma(x$cnt, attr(x, 'meas')[['Calinfo']][['cuvette.conc']]) 
+    }
     lines(x$wl, x$cnt, ...)
 }
+# sigma2dc inverse
+dc2sigma <- function(dc, mgm3 = 193.4095) {
+    dc / 1e-4 / 6.02214076e23 / mgm3 * 17e3 / 0.075
+}
+
+# #### plot chen
+# plot.chen <- function(x, ...) {
+
+# }
 
 
 #### further plotting helpers

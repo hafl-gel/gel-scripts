@@ -739,7 +739,7 @@ plot.dc <- function(x, fctr = 1, tau = 0, per_molecule = FALSE, type = 'l', xlab
     }
     if (per_molecule) {
         # sigma2dc inverse
-        x$cnt <- dc2sigma(x$cnt, attr(x, 'meas')[['Calinfo']][['cuvette.conc']]) 
+        dc2sigma(x) 
     }
     plot(x$wl, x$cnt, type = type, xlab = xlab, ylab = ylab, ...)
 }
@@ -757,13 +757,28 @@ lines.dc <- function(x, fctr = 1, tau = 0, per_molecule = FALSE, ...) {
     }
     if (per_molecule) {
         # sigma2dc inverse
-        x$cnt <- dc2sigma(x$cnt, attr(x, 'meas')[['Calinfo']][['cuvette.conc']]) 
+        dc2sigma(x) 
     }
     lines(x$wl, x$cnt, ...)
 }
+# TODO: add argument molar mass
 # sigma2dc inverse
-dc2sigma <- function(dc, mgm3 = 193.4095) {
-    dc / 1e-4 / 6.02214076e23 / mgm3 * 17e3 / 0.075
+dc2sigma <- function(dc, mgm3 = NULL) {
+    dc_name <- deparse(substitute(dc))
+    if (is.null(mgm3)) {
+        meas <- attr(dc, 'meas')
+        mgm3 <- switch(class(meas)[1]
+            , rawdat = meas[['Header']][['cuvetteConc_mg']]
+            , caldat = attr(dc, 'meas')[['Calinfo']][['cuvette.conc']]
+            , {
+                cat('dc2sigma not yet implemented for class', class(meas)[1], '!\n')
+                browser()
+            }
+            )
+    }
+    dc$cnt <- dc$cnt / 1e-4 / 6.02214076e23 / mgm3 * 17e3 / 0.075
+    assign(dc_name, dc, sys.frame(-1))
+    invisible(NULL)
 }
 
 #### plot chen

@@ -580,10 +580,13 @@ chen2dc <- function(cheng, ref, shift = 0, filter = TRUE, fstrength = 5, ftype =
     }
     # cheng (sigma in cm2 / molecule) to m2 / ug
     dta[, cal := sigma2dc(cnt)]
-    # map cal to ref wl
-    cal_ref <- cnt2wl(dta[, wl], ref$data[, wl], dta[, cal], shift = shift)
     # add cheng to ref spec
     pseudo_meas <- ref
+    pseudo_meas[['Calinfo']][['cuvette.gas']] <- 'NH3'
+    pseudo_meas[['Calinfo']][['cuvette.conc']] <- 193.4095
+    pseudo_meas[['Calinfo']][['dark.corrected']] <- TRUE
+    # map cal to ref wl
+    cal_ref <- cnt2wl(dta[, wl], ref$data[, wl], dta[, cal], shift = shift)
     pseudo_meas$data <- copy(ref$data)
     pseudo_cal <- ref$data[, exp(log(cnt) - cal_ref)]
     pseudo_meas$data[, cnt := pseudo_cal]
@@ -745,10 +748,10 @@ dc2sigma <- function(dc, mgm3 = 193.4095) {
     dc / 1e-4 / 6.02214076e23 / mgm3 * 17e3 / 0.075
 }
 
-# #### plot chen
-# plot.chen <- function(x, ...) {
-
-# }
+#### plot chen
+plot.chen <- function(x, xlim = c(190, 230), type = 'l', ...) {
+    x$data[, plot(wl, cnt, type = type, xlim = xlim, ...)]
+}
 
 
 #### further plotting helpers

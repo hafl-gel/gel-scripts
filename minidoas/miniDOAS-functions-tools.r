@@ -571,7 +571,24 @@ cheng2dc <- function(cheng, ref, shift = 0, filter = TRUE, fstrength = 5, ftype 
     # create synthetic cal spec
     # -> log(ref) - 193 * cheng2mg_m3 (T = exp(-sum(t)), t = sigma_i * c_i)
     # get/add 'straylight'
-    ref$data <- copy(ref$data)
+    if (inherits(ref, 'avgdat')) {
+        old <- ref
+        ref <- attr(old, 'RawData')
+        # add Calinfo etc.
+        ref <- structure(list(
+            data = data.table(wl = ref$DOASinfo$Spectrometer$wavelength, cnt = as.numeric(old)),
+            Calinfo = list(
+                info = data.table(val = 'todo'),
+                spec.name = 'dat.NH3.N2',
+                cuvette.gas = 'todo',
+                cuvette.conc = '-',
+                cuvette.path = 'todo'
+                ),
+            DOASinfo = ref$DOASinfo
+        ), class = 'caldat')
+    } else {
+        ref$data <- copy(ref$data)
+    }
     win <- getWindows(ref$DOASinfo$DOASmodel)
     stray <- ref$data[win$pixel_straylight, mean(cnt)]
     if (stray > 1500) {
@@ -582,6 +599,7 @@ cheng2dc <- function(cheng, ref, shift = 0, filter = TRUE, fstrength = 5, ftype 
     dta[, cal := sigma2dc(cnt)]
     # add cheng to ref spec
     pseudo_meas <- ref
+    pseudo_meas[['Calinfo']][['info']] <- data.table(val = 'Cheng 2006')
     pseudo_meas[['Calinfo']][['cuvette.gas']] <- 'NH3'
     pseudo_meas[['Calinfo']][['cuvette.conc']] <- 193.4095
     pseudo_meas[['Calinfo']][['dark.corrected']] <- TRUE

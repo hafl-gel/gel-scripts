@@ -763,7 +763,7 @@ lines.dc <- function(x, fctr = 1, tau = 0, per_molecule = FALSE, ...) {
 }
 # TODO: add argument molar mass
 # sigma2dc inverse
-dc2sigma <- function(dc, mgm3 = NULL) {
+dc2sigma <- function(dc, mgm3 = NULL, copy = FALSE) {
     dc_name <- deparse(substitute(dc))
     if (is.null(mgm3)) {
         meas <- attr(dc, 'meas')
@@ -777,8 +777,10 @@ dc2sigma <- function(dc, mgm3 = NULL) {
             )
     }
     dc$cnt <- dc$cnt / 1e-4 / 6.02214076e23 / mgm3 * 17e3 / 0.075
-    assign(dc_name, dc, sys.frame(-1))
-    invisible(NULL)
+    if (!copy) {
+        assign(dc_name, dc, sys.frame(-1))
+    }
+    invisible(dc)
 }
 
 #### plot chen

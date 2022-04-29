@@ -513,8 +513,8 @@ calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
     if (is.character(meas)) {
         # file path or chen
         if (tolower(meas) == 'chen') {
-            # call chen2dc
-            return(chen2dc(meas, ref, ftype, fstrength, fwin, fitwin, shift))
+            # call cheng2dc
+            return(cheng2dc(meas, ref, ftype, fstrength, fwin, fitwin, shift))
         } else {
             meas <- read_cal(meas, correct.straylight = correct.straylight, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
         }
@@ -564,8 +564,8 @@ get_pixel <- function(x) {
     x$DOASinfo$Spectrometer$pixel
 }
 
-# new version of cheng2dc (argh!!!)
-chen2dc <- function(cheng, ref, shift = 0, filter = TRUE, fstrength = 5, ftype = 'Rect', ...) {
+# new version of old_cheng2dc (argh!!!)
+cheng2dc <- function(cheng, ref, shift = 0, filter = TRUE, fstrength = 5, ftype = 'Rect', ...) {
     # copy cheng data.table
     dta <- copy(cheng$data)
     # create synthetic cal spec
@@ -655,7 +655,7 @@ convertCS <- function(x) {
 
 
 #### convert cheng to dc
-cheng2dc <- function(dc, cheng = NULL, shift = FALSE) {
+old_cheng2dc <- function(dc, cheng = NULL, shift = FALSE) {
     stopifnot(!is.null(attr(dc, 'meas')$DOASinfo))
     if (is.null(cheng)) cheng <- get_Cheng()
     if (shift) {
@@ -1333,8 +1333,8 @@ if (FALSE) {
     dcOld <- calc_dc(FileOldNH3, FileOldN2, correct.straylight = c_dark, correct.linearity = c_lin, lin_before_dark = lin_first)
     dsAula <- attr(dcAula, 'ds')[attr(dcAula, 'win')$pixel_filter]
     dsOld <- attr(dcOld, 'ds')[attr(dcOld, 'win')$pixel_filter]
-    chAula <- cheng2dc(dcAula)
-    chOld <- cheng2dc(dcOld)
+    chAula <- old_cheng2dc(dcAula)
+    chOld <- old_cheng2dc(dcOld)
 
     type <- 'l'
     plot(dcAula$wl, dcAula$cnt, type = type)

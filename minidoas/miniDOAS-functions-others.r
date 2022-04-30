@@ -375,11 +375,8 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
     # get eval period subset
     takeme <- (header$et >= timerange[1]) & (header$st <= timerange[2])
 
-    # bind raw data
-    RawData <- data.frame(lapply(raw_data, function(x) x[[1]][, -1]))[, takeme, drop = FALSE]
-
-    # get timerange:
-    if (!length(RawData)) stop("No data available for specified time range!\n")
+    # check timerange:
+    if (!any(takeme)) stop("No data available for specified time range!\n")
 
     # subset header
     header <- header[takeme, ]
@@ -395,8 +392,11 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
         stringsAsFactors = FALSE
     )
 
+    # select data in timerange, keep list
+    RawData <- lapply(raw_data, function(x) x[[1]][, -1])[takeme]
+
     # devide total counts by # of accumulations
-    RawData <- sweep(RawData, 2, Header[, "AccNum"], "/")
+    RawData <- mapply('/', RawData, Header[, 'AccNum'], SIMPLIFY = FALSE)
 
     return(list(RawData=RawData,Header=Header,DOASinfo=DOASinfo))
 }
@@ -1193,7 +1193,6 @@ evalOffline <- function(
     ################################################################################
     
     cat('\nProcessing spectra...\n')
-
     # correct cal/ref specs:
     SpecCorr <- process_spectra(CalRefSpecs, rawData = RawData, correct.dark = correct.dark, 
         correct.linearity = correct.linearity, correct.straylight = correct.straylight, 

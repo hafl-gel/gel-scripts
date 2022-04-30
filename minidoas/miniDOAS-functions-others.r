@@ -151,7 +151,7 @@ process_dailyfiles <- function(folders, path_data, doas_info, RawData) {
                 et = parse_date_time(sub("^.*_", "", dat[doas_info$rawdata.structure$"Acquisition stop time", -1]), doas_info$rawdata.structure$"Time Format", tz = tz(doas_info$timerange))
                 )
             # prepare raw data as list
-            out <- list(intensity = apply(dat[-seq.int(doas_info$rawdata.structure$'Header Lines'), ], 2, as.numeric), header = header)
+            out <- list(intensity = lapply(dat[-seq.int(doas_info$rawdata.structure$'Header Lines'), ], as.numeric), header = header)
             # write daily file (files, data, path)
             write_daily(basename(rawdat), out, file.path(path_data, i))
             # return list
@@ -323,7 +323,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
                     )
 
                     # write raw data as list
-                    raw_data[[i]] <- list(intensity = apply(dat[-seq.int(DOASinfo$rawdata.structure$'Header Lines'), ], 2, as.numeric), header = header)
+                    raw_data[[i]] <- list(intensity = lapply(dat[-seq.int(DOASinfo$rawdata.structure$'Header Lines'), ], as.numeric), header = header)
                 } else {
                     raw_data <- raw_data[-match(i, names(raw_data))]
                 } 
@@ -393,7 +393,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
     )
 
     # select data in timerange, keep list
-    RawData <- lapply(raw_data, function(x) x[[1]][, -1])[takeme]
+    RawData <- unlist(lapply(raw_data, function(x) x[[1]]), recursive = FALSE)[c(FALSE, takeme)]
 
     # devide total counts by # of accumulations
     RawData <- mapply('/', RawData, Header[, 'AccNum'], SIMPLIFY = FALSE)
@@ -1284,8 +1284,6 @@ evalOffline <- function(
 
         # verbose
         cat("\nParallel computing doascurve and fit...\n\n")
-
-        browser()
 
         # split diffspecs
         p_index <- parallel::splitIndices(length(DiffSpec$diffspec), length(cl))

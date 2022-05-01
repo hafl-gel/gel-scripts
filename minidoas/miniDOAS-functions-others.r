@@ -412,7 +412,7 @@ avgSpec <- function(rawdat,type=c("raw","cal","ref","dark"),tracer=c("ambient","
     Specs <- rawdat[[1]]
     # average specs:
     # SpecAvg <- colMeans(Specs,na.rm=TRUE)
-    SpecAvg <- rowMeans(Specs,na.rm=TRUE)
+    SpecAvg <- rowMeans(as.data.frame(Specs),na.rm=TRUE)
 
     type <- type[1]
     tracer <- tracer[1]

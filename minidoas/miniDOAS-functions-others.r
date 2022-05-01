@@ -393,7 +393,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
     )
 
     # select data in timerange, keep list
-    RawData <- unlist(lapply(raw_data, function(x) x[[1]]), recursive = FALSE)[c(FALSE, takeme)]
+    RawData <- unlist(lapply(raw_data, function(x) x[[1]][-1]), recursive = FALSE)[takeme]
 
     # devide total counts by # of accumulations
     RawData <- mapply('/', RawData, Header[, 'AccNum'], SIMPLIFY = FALSE)

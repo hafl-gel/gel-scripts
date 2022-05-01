@@ -477,11 +477,11 @@ avgSpec <- function(rawdat,type=c("raw","cal","ref","dark"),tracer=c("ambient","
         ,"~~~ "
         ,paste0("averaging period: ",format(rawdat[[2]][1,"st"])," to ",format(rev(rawdat[[2]][,"et"])[1]))
         ,paste0("averaged ",length(rawdat[[2]][,"et"])," spectra")
-        ,paste0("number of accumulations: ",paste(range(rawdat[[2]][,"AccNum"]),collapse=" to ")," (avg: ",sprintf("%1.1f",mean(rawdat[[2]][,"AccNum"])),")")
-        ,paste0("exposure time: ",paste(range(rawdat[[2]][,"Expos"]),collapse=" to ")," (avg: ",sprintf("%1.1f",mean(rawdat[[2]][,"Expos"])),")")
-        ,paste0("TEC temperature (deg C): ",paste(range(as.numeric(rawdat[[2]][,"TECTemp"])),collapse=" to ")," (avg: ",sprintf("%1.1f",mean(as.numeric(rawdat[[2]][,"TECTemp"]))),")")
-        ,paste0("ambient temperature (deg C): ",paste(range(as.numeric(gsub(",.*$","",rawdat[[2]][,"Klima"]))),collapse=" to ")," (avg: ",sprintf("%1.1f",mean(as.numeric(gsub(",.*$","",rawdat[[2]][,"Klima"])))),")")
-        ,paste0("Imax: ",sprintf("%1.1f to %1.1f",min(apply(Specs,2,max)),max(apply(Specs,2,max)))," (avg: ",sprintf("%1.1f",max(SpecAvg)),")")
+        ,paste0("number of accumulations: ",paste(Info$AccNum$range,collapse=" to ")," (avg: ",sprintf("%1.1f",Info$AccNum$mean),")")
+        ,paste0("exposure time: ",paste(Info$Expos$range,collapse=" to ")," (avg: ",sprintf("%1.1f",Info$Expos$mean),")")
+        ,paste0("TEC temperature (deg C): ",paste(Info$TEC$range,collapse=" to ")," (avg: ",sprintf("%1.1f",Info$TEC$mean),")")
+        ,paste0("ambient temperature (deg C): ",paste(Info$Ambient$range,collapse=" to ")," (avg: ",sprintf("%1.1f",Info$Ambient$mean),")")
+        ,paste0("Imax: ",sprintf("%1.1f to %1.1f",Info$Imax$range[1],Info$Imax$range[2])," (avg: ",sprintf("%1.1f",Info$Imax$mean),")")
         ,"-----")
 
     if (saveToFile) {

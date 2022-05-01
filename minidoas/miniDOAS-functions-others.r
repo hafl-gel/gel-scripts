@@ -277,7 +277,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
                 rawdat_all <- rawdat_all[takeme]
                 rawdatSize <- file.size(rawdat_all)
                 rawdat <- rawdat_all[rawdatSize > 4000]
-                if(sum(rawdatSize <= 4000)){
+                if(any(rawdatSize <= 4000)){
                     cat(paste0(sum(rawdatSize <= 4000)," invalid files (< 4000 bytes)!\n"))
                     file.copy(rawdat_all[rawdatSize <= 4000],gsub(".txt$",".invalid",rawdat_all[rawdatSize <= 4000]))
                 }

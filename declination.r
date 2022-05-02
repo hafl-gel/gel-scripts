@@ -6,17 +6,18 @@ require(data.table)
 
 # functions
 f_t <- function(d_yr, ps = paras) {
-    (d_yr + ps['beta'] * d_yr ^ 2) / (1 + ps['gamma'] * d_yr)
+    (d_yr + ps[['beta']] * d_yr ^ 2) / (1 + ps[['gamma']] * d_yr)
 }
 D_xyt <- function(d_x, d_y, d_yr, ps = paras) {
-    ps['A'] + ps['B'] * d_x + ps['C'] * d_y + 
-        ps['alpha'] * (1 + ps['b'] * d_x + ps['c'] * d_y) * 
+    ps[['A']] + ps[['B']] * d_x + ps[['C']] * d_y + 
+        ps[['alpha']] * (1 + ps[['b']] * d_x + ps[['c']] * d_y) * 
         f_t(d_yr, ps)
 }
 
+# calculate declination
 declination <- function(X, Y, Date = Sys.time(), 
     type = c('declination', 'inclination', 'field')[1],
-    folder = './declination') {
+    folder = './declination', correct.anomaly = type == 'declination') {
     # convert Date to POSIXt
     if (is.character(Date)) {
         require(ibts)
@@ -51,8 +52,52 @@ declination <- function(X, Y, Date = Sys.time(),
     # get zeros
     zeros <- paras_raw[grepl('0$', coef), setNames(declination, coef)]
     # calculate result
-    D_xyt((X - zeros['X0']), (Y - zeros['Y0']), (Tyear - zeros['T0']), paras)
+    out <- D_xyt((X - zeros[['X0']]), (Y - zeros[['Y0']]), (Tyear - zeros[['T0']]), paras)
+    # correct anomaly?
+    if (correct.anomaly) {
+        # read file
+        anomaly_file <- file.path(folder, 'anomalies.grd')
+        # anomalies header
+        header <- fread(anomaly_file, nrows = 6)[, setNames(V2, V1)]
+        # anomalies values
+        values <- as.matrix(fread(anomaly_file, skip = 6, na.strings = as.character(header['nodata_value'])))
+        # get row & column
+        row <- ceiling(header[['nrows']] - (((X * 1000) - header[['yllcorner']]) / header[['cellsize']]))
+        col <- ceiling(((Y * 1000) - header[['xllcorner']]) / header[['cellsize']])
+        # print
+        x <- header[['xllcorner']] + cumsum(rep(header[['cellsize']], header[['ncols']])) - header[['cellsize']] / 2
+        y <- header[['yllcorner']] + cumsum(rep(header[['cellsize']], header[['nrows']])) - header[['cellsize']] / 2
+        image(x, y, t(as.matrix(values)[nrow(values):1,]))
+        contour(x, y, t(as.matrix(values)[nrow(values):1,]), add = TRUE)
+        points(x[col], y[header[['nrows']] - row], pch = 20)
+        text(x[col], y[header[['nrows']] - row], label = values[row, col], pos = 3)
+        print(values[row + (-2:2), col + (-2:2)])
+        # get anomaly
+        out + values[row, col]
+    } else {
+        out
+    }
 }
 
-# declination(200, 600, '21.01.2021')
+
+# checks with https://www.swisstopo.admin.ch/en/maps-data-online/calculation-services/deklination.html
+declination(200, 600, '21.01.2021')
+# should read 2.66425 (reads: 2.084385)
+declination(200, 600, '21.01.2021', correct.anomaly = FALSE)
+# should read 2.68508 (reads: 2.684385)
+declination(200, 600, '21.03.2022')
+# should read 2.86293 (reads: 2.283059)
+declination(200, 600, '21.03.2022', correct.anomaly = FALSE)
+# should read 2.88377 (reads: 2.883059)
+
+declination(250, 600, '21.03.2022')
+declination(250, 600, '21.03.2022', correct.anomaly = FALSE)
+
+
+
+declination(100, 620, '21.01.2021')
+declination(90, 670, '21.01.2021')
+
+
+
 

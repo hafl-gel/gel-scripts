@@ -67,13 +67,9 @@ declination <- function(X, Y, Date = Sys.time(),
         # print
         x <- header[['xllcorner']] + cumsum(rep(header[['cellsize']], header[['ncols']])) - header[['cellsize']] / 2
         y <- header[['yllcorner']] + cumsum(rep(header[['cellsize']], header[['nrows']])) - header[['cellsize']] / 2
-        image(x, y, t(as.matrix(values)[nrow(values):1,]))
-        contour(x, y, t(as.matrix(values)[nrow(values):1,]), add = TRUE)
-        points(x[col], y[header[['nrows']] - row], pch = 20)
-        text(x[col], y[header[['nrows']] - row], label = values[row, col], pos = 3)
         print(values[row + (-2:2), col + (-2:2)])
         # get anomaly
-        out + values[row, col]
+        out + values[row, col] / 60
     } else {
         out
     }
@@ -95,9 +91,11 @@ declination(250, 600, '21.03.2022', correct.anomaly = FALSE)
 
 
 
-declination(100, 620, '21.01.2021')
-declination(90, 670, '21.01.2021')
+declination(100, 620, '21.01.2021') # soll: 1.76; ist: 2.13
+declination(90, 670, '21.01.2021')  # soll: 2.86; ist: 3.54
 
+declination(100, 620, '21.01.2021', correct.anomaly = FALSE) # soll: 2.62; ist: 2.81
+declination(90, 670, '21.01.2021', correct.anomaly = FALSE)  # soll: 2.32; ist: 2.98
 
 
 

@@ -789,16 +789,23 @@ plot.chen <- function(x, xlim = c(190, 230), type = 'l', ...) {
 }
 
 
-#### further plotting helpers
-ann_time <- function(obj, x = NULL, y = NULL, x_adj = 0, y_adj = 0, cex = 0.6, ...) {
-    # get timerange
-    timerange <- switch(class(obj)[1]
+#### get timerange
+get_timerange <- function(obj) {
+    switch(class(obj)[1]
         , 'avgdat' = 
         , 'single_spec' = attr(obj, 'RawData')[['DOASinfo']][['timerange']]
         , 'dc' = attr(obj, 'meas')[['DOASinfo']][['timerange']]
+        , 'caldat' = 
         , 'rawdat' = obj[['DOASinfo']][['timerange']]
         , stop('class not yet implemented')
     )
+}
+
+
+#### further plotting helpers
+ann_time <- function(obj, x = NULL, y = NULL, x_adj = 0, y_adj = 0, cex = 0.6, ...) {
+    # get timerange
+    timerange <- get_timerange(obj)
     if (is.character(x)) {
         text(x, labels = ibts::deparse_timerange(timerange, sep = ' to '), cex = cex, ...)
     } else {

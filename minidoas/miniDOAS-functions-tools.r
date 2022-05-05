@@ -763,6 +763,9 @@ lines.dc <- function(x, fctr = 1, tau = 0, per_molecule = FALSE, ...) {
     }
     lines(x$wl, x$cnt, ...)
 }
+points.dc <- function(x, fctr = 1, tau = 0, per_molecule = FALSE, type = 'p', ...) {
+    lines(x, fctr = 1, tau = 0, per_molecule = FALSE, type = type, ...)
+}
 # TODO: add argument molar mass
 # sigma2dc inverse
 dc2sigma <- function(dc, mgm3 = NULL, copy = FALSE) {

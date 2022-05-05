@@ -766,9 +766,8 @@ lines.dc <- function(x, fctr = 1, tau = 0, per_molecule = FALSE, ...) {
 points.dc <- function(x, fctr = 1, tau = 0, per_molecule = FALSE, type = 'p', ...) {
     lines(x, fctr = 1, tau = 0, per_molecule = FALSE, type = type, ...)
 }
-# TODO: add argument molar mass
 # sigma2dc inverse
-dc2sigma <- function(dc, mgm3 = NULL, copy = FALSE) {
+dc2sigma <- function(dc, mgm3 = NULL, molar_mass = NULL, copy = FALSE) {
     dc_name <- deparse(substitute(dc))
     if (is.null(mgm3)) {
         meas <- attr(dc, 'meas')
@@ -781,7 +780,22 @@ dc2sigma <- function(dc, mgm3 = NULL, copy = FALSE) {
             }
             )
     }
-    dc$cnt <- dc$cnt / 1e-4 / 6.02214076e23 / mgm3 * 17e3 / 0.075
+    if (is.null(molar_mass)) {
+        meas <- attr(dc, 'meas')
+        gas <- switch(class(meas)[1]
+            , caldat = attr(dc, 'meas')[['Calinfo']][['cuvette.gas']]
+            , {
+                cat('dc2sigma not yet implemented for class', class(meas)[1], '!\n')
+                browser()
+            }
+            )
+        molar_mass <- switch(tolower(gas),
+            nh3 = 17,
+            so2 = 64,
+            no = 30
+            )
+    }
+    dc$cnt <- dc$cnt / 1e-4 / 6.02214076e23 / mgm3 * molar_mass * 1e3 / 0.075
     if (!copy) {
         assign(dc_name, dc, sys.frame(-1))
     }

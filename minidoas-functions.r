@@ -17,7 +17,7 @@ require(ibts)
 
 
 if (dir.exists('~/repos/5_GitHub/gel-scripts')) {
-    # local
+    # local to gel
     source("~/repos/5_GitHub/gel-scripts/minidoas/miniDOAS-functions-filters.r")
     source("~/repos/5_GitHub/gel-scripts/minidoas/miniDOAS-functions-fitting.r")
     source("~/repos/5_GitHub/gel-scripts/minidoas/miniDOAS-functions-plotting.r")
@@ -26,12 +26,12 @@ if (dir.exists('~/repos/5_GitHub/gel-scripts')) {
     source("~/repos/5_GitHub/gel-scripts/minidoas/miniDOAS-functions-tools.r")
 } else {
     # remote
-    devtools::source_url("https://github.com/ChHaeni/gel-scripts/blob/main/minidoas/miniDOAS-functions-filters.r?raw=TRUE")
-    devtools::source_url("https://github.com/ChHaeni/gel-scripts/blob/main/minidoas/miniDOAS-functions-fitting.r?raw=TRUE")
-    devtools::source_url("https://github.com/ChHaeni/gel-scripts/blob/main/minidoas/miniDOAS-functions-plotting.r?raw=TRUE")
-    devtools::source_url("https://github.com/ChHaeni/gel-scripts/blob/main/minidoas/miniDOAS-functions-spectrometer.r?raw=TRUE")
-    devtools::source_url("https://github.com/ChHaeni/gel-scripts/blob/main/minidoas/miniDOAS-functions-others.r?raw=TRUE")
-    devtools::source_url("https://github.com/ChHaeni/gel-scripts/blob/main/minidoas/miniDOAS-functions-tools.r?raw=TRUE")
+    devtools::source_url("https://rawgithubusercontent.com/ChHaeni/gel-scripts/main/minidoas/miniDOAS-functions-filters.r")
+    devtools::source_url("https://rawgithubusercontent.com/ChHaeni/gel-scripts/main/minidoas/miniDOAS-functions-fitting.r")
+    devtools::source_url("https://rawgithubusercontent.com/ChHaeni/gel-scripts/main/minidoas/miniDOAS-functions-plotting.r")
+    devtools::source_url("https://rawgithubusercontent.com/ChHaeni/gel-scripts/main/minidoas/miniDOAS-functions-spectrometer.r")
+    devtools::source_url("https://rawgithubusercontent.com/ChHaeni/gel-scripts/main/minidoas/miniDOAS-functions-others.r")
+    devtools::source_url("https://rawgithubusercontent.com/ChHaeni/gel-scripts/main/minidoas/miniDOAS-functions-tools.r")
 }
 
 cat("\n*** Skript", programVersion, "***\n")

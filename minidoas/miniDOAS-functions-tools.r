@@ -705,6 +705,7 @@ plot.caldat <- function(x, tau = 0, type = 'l', xlim = c(190, 230), ...) {
     # fix xlim = NULL
     if (is.null(xlim)) xlim <- x$data[, range(wl, na.rm = TRUE)]
     x$data[wl >= xlim [1] & wl <= xlim[2], plot(wl, cnt, type = type, xlim = xlim, ...)]
+    invisible()
 }
 lines.caldat <- function(x, tau = 0, ...) {
     if (tau != 0) {
@@ -722,6 +723,7 @@ lines.caldat <- function(x, tau = 0, ...) {
         }]
     }
     x$data[, lines(wl, cnt, ...)]
+    invisible()
 }
 
 #### plot method for dc

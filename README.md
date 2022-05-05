@@ -5,8 +5,8 @@ E.g. to source the script to evaluate turbulence statistics from the GILL Windma
 
 ```r
 # script <- 'sonic-turbulence.r'
-# raw_file <- paste0('https://github.com/ChHaeni/gel-scripts/blob/main/', script, '?raw=TRUE')
+# raw_file <- paste0('https://rawgithubusercontent.com/ChHaeni/gel-scripts/main/', script)
 # devtools::source_url(raw_file)
-devtools::source_url('https://github.com/ChHaeni/gel-scripts/blob/main/sonic-turbulence.r?raw=TRUE')
+devtools::source_url('https://rawgithubusercontent.com/ChHaeni/gel-scripts/main/sonic-turbulence.r')
 ```
 

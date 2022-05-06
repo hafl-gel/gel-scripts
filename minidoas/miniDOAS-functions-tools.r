@@ -554,6 +554,59 @@ calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
         )
 }
 
+# get local minima values for dc
+local_minima <- function(dc, max_wl = 219, zero_value = -0.5e-20) {
+    # convert to sigma
+    dc <- dc2sigma(dc, copy = TRUE)
+    # below maximum wavelength
+    dc$cnt[dc_sigma$wl >= max_wl] <- NA
+    # dc pixels + wavelength
+    dc_px <- attr(dc, 'win')[['pixel_filter']]
+    dc_wl <- get_wl(dc)[dc_px]
+    # counts
+    cnt <- dc$cnt
+    # get exact zeros:
+    i_exact <- which(abs(diff(sign(cnt))) == 1L)
+    i_lwr <- which(abs(diff(sign(cnt))) > 1L)
+    i_upr <- i_lwr + 1
+    abs_cnt <- abs(cnt)
+    ind_zero <- c(i_exact, (i_lwr * abs_cnt[i_lwr] + i_upr * abs_cnt[i_upr]) / (abs_cnt[i_lwr] + abs_cnt[i_upr]))
+    # NOTE: -> round: nearer, floor: lower, ceiling: upper indices...
+    # local minima
+    i_neg <- is.finite(cnt) & cnt < zero_value
+    # build groups and find their minima or local minima
+    grps <- data.table(
+        cnt = cnt, wl = dc$wl, pix = seq.int(cnt),
+        grp = cumsum(c(0,diff(as.integer(i_neg))) > 0) * as.integer(i_neg)
+    )
+    grps[, minima := min(cnt) == cnt, by = grp]
+    # find exact minima
+    min_exact <- grps[grp != 0, {
+        m <- which(minima)
+        if (cnt[m - 1] > cnt[m + 1]) {
+            dl <- cnt[m] - cnt[m - 1]
+            dr <- cnt[m + 1] - cnt[m + 2]
+            px <- (dl * pix[m] + dr * pix[m + 1]) / (dl + dr)
+        } else {
+            dl <- cnt[m - 1] - cnt[m - 2]
+            dr <- cnt[m] - cnt[m + 1]
+            px <- (dl * pix[m - 1] + dr * pix[m]) / (dl + dr)
+        }
+        .(
+            px = px,
+            wl = dc_wl[floor(px)] + diff(dc_wl[floor(px) + (0:1)]) * (px %% 1)
+            )
+    }, by = grp]
+    # return values
+    list(
+        pixel_zero = sort(ind_zero) + dc_px[1] - 1,
+        pixel_exact = min_exact[, px + dc_px[1] - 1],
+        wl_exact = min_exact[, wl],
+        pixel_minima = grps[, which(minima) + dc_px[1] - 1],
+        sigmas_minima = grps[, cnt[which(minima)]]
+        )
+}
+
 #### helper function to calculate wavelength (correct incl blinds)
 calc_wl <- function(x, pixel = NULL) {
     cal.coef <- x$DOASinfo$Spectrometer$'Calibration Coefficients'

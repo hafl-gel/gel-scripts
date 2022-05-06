@@ -427,6 +427,8 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
             DOASinfo = DOASinfo
             )
     }
+    # save original
+    out$Calinfo$raw.spec <- out$data[, cnt]
     # correct dark
     out$Calinfo$dark.corrected = FALSE
     if (!is_dark && is.null(dark)) {
@@ -434,7 +436,8 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
     } else if(!is_dark) {
         cdark <- dark$data[, cnt]
         out$data[, cnt := cnt - cdark]
-        out$Calinfo$dark.corrected = TRUE
+        out$Calinfo$dark.corrected <- TRUE
+        out$Calinfo$dark.spec <- cdark
     }
     # correct straylight
     out$Calinfo$straylight.corrected = FALSE
@@ -444,14 +447,15 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
         if (!lin_before_dark) {
             out$data[, cnt := cnt - dark]
         }
-        out$Calinfo$straylight.corrected = TRUE
+        out$Calinfo$straylight.corrected <- TRUE
+        out$Calinfo$straylight.value <- dark
     }
     # correct linearity
     out$Calinfo$linearity.corrected = FALSE
     if (correct.linearity) {
         lin.coef <- out$DOASinfo$Spectrometer$'Linearity Coefficients'
         out$data[, cnt := cnt / linearity.func(cnt, lin.coef)]
-        out$Calinfo$linearity.corrected = TRUE
+        out$Calinfo$linearity.corrected <- TRUE
     }
     # correct.straylight afterwards
     if (correct.straylight && lin_before_dark) {
@@ -555,9 +559,10 @@ calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
 }
 
 # get local minima values for dc
-local_minima <- function(dc, max_wl = 219, zero_value = -0.5e-20) {
+local_minima <- function(dc, zero_value = -0.2e-20, max_wl = 219, show = FALSE) {
     # convert to sigma
     dc <- dc2sigma(dc, copy = TRUE)
+    if (show) dc_orig <- dc
     # below maximum wavelength
     dc$cnt[dc_sigma$wl >= max_wl] <- NA
     # dc pixels + wavelength
@@ -598,13 +603,24 @@ local_minima <- function(dc, max_wl = 219, zero_value = -0.5e-20) {
             )
     }, by = grp]
     # return values
-    list(
+    out <- list(
         pixel_zero = sort(ind_zero) + dc_px[1] - 1,
         pixel_exact = min_exact[, px + dc_px[1] - 1],
         wl_exact = min_exact[, wl],
         pixel_minima = grps[, which(minima) + dc_px[1] - 1],
         sigmas_minima = grps[, cnt[which(minima)]]
         )
+    # plot?
+    if (show) {
+        dc_neg <- dc_orig
+        dc_neg$cnt[!i_neg] <- NA
+        plot(dc_orig, col = 'lightgrey')
+        abline(v = max_wl, lwd = 2)
+        abline(h = zero_value, lwd = 2)
+        lines(dc_neg, col = 'black', lwd = 2)
+        points(dc_wl[grps[, which(minima)]], out$sigmas_minima, col = 'indianred', pch = 20, cex = 1.5)
+    }
+    out
 }
 
 #### helper function to calculate wavelength (correct incl blinds)

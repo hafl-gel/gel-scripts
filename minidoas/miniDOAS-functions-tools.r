@@ -253,6 +253,8 @@ get_wl <- function(x) {
         attr(x, 'RawData')$DOASinfo$Spectrometer$wavelength
     } else if (inherits(x, 'caldat') || inherits(x, 'chen')) {
         x$data[, wl]
+    } else if (inherits(x, 'dc')) {
+        attr(x, 'meas')$DOASinfo$Spectrometer$wavelength
     }
 }
 

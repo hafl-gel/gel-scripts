@@ -502,6 +502,11 @@ avgSpec <- function(rawdat,type=c("raw","cal","ref","dark"),tracer=c("ambient","
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #~~ function; get dark/filter/fit windows and filter strength:
+options(
+    md.filter.strength = 25,
+    md.filter.window = c(202.2, 230.6),
+    md.fit.window = c(204.5, 228.4)
+    )
 getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(), 
     straylight.window = NULL, filter.window = NULL, fit.window = NULL, filter.strength = NULL, 
     tau.shift = NULL) {
@@ -515,11 +520,11 @@ getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(
     }
     
     # check filter window
-    if (is.null(filter.window)) filter.window <- c(202.2, 230.6)
+    if (is.null(filter.window)) filter.window <- getOption('md.filter.window')
 
     # check filter strength
     if (is.null(filter.strength)) {
-        filter.strength <- 25
+        filter.strength <- getOption('md.filter.strength')
     } else if ((filter.strength %% 2) < 1) {
         filter.strength <- round(filter.strength)
         if ((filter.strength %% 2) < 1) {
@@ -529,7 +534,7 @@ getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(
     }  
 
     # check fit.window
-    if (is.null(fit.window)) fit.window <- c(204.5, 228.4)
+    if (is.null(fit.window)) fit.window <- getOption('md.fit.window')
 
     # check straylight window
     if (is.null(straylight.window)) straylight.window <- c(150, 160)
@@ -1844,11 +1849,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             filter.strength <- input$filter.strength
                         }
                         if (filter.strength < 3) {
-                            if (rawdat$DOASinfo$DOASmodel=="S1" & rawdat$DOASinfo$timerange < parse_date_time("20170101","Ymd")) {
-                                filter_strength <- 41
-                            } else {
-                                filter_strength <- 25
-                            }
+                                filter_strength <- getOption('md.filter.strength')
                         } else {
                             filter_strength <- filter.strength
                         }

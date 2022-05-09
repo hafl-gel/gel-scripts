@@ -1724,7 +1724,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
 
     wavelength <- rawdat$DOASinfo$Spectrometer$wavelength[DOASwindows$pixel_filter]
 
-    index.max <- ncol(rawdat$RawData)
+    index.max <- length(rawdat$RawData)
 
     frmls <- formals(getOption('md.filter.function.list')[[DOASwindows$filter.type]])
     n <- DOASwindows$filter.strength
@@ -1910,7 +1910,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                     plot_reactive <- reactive({
                         i <- input$index
                         RawDat <- rawdat
-                        RawDat[[1]] <- list(rawdat[[1]][, i])
+                        RawDat[[1]] <- list(rawdat[[1]][[i]])
                         DOASwindows <- DOASwindows_reactive()
                         SpecCorr <- process_spectra(CalRefSpecs,RawDat,correct.dark = input$correct.dark, 
                             correct.linearity = input$correct.linearity, correct.straylight = input$correct.straylight, 
@@ -2030,7 +2030,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             par(mfrow=c(3,2),oma=c(0,0,1.5,0))
                             i <- input$index
                             RawDat <- rawdat
-                            RawDat[[1]] <- rawdat[[1]][,i,drop=FALSE]
+                            RawDat[[1]] <- rawdat[[1]][[i]]
                             DOASwindows <- DOASwindows_reactive()
                             SpecCorr <- process_spectra(CalRefSpecs,RawDat,correct.dark = input$correct.dark, correct.linearity = input$correct.linearity, 
                                 correct.straylight = input$correct.straylight, straylight.pix=DOASwindows$pixel_straylight)

@@ -1056,7 +1056,7 @@ evalOffline <- function(
     tz.Output='Etc/GMT-1',
     filter.type= NULL,
     use.arima=FALSE,
-    use.robust=TRUE,
+    use.robust=FALSE,
     filter.window=NULL, 
     filter.strength=NULL,
     fit.window=NULL,

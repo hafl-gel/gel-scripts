@@ -15,6 +15,20 @@ require(data.table)
 require(ibts)
 # options(shiny.trace=FALSE)
 
+# set minidoas options (except filter functions)
+options(
+    # # old evaluation (using BmHarris)
+    # md.filter.type = 'BmHarris',
+    # md.filter.strength = 25,
+    # md.filter.window = c(202.2, 230.6),
+    # md.fit.window = c(204.5, 228.4)
+    # new evaluation (using Exp filter)
+    md.filter.type = 'Exp',
+    md.filter.strength = 51,
+    md.filter.window = c(200.6, 232)
+    md.fit.window = c(205, 227.7)
+    )
+
 
 if (dir.exists('~/repos/5_GitHub/gel-scripts')) {
     # local to gel

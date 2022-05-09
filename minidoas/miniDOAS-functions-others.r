@@ -502,12 +502,7 @@ avgSpec <- function(rawdat,type=c("raw","cal","ref","dark"),tracer=c("ambient","
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #~~ function; get dark/filter/fit windows and filter strength:
-options(
-    md.filter.strength = 25,
-    md.filter.window = c(202.2, 230.6),
-    md.fit.window = c(204.5, 228.4)
-    )
-getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(), 
+getWindows <- function(DOASinfo, filter.type = NULL, timerange = Sys.time(), 
     straylight.window = NULL, filter.window = NULL, fit.window = NULL, filter.strength = NULL, 
     tau.shift = NULL) {
 
@@ -515,7 +510,9 @@ getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(
     if (inherits(DOASinfo, "character")) DOASinfo <- getDOASinfo(DOASinfo, timerange)
 
     # check filter
-    if (!(filter.type %in% names(getOption('md.filter.function.list')))) {
+    if (is.null(filter.type)) {
+        filter.type <- getOption('md.filter.type')
+    } else if (!(filter.type %in% names(getOption('md.filter.function.list')))) {
         stop("filter.type = \"", filter.type, "\" is not a valid filter type! -> see names(getOption('md.filter.function.list'))")
     }
     
@@ -1057,7 +1054,7 @@ evalOffline <- function(
     tz.DOAS='Etc/GMT-1',
     path.length=NULL,
     tz.Output='Etc/GMT-1',
-    filter.type="BmHarris",
+    filter.type= NULL,
     use.arima=FALSE,
     use.robust=TRUE,
     filter.window=NULL, 
@@ -1699,12 +1696,13 @@ runAppDOAS <- function(ShinyInput) {
 
 
 inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
-    filter.type = "BmHarris", fit.type = "OLS", robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
+    filter.type = NULL, fit.type = "OLS", robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
     filter.strength = NULL, tau.shift = NULL, correct.dark = TRUE, correct.linearity = TRUE, 
     correct.straylight = c("avg", "linear", "none"), use.ref = TRUE,
     Edinburgh_correction = TRUE) {
 
     require(shiny)
+    require(shinyWidgets)
     require(lubridate)
     require(robustbase)
     require(MASS)
@@ -1778,11 +1776,11 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                                 choices = names(getOption('md.filter.function.list')),
                                 selected = DOASwindows$filter.type
                             )
-                            ,sliderInput("filter.window", 
+                            ,numericRangeInput("filter.window", 
                                 label = "filter.window:", 
                                 min = 190, 
                                 max = 240,
-                                step = 0.1, 
+                                step = 0.2, 
                                 value = DOASwindows$filter.window
                             )
                             ,uiOutput("fit_window")
@@ -1899,11 +1897,11 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
 
                     output$fit_window <- renderUI({
                         DOASwindows <- DOASwindows_reactive()
-                        sliderInput("fit.window", 
+                        numericRangeInput("fit.window", 
                             label = "fit.window:", 
                             min = DOASwindows$filter.window[1], 
                             max = DOASwindows$filter.window[2],
-                            step = 0.1, 
+                            step = 0.2, 
                             value = DOASwindows$fit.window
                         )
                     })

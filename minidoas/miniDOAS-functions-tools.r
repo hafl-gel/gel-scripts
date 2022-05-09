@@ -513,13 +513,15 @@ get_cnt <- function(x) {
 
 
 #### doascurve
-calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = NULL, fwin = NULL,
+calc_dc <- function(meas, ref, ftype = NULL, fstrength = NULL, fwin = NULL,
     fitwin = NULL, shift = NULL, correct.straylight = TRUE, correct.linearity = TRUE,
     lin_before_dark = FALSE, do_lowpass_filtering = FALSE, lp.type = 'Rect', lp.strength = 5) {
     if (is.character(meas)) {
         # file path or chen
         if (tolower(meas) == 'chen') {
             # call cheng2dc
+            cat('Fix arguments!!!\n')
+            browser()
             return(cheng2dc(meas, ref, ftype, fstrength, fwin, fitwin, shift))
         } else {
             meas <- read_cal(meas, correct.straylight = correct.straylight, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)

@@ -564,7 +564,7 @@ local_minima <- function(dc, zero_value = -0.2e-20, max_wl = 219, show = FALSE) 
     dc <- dc2sigma(dc, copy = TRUE)
     if (show) dc_orig <- dc
     # below maximum wavelength
-    dc$cnt[dc_sigma$wl >= max_wl] <- NA
+    dc$cnt[dc$wl >= max_wl] <- NA
     # dc pixels + wavelength
     dc_px <- attr(dc, 'win')[['pixel_filter']]
     dc_wl <- get_wl(dc)[dc_px]

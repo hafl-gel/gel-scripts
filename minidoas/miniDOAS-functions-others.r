@@ -504,7 +504,7 @@ avgSpec <- function(rawdat,type=c("raw","cal","ref","dark"),tracer=c("ambient","
 #~~ function; get dark/filter/fit windows and filter strength:
 getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(), 
     straylight.window = NULL, filter.window = NULL, fit.window = NULL, filter.strength = NULL, 
-    tau.shift = NULL, filter.rev = TRUE) {
+    tau.shift = NULL) {
 
     # get doas info
     if (inherits(DOASinfo, "character")) DOASinfo <- getDOASinfo(DOASinfo, timerange)
@@ -582,7 +582,6 @@ getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(
         straylight.window = straylight.window,
         filter.type = filter.type,
         filter.strength = filter.strength,
-        filter.rev = filter.rev,
         tau.shift = tau.shift,
         pixel_filter = pixel_filter,
         pixel_fit = pixel_fit,
@@ -1060,7 +1059,6 @@ evalOffline <- function(
     use.robust=TRUE,
     filter.window=NULL, 
     filter.strength=NULL,
-    filter.rev=TRUE,
     fit.window=NULL,
     straylight.window=NULL,
     skip.check.daily=FALSE,
@@ -1135,7 +1133,7 @@ evalOffline <- function(
     ### get DOAS windows:
     DOAS.win <- getWindows(DOAS.info, filter.type, timerange, 
         straylight.window, filter.window, fit.window, 
-        filter.strength, tau.shift, filter.rev)
+        filter.strength, tau.shift)
 
     ### read (average) reference, calibration & noise spectra
     ### ******************************************************************************
@@ -1233,26 +1231,12 @@ evalOffline <- function(
         "DolphChebyshev" = winDolphChebyshev)
     DOAS.win$filt <- winFUN(DOAS.win$filter.strength,...)
     C_cfilter <- getFromNamespace('C_cfilter', 'stats')
-    if (DOAS.win$filter.rev) {
-        # # old double filter
-        # highpass.filter2 <- function(dat, filt) {
-        #     dat - rev(.Call(C_cfilter, rev(.Call(C_cfilter, dat, filt, 2L, FALSE)), filt, 2L, FALSE))
-        # }
-        # new double filter
-        highpass.filter2 <- function(dat, filt) {
-            dat - (
-                .Call(C_cfilter, dat, filt, 2L, FALSE) +
-                    rev(.Call(C_cfilter, rev(dat), filt, 2L, FALSE))
-                ) / 2
-        }
-    } else {
-        # new double filter
-        highpass.filter2 <- function(dat, filt) {
-            dat - (
-                .Call(C_cfilter, dat, filt, 2L, FALSE) +
-                    rev(.Call(C_cfilter, rev(dat), filt, 2L, FALSE))
-                ) / 2
-        }
+    # new double filter
+    highpass.filter2 <- function(dat, filt) {
+        dat - (
+            .Call(C_cfilter, dat, filt, 2L, FALSE) +
+                rev(.Call(C_cfilter, rev(dat), filt, 2L, FALSE))
+            ) / 2
     }
 
 
@@ -1726,7 +1710,7 @@ runAppDOAS <- function(ShinyInput) {
 
 
 inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
-    filter.type = "BmHarris", fit.type = "OLS",filter.rev=TRUE, robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
+    filter.type = "BmHarris", fit.type = "OLS", robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
     filter.strength = NULL, tau.shift = NULL, correct.dark = TRUE, correct.linearity = TRUE, 
     correct.straylight = c("avg", "linear", "none"), use.ref = TRUE,
     Edinburgh_correction = TRUE) {
@@ -1738,7 +1722,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
 
     # windows first time:
     DOASwindows <- getWindows(rawdat$DOASinfo,filter.type = filter.type, straylight.window = straylight.window, 
-        filter.window = filter.window, fit.window = fit.window, filter.strength = filter.strength, filter.rev = filter.rev,
+        filter.window = filter.window, fit.window = fit.window, filter.strength = filter.strength,
         tau.shift = tau.shift)
 
     # correct cal/ref specs:
@@ -1822,11 +1806,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                                     ,"Gauss","Kaiser","DolphChebyshev","BmHarris","Tukey","Poisson","Exp","ExpHamming"),
                                 selected = DOASwindows$filter.type
                             )
-                            ,selectInput("filter.rev", 
-                                label = "filter.rev:",
-                                choices = c(TRUE,FALSE),
-                                selected = DOASwindows$filter.rev
-                            )
                             ,sliderInput("filter.window", 
                                 label = "filter.window:", 
                                 min = 190, 
@@ -1907,7 +1886,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             filter_strength <- filter.strength
                         }
                         getWindows(rawdat$DOASinfo, filter.type = input$filter.type, straylight.window = straylight.window, 
-                            filter.window = input$filter.window, fit.window = fit_window, filter.rev = input$filter.rev,
+                            filter.window = input$filter.window, fit.window = fit_window,
                             filter.strength = filter_strength, tau.shift = input$tau.shift)
                     })
 

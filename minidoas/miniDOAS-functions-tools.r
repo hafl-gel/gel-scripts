@@ -513,7 +513,7 @@ get_cnt <- function(x) {
 
 
 #### doascurve
-calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = 25, fwin = NULL,
+calc_dc <- function(meas, ref, ftype = 'BmHarris', fstrength = NULL, fwin = NULL,
     fitwin = NULL, shift = NULL, correct.straylight = TRUE, correct.linearity = TRUE,
     lin_before_dark = FALSE, do_lowpass_filtering = FALSE, lp.type = 'Rect', lp.strength = 5) {
     if (is.character(meas)) {

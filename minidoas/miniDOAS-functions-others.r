@@ -510,10 +510,8 @@ getWindows <- function(DOASinfo, filter.type = "BmHarris", timerange = Sys.time(
     if (inherits(DOASinfo, "character")) DOASinfo <- getDOASinfo(DOASinfo, timerange)
 
     # check filter
-    if (filter.type %in% c("Rect", "Hann", "Hamming", "Blackman", "BmNuttall"
-                , "Sin", "Gauss", "Kaiser", "DolphChebyshev", "BmHarris", "Tukey", "Poisson", "Exp", "ExpHamming")) {
-    } else {
-        stop("filter.type = \"", filter.type, "\" is not a valid filter type")
+    if (!(filter.type %in% names(getOption('md.filter.function.list')))) {
+        stop("filter.type = \"", filter.type, "\" is not a valid filter type! -> see names(getOption('md.filter.function.list'))")
     }
     
     # check filter window
@@ -1214,21 +1212,7 @@ evalOffline <- function(
     }
 
     # create a 'lighter' highpass filter
-    winFUN <- switch(DOAS.win$filter.type,
-        "Rect" = winRect,
-        "Hann" = winHann,
-        "Hamming" = winHamming,
-        "Blackman" = winBlackman,
-        "BmNuttall" = winBmNuttall,
-        "Sin" = winSin,
-        "Gauss" = winGauss,
-        "Kaiser" = winKaiser,
-        "BmHarris" = winBmHarris,
-        "Tukey" = winTukey,
-        "Poisson" = winPoisson,
-        "Exp" = winExp,
-        "ExpHamming" = winExpHamming,
-        "DolphChebyshev" = winDolphChebyshev)
+    winFUN <- getOption('md.filter.function.list')[[DOAS.win$filter.type]]
     DOAS.win$filt <- winFUN(DOAS.win$filter.strength,...)
     C_cfilter <- getFromNamespace('C_cfilter', 'stats')
     # new double filter
@@ -1739,23 +1723,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
 
     index.max <- ncol(rawdat$RawData)
 
-    frmls <- switch(DOASwindows$filter.type,
-        "Rect" = formals(winRect),
-        "Hann" = formals(winHann),
-        "Hamming" = formals(winHamming),
-        "Blackman" = formals(winBlackman),
-        "BmNuttall" = formals(winBmNuttall),
-        "Sin" = formals(winSin),
-        "Gauss" = formals(winGauss),
-        "Kaiser" = formals(winKaiser),
-        "DolphChebyshev" = formals(winDolphChebyshev),
-        "BmHarris" = formals(winBmHarris),
-        "Tukey" = formals(winTukey),
-        "Poisson" = formals(winPoisson),
-        "Exp" = formals(winExp),
-        "ExpHamming" = formals(winExpHamming),
-        NULL
-    )
+    frmls <- formals(getOption('md.filter.function.list')[[DOASwindows$filter.type]])
     n <- DOASwindows$filter.strength
     p1 <- eval(frmls$p1)
     p2 <- eval(frmls$p2)
@@ -1802,8 +1770,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             )
                             ,selectInput("filter.type", 
                                 label = "filter.type:",
-                                choices = c("Hamming","Rect","Hann","Blackman","BmNuttall","Sin"
-                                    ,"Gauss","Kaiser","DolphChebyshev","BmHarris","Tukey","Poisson","Exp","ExpHamming"),
+                                choices = names(getOption('md.filter.function.list')),
                                 selected = DOASwindows$filter.type
                             )
                             ,sliderInput("filter.window", 
@@ -1897,23 +1864,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                             } else {
                                 filter.strength <- input$filter.strength
                             }
-                            frmls <- switch(DOASwindows$filter.type,
-                                "Rect" = formals(winRect),
-                                "Hann" = formals(winHann),
-                                "Hamming" = formals(winHamming),
-                                "Blackman" = formals(winBlackman),
-                                "BmNuttall" = formals(winBmNuttall),
-                                "Sin" = formals(winSin),
-                                "Gauss" = formals(winGauss),
-                                "Kaiser" = formals(winKaiser),
-                                "DolphChebyshev" = formals(winDolphChebyshev),
-                                "BmHarris" = formals(winBmHarris),
-                                "Tukey" = formals(winTukey),
-                                "Poisson" = formals(winPoisson),
-                                "Exp" = formals(winExp),
-                                "ExpHamming" = formals(winExpHamming),
-                                NULL
-                            )
+                            frmls <- formals(getOption('md.filter.function.list')[[DOASwindows$filter.type]])
                             n <- filter.strength
                             p1 <- eval(frmls$p1)
                             p2 <- eval(frmls$p2)

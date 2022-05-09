@@ -25,8 +25,8 @@ options(
     # new evaluation (using Exp filter)
     md.filter.type = 'Exp',
     md.filter.strength = 51,
-    md.filter.window = c(200.6, 232),
-    md.fit.window = c(205, 227.7)
+    md.filter.window = c(200, 232),
+    md.fit.window = c(204.4, 227.7)
     )
 
 

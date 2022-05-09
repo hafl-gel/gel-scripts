@@ -67,7 +67,7 @@ get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
         # get indices
         ind <- which(folder$Header[['et']] > from & folder$Header[['st']] < to)
         if (length(ind)) {
-            folder$RawData <- folder$RawData[, ind, drop = FALSE]
+            folder$RawData <- folder$RawData[ind]
             folder$Header <- folder$Header[ind, , drop = FALSE]
         } else {
             stop('No data within specified timerange available')
@@ -99,7 +99,7 @@ single_specs <- function(folder, at, tz = 'Etc/GMT-1',
     # get indices
     ind <- which(folder$Header[['et']] >= at & folder$Header[['st']] <= at)
     if (length(ind)) {
-        folder$RawData <- folder$RawData[, ind, drop = FALSE]
+        folder$RawData <- folder$RawData[ind]
         folder$Header <- folder$Header[ind, , drop = FALSE]
         # update timerange
         folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][1, 'st'], folder[['Header']][1, 'et'])
@@ -177,7 +177,7 @@ avg_spec <- function(folder, from = NULL, to = NULL, tz = 'Etc/GMT-1',
             # get indices
             ind <- which(folder$Header[['et']] > from & folder$Header[['st']] < to)
             if (length(ind)) {
-                folder$RawData <- folder$RawData[, ind, drop = FALSE]
+                folder$RawData <- folder$RawData[ind]
                 folder$Header <- folder$Header[ind, , drop = FALSE]
                 # update timerange
                 folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][1, 'st'], folder[['Header']][length(ind), 'et'])
@@ -211,7 +211,7 @@ avg_spec <- function(folder, from = NULL, to = NULL, tz = 'Etc/GMT-1',
         folder$RawData <- correct_linearity(folder)
     }
     structure(
-        rowMeans(folder$RawData)
+        rowMeans(as.data.frame(folder$RawData))
         , RawData = folder
         , class = 'avgdat'
         , straylight.corrected = correct.straylight
@@ -226,7 +226,7 @@ cut_wl <- function(x, lo = 190, hi = 230) {
     ind <- which(wl >= lo & wl <= hi)
     if (inherits(x, 'rawdat')) {
         out <- x
-        out$RawData <- x$RawData[ind, , drop = FALSE]
+        out$RawData <- lapply(x$RawData, function(y) y[ind])
         out$DOASinfo$Spectrometer$pixel <- x$DOASinfo$Spectrometer$pixel[ind]
         out$DOASinfo$Spectrometer$wavelength <- wl[ind]
     } else if (inherits(x, 'avgdat')) {
@@ -321,23 +321,23 @@ lines.avgdat <- function(x, y = NULL, what = c('average', 'residuals', 'original
 
 #### helper function to correct for dark current
 correct_dark <- function(x, y) {
-    x$RawData - y$data[, cnt]
+    lapply(x$RawData, '-', y$data[, cnt])
 }
 
 correct_straylight <- function(x) {
     win <- getWindows(x$DOASinfo)
-    if (is.data.frame(x$RawData)) {
-        sweep(x$RawData, 2, colMeans(x$RawData[win$pixel_straylight, , drop = FALSE]))
-    } else {
-        stop('Fix correct_straylight for non-data.frames')
-        x$RawData - mean(x$RawData[win$pixel_straylight, ])
-    }
+    # if (is.data.frame(x$RawData)) {
+    #     sweep(x$RawData, 2, colMeans(x$RawData[win$pixel_straylight, , drop = FALSE]))
+    # } else {
+        lapply(x$RawData, '-', sum(sapply(x$RawData, function(y) mean(y[win$pixel_straylight]))) / length(x$RawData))
+    # }
 }
 
 #### helper function to correct for non-linearity
 correct_linearity <- function(x) {
     lin.coef <- x$DOASinfo$Spectrometer$"Linearity Coefficients"
-    x$RawData / linearity.func(x$RawData, lin.coef)
+    # x$RawData / linearity.func(x$RawData, lin.coef)
+    lapply(x$RawData, function(y) y / linearity.func(y, lin.coef))
 }
 
 
@@ -1298,7 +1298,7 @@ filter_time <- function(rawdat, index, to = NULL, including = TRUE) {
     # return rawdat class
     structure(
         list(
-            RawData = rawdat[['RawData']][, ind],
+            RawData = rawdat[['RawData']][ind],
             Header = rawdat[['Header']][ind, ],
             DOASinfo = rawdat[['DOASinfo']]
             ),
@@ -1326,7 +1326,7 @@ filter_position <- function(rawdat, position) {
     # return rawdat class
     structure(
         list(
-            RawData = rawdat[['RawData']][, ind],
+            RawData = rawdat[['RawData']][ind],
             Header = rawdat[['Header']][ind, ],
             DOASinfo = rawdat[['DOASinfo']]
             ),

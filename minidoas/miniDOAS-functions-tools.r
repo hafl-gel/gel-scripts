@@ -514,6 +514,21 @@ get_cnt <- function(x) {
     }
 }
 
+get_integration_time <- function(x) {
+    h <- get_header(x)
+    as.numeric(unlist(strsplit(grep('integration', h, value = TRUE), split = ':'))[2])
+}
+get_header <- function(rawdat) {
+    if (inherits(rawdat, 'character')) {
+        stop('reading in raw data from file not yet implemented')
+    }
+    if (inherits(rawdat, 'dc')) {
+        return(get_header(attr(rawdat, 'meas')))
+    }
+    rawdat$calref.info
+}
+
+
 
 #### doascurve
 calc_dc <- function(meas, ref, ftype = NULL, fstrength = NULL, fwin = NULL,

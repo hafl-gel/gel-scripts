@@ -679,6 +679,8 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
                 ambient <- AvgSpec$Info[3:6]
                 cuvette <- AvgSpec$Info[7:8]
                 timerange <- c(min(spec$rawdat$Header[,"st"]),max(spec$rawdat$Header[,"et"])) 
+                info.spec <- unlist(strsplit(AvgSpec$txt, split = '\n'))
+                info.spec <- info.spec[!(info.spec %in% '')]
             }
         }
     } else {
@@ -749,7 +751,15 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
     }
 
     if (lite) {
-        return(list(dat.spec=dat.spec,ambient=ambient,cuvette=cuvette,timerange=timerange))  
+        return(
+            list(
+                dat.spec = dat.spec,
+                ambient = ambient,
+                cuvette = cuvette,
+                timerange = timerange,
+                info.spec = info.spec
+                )
+        )  
     } else {
         return(AvgSpec)
     }

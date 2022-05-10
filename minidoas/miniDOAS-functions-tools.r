@@ -561,12 +561,12 @@ calc_dc <- function(meas, ref, ftype = NULL, fstrength = NULL, fwin = NULL,
 }
 
 # get local minima values for dc
-local_minima <- function(dc, zero_value = -0.2e-20, max_wl = 219, show = FALSE) {
+local_minima <- function(dc, zero_value = -0.2e-20, wl_range = c(203, 219), show = FALSE) {
     # convert to sigma
     dc <- dc2sigma(dc, copy = TRUE)
     if (show) dc_orig <- dc
-    # below maximum wavelength
-    dc$cnt[dc$wl >= max_wl] <- NA
+    # select wl range
+    dc$cnt[dc$wl <= wl_range[1] | dc$wl >= wl_range[2]] <- NA
     # dc pixels + wavelength
     dc_px <- attr(dc, 'win')[['pixel_filter']]
     dc_wl <- get_wl(dc)[dc_px]
@@ -617,7 +617,7 @@ local_minima <- function(dc, zero_value = -0.2e-20, max_wl = 219, show = FALSE) 
         dc_neg <- dc_orig
         dc_neg$cnt[!i_neg] <- NA
         plot(dc_orig, col = 'lightgrey')
-        abline(v = max_wl, lwd = 2)
+        abline(v = wl_range, lwd = 2)
         abline(h = zero_value, lwd = 2)
         lines(dc_neg, col = 'black', lwd = 2)
         points(dc_wl[grps[, which(minima)]], out$sigmas_minima, col = 'indianred', pch = 20, cex = 1.5)

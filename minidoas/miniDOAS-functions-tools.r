@@ -782,6 +782,40 @@ find_cheng <- function(dc, show = FALSE, interval = c(-1, 1)) {
         )
 }
 
+get_cal_infos <- function(dc, compact = TRUE, show = !compact) {
+    # local minima
+    loc_min <- local_minima(dc[['nh3']][['dc']])#, show = TRUE)
+    # -> Imax? Iavg(fit) Imin(fit) Imax(fit)
+    cinfo <- attr(dc[['nh3']][['dc']], 'meas')$Calinfo
+    # straylight + dark
+    dark <- 0
+    if (cinfo$dark.corrected) dark <- dark + cinfo$dark.spec
+    if (cinfo$straylight.corrected) dark <- dark + cinfo$straylight.value
+    # cheng factor
+    cheng <- find_cheng(dc[['nh3']][['dc']], show)
+    out <- c(
+        loc_min,
+        list(
+            integ_ms = get_integration_time(dc[['nh3']][['dc']]),
+            light_max = max(cinfo$raw.spec),
+            wl_max =  get_wl(dc[['nh3']][['dc']])[which.max(cinfo$raw.spec)],
+            light_peaks = cinfo$raw.spec[loc_min$pixel_minima],
+            light_dark = dark
+        ),
+        cheng
+        )
+    if (compact) {
+        list(
+            cheng = unlist(cheng)[c(2, 4, 5, 6)],
+            light = unlist(out[c(6, 7, 9, 10)]),
+            spec = unlist(out[c(2, 5)])
+                )
+    } else {
+        out
+    }
+}
+
+
 
 #### average cheng to reference doas
 cheng2doas <- function(cheng, ref, wvlim = NULL) {

@@ -29,6 +29,9 @@ options(
     md.fit.window = c(204.4, 227.7)
     )
 
+# TODO:
+#   - clean up functions & scripts!!
+#   - organize objects rawdat, dc, etc. more consistently! -> entries: processed data, rawdata, meta data, etc...
 
 if (dir.exists('~/repos/5_GitHub/gel-scripts')) {
     # local to gel

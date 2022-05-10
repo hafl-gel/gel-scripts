@@ -376,7 +376,8 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
                     cuvette.conc = if (tracer == 'N2') '-' else info[8, as.numeric(val)],
                     cuvette.path = info[9, as.numeric(val)]
                     ),
-                DOASinfo = getDOASinfo(info[2, val], timerange = info[1, val], tzone = tz, Serial = Serial)
+                DOASinfo = getDOASinfo(info[2, val], timerange = info[1, val], tzone = tz, Serial = Serial),
+                calref.info = cal[1:10, V1]
             )
         } else if (nrow(cal) == 1054) {
             info <- cal[, {
@@ -397,7 +398,8 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
                     cuvette.conc = if (tracer == 'N2') '-' else info[3, convert2mg(val, tracer)],
                     cuvette.path = info[4, as.numeric(val)]
                     ),
-                DOASinfo = DOASinfo
+                DOASinfo = DOASinfo,
+                calref.info = cal[1:10, V1]
             )
         }
     } else {
@@ -424,7 +426,8 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
                 cuvette.conc = spec_out[['cuvette']][['cuvetteConc_mg']],
                 cuvette.path = spec_out[['cuvette']][['cuvetteLength']]
                 ),
-            DOASinfo = DOASinfo
+            DOASinfo = DOASinfo,
+            calref.info = spec_out$info.spec
             )
     }
     # save original

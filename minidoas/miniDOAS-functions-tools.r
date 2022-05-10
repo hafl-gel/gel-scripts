@@ -738,6 +738,50 @@ cnt2wl <- function(wl_from, wl_to, cnt, shift_nm = 0) {
     )
 }
 
+# get Cheng factor
+cheng_factor <- function(dc, shift_cheng = 0, show = FALSE) {
+    # S5 cheng dc
+    cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref'), shift = shift_cheng))
+    # get sigmas
+    dc2sigma(cheng)
+    dc <- dc2sigma(dc, copy = TRUE)
+    # fit
+    mod <- lm(dc$cnt ~ cheng$cnt)
+    # show?
+    if (show) {
+        par(mfrow = c(2, 1))
+        plot(dc, lwd = 2)
+        lines(cheng, col = 'indianred')
+        legend('bottomright', bty = 'n', legend = c('meas', 'Cheng2006'), 
+            lwd = c(2, 1), col = c('black', 'indianred'))
+        plot(cheng$cnt, dc$cnt, xlab = 'Cheng2006', ylab = 'meas')
+        legend('bottomright', bty = 'n', legend = sprintf('span = %1.2f', 
+                coef(mod)[2]))
+        abline(0, 1)
+        abline(mod, col = 'lightblue')
+    }
+    # return
+    list(
+        coefs = setNames(coef(mod), c('offset', 'span')),
+        se = setNames(summary(mod)$coefficients[, 2], c('offset', 'span')),
+        rmse = summary(mod)$sigma
+        )
+}
+
+find_cheng <- function(dc, show = FALSE, interval = c(-1, 1)) {
+    # S5 cheng dc
+    cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref')))
+    ms <- median(local_minima(dc)$wl_exact - local_minima(cheng)$wl_exact)
+    # optimize
+    par <- optimize(function(x) {
+        cheng_factor(dc, x)$rmse
+        }, interval = interval + ms)
+    c(
+        cheng_factor(dc, par$minimum, show = show),
+        shift = par$minimum
+        )
+}
+
 
 #### average cheng to reference doas
 cheng2doas <- function(cheng, ref, wvlim = NULL) {

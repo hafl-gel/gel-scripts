@@ -3,7 +3,8 @@
 
 
 #### read doas data
-read_data <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL){
+read_data <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', doas = sub('.*(S[1-6]).*', '\\1', folder), 
+    Serial = NULL, force.write.daily = FALSE, rawdataOnly = TRUE){
     if(length(from) > 1){
         to <- from[2]
         from <- from[1]
@@ -17,14 +18,14 @@ read_data <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', doas = sub('.*(
     stopifnot(to >= from)
     di <- getDOASinfo(doas, timerange = c(from, to), tzone = tz, Serial = Serial)
     structure(
-        readDOASdata(di, folder, rawdataOnly = TRUE)
+        readDOASdata(di, folder, rawdataOnly = rawdataOnly, force.write.daily = force.write.daily)
         , class = 'rawdat'
         )
 }
 
 #### print specdat method
 print.rawdat <- function(x, ...){
-    nc <- ncol(x$RawData)
+    nc <- length(x$RawData)
     wl <- get_wl(x)
     cat('~~~~\n')
     cat('\t', x$DOASinfo$DOASmodel, '/', x$DOASinfo$Spectrometer$Serial, '- raw data\n')
@@ -40,7 +41,7 @@ print.avgdat <- function(x, ...) {
     has_sc <- attr(x, 'straylight.corrected')
     has_lc <- attr(x, 'linearity.corrected')
     x <- attr(x, 'RawData')
-    nc <- ncol(x$RawData)
+    nc <- length(x$RawData)
     wl <- get_wl(x)
     cat('~~~~\n')
     cat('\t', x$DOASinfo$DOASmodel, '/', x$DOASinfo$Spectrometer$Serial, '- average spectrum\n')
@@ -176,14 +177,16 @@ avg_spec <- function(folder, from = NULL, to = NULL, tz = 'Etc/GMT-1',
             to <- parse_date_time3(to, tz = tz)
             # get indices
             ind <- which(folder$Header[['et']] > from & folder$Header[['st']] < to)
-            if (length(ind)) {
-                folder$RawData <- folder$RawData[ind]
-                folder$Header <- folder$Header[ind, , drop = FALSE]
-                # update timerange
-                folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][1, 'st'], folder[['Header']][length(ind), 'et'])
-            } else {
-                stop('No data within specified timerange available')
-            }
+        } else {
+            ind <- seq_along(folder$Header$et)
+        }
+        if (length(ind)) {
+            folder$RawData <- folder$RawData[ind]
+            folder$Header <- folder$Header[ind, , drop = FALSE]
+            # update timerange
+            folder[['DOASinfo']][['timerange']] <- c(folder[['Header']][1, 'st'], folder[['Header']][length(ind), 'et'])
+        } else {
+            stop('No data within specified timerange available')
         }
     } else if (is.list(folder) && 'SpecAvg' %in% names(folder)) {
         folder <- structure(
@@ -581,7 +584,7 @@ calc_dc <- function(meas, ref, ftype = NULL, fstrength = NULL, fwin = NULL,
 # get local minima values for dc
 local_minima <- function(dc, zero_value = -0.2e-20, wl_range = c(203, 219), show = FALSE) {
     # convert to sigma
-    dc <- dc2sigma(dc, copy = TRUE)
+    dc <- dc2sigma(dc, mgm3 = 193.4095, molar_mass = 17, copy = TRUE)
     if (show) dc_orig <- dc
     # select wl range
     dc$cnt[dc$wl <= wl_range[1] | dc$wl >= wl_range[2]] <- NA

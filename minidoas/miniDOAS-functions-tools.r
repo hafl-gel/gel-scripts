@@ -856,6 +856,7 @@ dc2sigma <- function(dc, mgm3 = NULL, molar_mass = NULL, copy = FALSE) {
     if (is.null(molar_mass)) {
         meas <- attr(dc, 'meas')
         gas <- switch(class(meas)[1]
+            , rawdat = meas[['Header']][['cuvetteGas']]
             , caldat = attr(dc, 'meas')[['Calinfo']][['cuvette.gas']]
             , {
                 cat('dc2sigma not yet implemented for class', class(meas)[1], '!\n')

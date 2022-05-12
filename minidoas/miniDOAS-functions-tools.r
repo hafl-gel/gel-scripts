@@ -576,19 +576,50 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
         }
     } else if (inherits(file, 'avgdat')) {
         DOASinfo <- attr(file, 'RawData')$DOASinfo
-        gas <- unique(attr(file, 'RawData')$Header[, 'RevPos'])
+        Header <- attr(file, 'RawData')$Header
+        gas <- unique(Header[, 'RevPos'])
         if (length(gas) > 1) stop('data has more than one unique entry in revolver position!')
+        cuvetteConc_mg <- switch(gas, nh3 = 193.4095, no = 593.9938, so2 = 76.29128, NA)
+        cuvetteLength <- 0.075
+        i_max <- sapply(attr(file, 'RawData')$RawData, max, na.rm = TRUE)
+        Imax <- list(range = range(i_max), mean = mean(i_max))
+        txt <- c(
+            "averaged raw spectra file"
+            ,paste0("calculation performed on: ",format(Now <- Sys.time()))
+            ,paste0("miniDOAS: ",DOASinfo$DOASmodel)
+            ,paste0("spectrometer: ",DOASinfo$Spectrometer$"Spectrometer Name")
+            ,paste0("revolver position: ",paste(unique(Header[,"RevPos"]),sep=","))
+            ,paste0("shutter position: ",paste(unique(Header[,"ShuPos"]),sep=","))
+            ,"~~~ cuvette measurement ~~~"
+            ,paste0("cuvette installed: ",ifelse((gas=="none"|is.na(gas)),"no","yes"))
+            ,paste0("cuvette gas: ",gas)
+            ,paste0("cuvette concentration (mg/m3): ",cuvetteConc_mg)
+            ,paste0("cuvette length: ",cuvetteLength)
+            ,"~~~ path measurement ~~~"
+            ,paste0("path length: ",NA)
+            ,paste0("ambient NH3 concentration (ug/m3): ",NA)
+            ,paste0("ambient SO2 concentration (ug/m3): ",NA)
+            ,paste0("ambient NO concentration (ug/m3): ",NA)
+            ,"~~~ "
+            ,paste0("averaging period: ",format(Header[1,"st"])," to ",format(rev(Header[,"et"])[1]))
+            ,paste0("averaged ",length(Header[,"et"])," spectra")
+            ,paste0("number of accumulations: ",paste(range(Header[, 'AccNum']),collapse=" to ")," (avg: ",sprintf("%1.1f",mean(Header[, 'AccNum'])),")")
+            ,paste0("exposure time (ms): ",paste(range(Header[, 'Expos']),collapse=" to ")," (avg: ",sprintf("%1.1f",mean(Header[, 'Expos'])),")")
+            ,paste0("TEC temperature (deg C): ",paste(range(as.numeric(Header[, 'TECTemp'])),collapse=" to ")," (avg: ",sprintf("%1.1f",mean(as.numeric(Header[, 'TECTemp']))),")")
+            ,paste0("ambient temperature (deg C): ",paste(NA,collapse=" to ")," (avg: ",sprintf("%1.1f",NA),")")
+            ,paste0("Imax: ",sprintf("%1.1f to %1.1f",Imax$range[1],Imax$range[2])," (avg: ",sprintf("%1.1f",Imax$mean),")")
+            ,"-----")
         out <- list(
             data = data.table(wl = get_wl(file), cnt = as.numeric(file)),
             Calinfo = list(
                 info = data.table(var = 'timerange', val = paste0(DOASinfo$timerange, collapse = ' and ')),
                 spec.name = spec,
                 cuvette.gas = gas,
-                cuvette.conc = switch(gas, nh3 = 193.4095, no = 593.9938, so2 = 76.29128, NA),
-                cuvette.path = 0.075
+                cuvette.conc = cuvetteConc_mg,
+                cuvette.path = cuvetteLength
                 ),
             DOASinfo = DOASinfo,
-            calref.info = spec_out$info.spec
+            calref.info = txt
             )
     } else {
         # if file is result from getSpecSet

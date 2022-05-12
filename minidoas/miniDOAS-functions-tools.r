@@ -574,6 +574,22 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
                 calref.info = cal[1:10, V1]
             )
         }
+    } else if (inherits(file, 'avgdat')) {
+        DOASinfo <- attr(file, 'RawData')$DOASinfo
+        gas <- unique(attr(file, 'RawData')$Header[, 'RevPos'])
+        if (length(gas) > 1) stop('data has more than one unique entry in revolver position!')
+        out <- list(
+            data = data.table(wl = get_wl(file), cnt = as.numeric(file)),
+            Calinfo = list(
+                info = data.table(var = 'timerange', val = paste0(DOASinfo$timerange, collapse = ' and ')),
+                spec.name = spec,
+                cuvette.gas = gas,
+                cuvette.conc = switch(gas, nh3 = 193.4095, no = 593.9938, so2 = 76.29128, NA),
+                cuvette.path = 0.075
+                ),
+            DOASinfo = DOASinfo,
+            calref.info = spec_out$info.spec
+            )
     } else {
         # if file is result from getSpecSet
         if (is.null(spec)) {

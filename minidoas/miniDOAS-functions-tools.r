@@ -66,7 +66,9 @@ plot.rawdat <- function(x, y, sweep_fun = NULL, log = 'y', xlim = c(190, 230), y
 }
 
 # split raw data depending on difference in light level
-split_raw <- function(specs, max_dist = 10) {
+split_raw <- function(rawdat, max_dist = 10) {
+    # get specs
+    specs <- rawdat$RawData
     # calculate distances between all
     dist <- outer(seq_along(specs), seq_along(specs), function(i, j) {
         mapply(function(x, y) mean(abs(x - y)), x = specs[i], y = specs[j], SIMPLIFY = TRUE)
@@ -141,7 +143,9 @@ split_raw <- function(specs, max_dist = 10) {
         # print(out)
     }
     # return list
-    lapply(out, sort)
+    lapply(out, function(x) {
+        filter_index(rawdat, sort(x))
+    })
 }
 
 

@@ -1516,6 +1516,19 @@ filter_time <- function(rawdat, index, to = NULL, including = TRUE) {
         )
 }
 
+# filter by simple index
+filter_index <- function(rawdat, index) {
+    # return rawdat class
+    structure(
+        list(
+            RawData = rawdat[['RawData']][index],
+            Header = rawdat[['Header']][index, ],
+            DOASinfo = rawdat[['DOASinfo']]
+            ),
+        class = 'rawdat'
+        )
+}
+
 # filter raw data by revolver position
 filter_position <- function(rawdat, position) {
     # get indices

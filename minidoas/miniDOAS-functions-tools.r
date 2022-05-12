@@ -35,6 +35,36 @@ print.rawdat <- function(x, ...){
     cat('~~~~\n')
 }
 
+#### plot raw spectra
+plot.rawdat <- function(x, y, sweep_fun = NULL, log = 'y', xlim = c(190, 230), ylim = NULL, 
+    col = 'black', lwd = 1, lty = 1, ...) {
+    # get wl
+    wl <- get_wl(x)
+    # get specs
+    specs <- x$RawData
+    # get subset xlim
+    if (is.null(xlim)) {
+        xlim <- range(wl)
+    } else {
+        ind <- which(wl >= xlim[1] & wl <= xlim[2])
+        wl <- wl[ind]
+        specs <- lapply(specs, function(y) y[ind])
+    }
+    # calculate difference to median
+    if (!is.null(sweep_fun)) {
+        log <- ''
+        med <- apply(data.frame(specs), 1, median)
+        specs <- lapply(specs, sweep_fun, med)
+    }
+    # get ylim
+    if (is.null(ylim)) ylim <- range(specs)
+    # plot empty + lines
+    plot(xlim, ylim, type = 'n', log = log, ...)
+    for (spec in specs) {
+        lines(wl, spec, col = col, lwd = lwd, lty = lty)
+    }
+}
+
 #### print avgdat method
 print.avgdat <- function(x, ...) {
     has_dc <- attr(x, 'dark.corrected')

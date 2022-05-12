@@ -65,6 +65,86 @@ plot.rawdat <- function(x, y, sweep_fun = NULL, log = 'y', xlim = c(190, 230), y
     }
 }
 
+# split raw data depending on difference in light level
+split_raw <- function(specs, max_dist = 10) {
+    # calculate distances between all
+    dist <- outer(seq_along(specs), seq_along(specs), function(i, j) {
+        mapply(function(x, y) mean(abs(x - y)), x = specs[i], y = specs[j], SIMPLIFY = TRUE)
+    })
+    diag(dist) <- NA
+    # set dist > max_dist to NA?
+    dist[dist > max_dist] <- NA
+    out <- list()
+    while (!all(is.na(dist))) {
+        # print(dist)
+        # find smallest 
+        i_min <- which.min(dist)
+        i_row <- ceiling(i_min / nrow(dist))
+        i_col <- (i_min - 1) %% nrow(dist) + 1
+        # print(i_row)
+        # print(i_col)
+        # check if can be connected
+        row_exists <- i_row %in% unlist(out)
+        col_exists <- i_col %in% unlist(out)
+        if (row_exists && !col_exists) {
+            # which set
+            i_set <- which(sapply(out, function(x) i_row %in% x))
+            # check i_col
+            check_me <- out[[i_set]] 
+            # remove i_row
+            check_me <- check_me[!(check_me %in% i_row)]
+            # don't add if any NA
+            if (!anyNA(dist[i_col, check_me])) {
+                out[[i_set]] <- c(out[[i_set]], i_col)
+            }
+            # set all to NA
+            dist[i_col, check_me] <- NA
+            dist[check_me, i_col] <- NA
+        } else if (col_exists && !row_exists) {
+            # which set
+            i_set <- which(sapply(out, function(x) i_col %in% x))
+            # check i_row
+            check_me <- out[[i_set]] 
+            # remove i_col
+            check_me <- check_me[!(check_me %in% i_col)]
+            # don't add if any NA
+            if (!anyNA(dist[i_row, check_me])) {
+                out[[i_set]] <- c(out[[i_set]], i_row)
+            }
+            # set all to NA
+            dist[i_row, check_me] <- NA
+            dist[check_me, i_row] <- NA
+        } else if (!col_exists && !row_exists) {
+            # add new set
+            out <- c(out, list(c(i_row, i_col)))
+        } else {
+            # check if sets can be joined together
+            # which sets
+            col_set <- which(sapply(out, function(x) i_col %in% x))
+            row_set <- which(sapply(out, function(x) i_row %in% x))
+            # get set entries
+            col_val <- out[[col_set]]
+            row_val <- out[[row_set]]
+            # anyNA?
+            if (!anyNA(dist[col_val, row_val])) {
+                # join
+                out[[col_set]] <- c(out[[col_set]], out[[row_set]])
+                # remove
+                out[[row_set]] <- NULL
+            }
+            # set NA
+            dist[col_val, row_val] <- NA
+            dist[row_val, col_val] <- NA
+        }
+        # set to NA
+        dist[c(i_row, i_col), c(i_col, i_row)] <- NA
+        # print(out)
+    }
+    # return list
+    lapply(out, sort)
+}
+
+
 #### print avgdat method
 print.avgdat <- function(x, ...) {
     has_dc <- attr(x, 'dark.corrected')

@@ -329,7 +329,7 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
         rawdata <- read_data(path_data, from = timerange)
     }
     # loop over gases
-    lapply(gases, read_gas, path_data = rawdata, show = show)
+    setNames(lapply(gases, read_gas, path_data = rawdata, show = show), gases)
 }
 
 

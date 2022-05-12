@@ -280,6 +280,61 @@ points.single_spec <- function(x, ...) {
 }
 
 
+#### process calref rawdata
+read_gas <- function(gas, path_data, from, show = TRUE) {
+    if (inherits(path_data, 'rawdat')) {
+        # pass on
+        rawdata <- path_data
+    } else {
+        # read data from timerange
+        rawdata <- read_data(path_data, from = from)
+    }
+    # filter for revolver position
+    raw <- filter_position(rawdata, gas)
+    # split
+    sets <- split_raw(raw, 10)
+    if (show) {
+        # raw
+        x11()
+        par(mfrow = c(2, 1))
+        plot(raw, main = paste(gas, '- unfiltered'))
+        plot(raw, sweep_fun = '/')
+        # sets
+        lapply(seq_along(sets), function(i) {
+            x11()
+            par(mfrow = c(2, 1))
+            plot(sets[[i]], main = paste(gas, '- set', i))
+            plot(sets[[i]], sweep_fun = '/')
+            })
+    }
+    # average spectra
+    suppressWarnings(avgs <- lapply(sets, avg_spec))
+    # get i_max
+    i_max <- sapply(avgs, max)
+    # return list
+    list(
+        raw = raw,
+        sets = sets,
+        avgs = avgs,
+        i_max = i_max
+        )
+}
+read_all_gases <- function(path_data, timerange, show = TRUE, 
+    gases = c('N2', 'NH3', 'NO', 'SO2')) {
+    if (inherits(path_data, 'rawdat')) {
+        # pass on
+        rawdata <- path_data
+    } else {
+        # read data from timerange
+        rawdata <- read_data(path_data, from = timerange)
+    }
+    # loop over gases
+    lapply(gases, read_gas, path_data = rawdata, show = show)
+}
+
+
+
+
 #### average raw data
 avg_spec <- function(folder, from = NULL, to = NULL, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 

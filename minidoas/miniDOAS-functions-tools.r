@@ -339,15 +339,25 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     out[['so2']][['dc']] <- calc_dc(out[['so2']][['cal_spec']], out[['so2']][['ref_spec']])
     structure(out, class = 'calref')
 }
-plot.calref <- function(x, per_molecule = TRUE, ...) {
+plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', ...) {
     par(mfrow = c(3, 3))
     for (i in seq_along(x)) {
-        for (j in seq_along(x[[i]])) {
-            if (inherits(x[[i]][[j]], 'dc')) {
-                plot(x[[i]][[j]], per_molecule = per_molecule, ...)
-            } else {
-                plot(x[[i]][[j]], ...)
-            }
+        # plot cal spec
+        plot(x[[i]][['cal_spec']], log = log, ...)
+        # plot ref spec
+        plot(x[[i]][['ref_spec']], type = 'n', log = log, ...)
+        lines(x[[i]][['cal_spec']], col = 'darkgrey')
+        lines(x[[i]][['ref_spec']], col = 'black')
+        # plot dc
+        if (add_cheng && names(x)[i] == 'nh3') {
+            cheng <- find_cheng(x[['nh3']][['dc']], show = FALSE, return.cheng.dc = TRUE)
+            plot(x[[i]][['dc']], per_molecule = per_molecule, type = 'n', ...)
+            lines(cheng$cheng, col = 'indianred', per_molecule = per_molecule)
+            lines(x[[i]][['dc']], per_molecule = per_molecule, col = 'black')
+            legend('bottomright', legend = sprintf('span = %1.3f (+/- %1.3f)\nshift = %1.2f', 
+                    cheng$coefs[2], cheng$se[2], cheng$shift), bty = 'n')
+        } else {
+            plot(x[[i]][['dc']], per_molecule = per_molecule, ...)
         }
     }
 }

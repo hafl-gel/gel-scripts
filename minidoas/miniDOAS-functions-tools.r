@@ -279,6 +279,67 @@ points.single_spec <- function(x, ...) {
     points(x, y, ...)
 }
 
+# helper functions to process calibration data
+save_calref <- function(x, qs_preset = c('high', 'archive')[2]) {
+    name <- deparse(substitute(x))
+    qsave(x, file.path(path_rsaves, paste0(name, '.qs')), preset = qs_preset[1])
+}
+create_calref <- function(spec_set) {
+    out <- list()
+    out[['nh3']][['cal_spec']] <- read_cal(spec_set, 'dat.NH3', dont_warn_dark = TRUE)
+    out[['nh3']][['ref_spec']] <- read_cal(spec_set, 'dat.N2.NH3', dont_warn_dark = TRUE)
+    out[['no']][['cal_spec']] <- read_cal(spec_set, 'dat.NO', dont_warn_dark = TRUE)
+    out[['no']][['ref_spec']] <- read_cal(spec_set, 'dat.N2.NO', dont_warn_dark = TRUE)
+    out[['so2']][['cal_spec']] <- read_cal(spec_set, 'dat.SO2', dont_warn_dark = TRUE)
+    out[['so2']][['ref_spec']] <- read_cal(spec_set, 'dat.N2.SO2', dont_warn_dark = TRUE)
+    out[['nh3']][['dc']] <- calc_dc(out[['nh3']][['cal_spec']], out[['nh3']][['ref_spec']])
+    out[['no']][['dc']] <- calc_dc(out[['no']][['cal_spec']], out[['no']][['ref_spec']])
+    out[['so2']][['dc']] <- calc_dc(out[['so2']][['cal_spec']], out[['so2']][['ref_spec']])
+    structure(out, class = 'calref')
+}
+read_calref <- function(...) {
+    create_calref(getSpecSet(...))
+}
+process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all, 
+    n2 = list(nh3 = all, no = all, so2 = all)) {
+    # TODO: check n2 -> single number -> ...; single_entry -> ...
+    if (!is.list(n2) || !all(c('nh3', 'no', 'so2') %in% names(n2))) {
+        cat('todo: fix user defined n2\n')
+        browser()
+    }
+    # capture args in list
+    args <- list(nh3 = nh3, no = no, so2 = so2, n2 = n2)
+    # use lowercase names for callist
+    nms <- names(callist) <- tolower(names(callist))
+    # loop over cals
+    cal_read <- setNames(lapply(nms, function(x) {
+        # read cal
+        if (x == 'n2') {
+            # get n2 args and names
+            n2_args <- args[[x]]
+            n2_nms <- names(n2_args)
+            # loop over n2 entries
+            setNames(lapply(n2_nms, function(y) {
+                read_cal(callist[[y]][['avgs']][[n2_args[[y]]]])
+            }), n2_nms)
+        } else {
+            read_cal(callist[[x]][['avgs']][[args[[x]]]])
+        }
+    }), nms)  
+    # assamble output
+    out <- list()
+    out[['nh3']][['cal_spec']] <- cal_read[['nh3']]
+    out[['nh3']][['ref_spec']] <- cal_read[['n2']][['nh3']]
+    out[['no']][['cal_spec']] <- cal_read[['no']]
+    out[['no']][['ref_spec']] <- cal_read[['n2']][['no']]
+    out[['so2']][['cal_spec']] <- cal_read[['so2']]
+    out[['so2']][['ref_spec']] <- cal_read[['n2']][['so2']]
+    out[['nh3']][['dc']] <- calc_dc(out[['nh3']][['cal_spec']], out[['nh3']][['ref_spec']])
+    out[['no']][['dc']] <- calc_dc(out[['no']][['cal_spec']], out[['no']][['ref_spec']])
+    out[['so2']][['dc']] <- calc_dc(out[['so2']][['cal_spec']], out[['so2']][['ref_spec']])
+    structure(out, class = 'calref')
+}
+
 
 #### process calref rawdata
 read_gas <- function(gas, path_data, from, show = TRUE) {

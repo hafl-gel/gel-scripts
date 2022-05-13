@@ -320,7 +320,7 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
             n2_nms <- names(n2_args)
             # loop over n2 entries
             setNames(lapply(n2_nms, function(y) {
-                read_cal(callist[[y]][['avgs']][[n2_args[[y]]]])
+                read_cal(callist[[x]][['avgs']][[n2_args[[y]]]])
             }), n2_nms)
         } else {
             read_cal(callist[[x]][['avgs']][[args[[x]]]])

@@ -1061,7 +1061,7 @@ cheng_factor <- function(dc, shift_cheng = 0, show = FALSE) {
         )
 }
 
-find_cheng <- function(dc, show = FALSE, interval = c(-1, 1)) {
+find_cheng <- function(dc, show = FALSE, interval = c(-1, 1), return.cheng.dc = FALSE) {
     # S5 cheng dc
     cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref')))
     ms <- median(local_minima(dc)$wl_exact - local_minima(cheng)$wl_exact)
@@ -1071,7 +1071,9 @@ find_cheng <- function(dc, show = FALSE, interval = c(-1, 1)) {
         }, interval = interval + ms)
     c(
         cheng_factor(dc, par$minimum, show = show),
-        shift = par$minimum
+        shift = par$minimum,
+        # return shifted cheng spectrum
+        cheng = if (return.cheng.dc) list(cheng2dc(get_Cheng(), attr(dc, 'ref'), shift = par$minimum))
         )
 }
 

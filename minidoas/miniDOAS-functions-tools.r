@@ -339,6 +339,15 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     out[['so2']][['dc']] <- calc_dc(out[['so2']][['cal_spec']], out[['so2']][['ref_spec']])
     structure(out, class = 'calref')
 }
+plot.calref <- function(x, ...) {
+    par(mfrow = c(3, 3))
+    for (i in seq_along(x)) {
+        for (j in seq_along(x[[i]])) {
+            plot(x[[i]][[j]], ...)
+        }
+    }
+}
+
 
 
 #### process calref rawdata

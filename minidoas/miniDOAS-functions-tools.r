@@ -339,11 +339,15 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     out[['so2']][['dc']] <- calc_dc(out[['so2']][['cal_spec']], out[['so2']][['ref_spec']])
     structure(out, class = 'calref')
 }
-plot.calref <- function(x, ...) {
+plot.calref <- function(x, per_molecule = TRUE, ...) {
     par(mfrow = c(3, 3))
     for (i in seq_along(x)) {
         for (j in seq_along(x[[i]])) {
-            plot(x[[i]][[j]], ...)
+            if (inherits(x[[i]][[j]], 'dc')) {
+                plot(x[[i]][[j]], per_molecule = per_molecule, ...)
+            } else {
+                plot(x[[i]][[j]], ...)
+            }
         }
     }
 }
@@ -649,7 +653,7 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
         Header <- attr(file, 'RawData')$Header
         gas <- unique(Header[, 'RevPos'])
         if (length(gas) > 1) stop('data has more than one unique entry in revolver position!')
-        cuvetteConc_mg <- switch(gas, nh3 = 193.4095, no = 593.9938, so2 = 76.29128, NA)
+        cuvetteConc_mg <- switch(gas, NH3 = 193.4095, NO = 593.9938, SO2 = 76.29128, NA)
         cuvetteLength <- 0.075
         i_max <- sapply(attr(file, 'RawData')$RawData, max, na.rm = TRUE)
         Imax <- list(range = range(i_max), mean = mean(i_max))

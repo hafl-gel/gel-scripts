@@ -344,10 +344,16 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', ...)
     for (i in seq_along(x)) {
         # plot cal spec
         plot(x[[i]][['cal_spec']], log = log, ...)
+        legend('topleft', bty = 'n', legend = paste0(
+                names(x)[i], ' cal spec, measured between:\n',
+                deparse_timerange(get_timerange(x[[i]][['cal_spec']]), sep = ' and ')) )
         # plot ref spec
         plot(x[[i]][['ref_spec']], type = 'n', log = log, ...)
         lines(x[[i]][['cal_spec']], col = 'darkgrey')
         lines(x[[i]][['ref_spec']], col = 'black')
+        legend('topleft', bty = 'n', legend = paste0(
+                names(x)[i], ' ref spec, measured between:\n',
+                deparse_timerange(get_timerange(x[[i]][['ref_spec']]), sep = ' and ')) )
         # plot dc
         if (add_cheng && names(x)[i] == 'nh3') {
             cheng <- find_cheng(x[['nh3']][['dc']], show = FALSE, return.cheng.dc = TRUE)
@@ -355,7 +361,7 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', ...)
             lines(cheng$cheng, col = 'indianred', per_molecule = per_molecule)
             lines(x[[i]][['dc']], per_molecule = per_molecule, col = 'black')
             legend('bottomright', legend = sprintf('span = %1.3f (+/- %1.3f)\nshift = %1.2f', 
-                    cheng$coefs[2], cheng$se[2], cheng$shift), bty = 'n')
+                    cheng$coefs[2], cheng$se[2], cheng$shift), bty = 'n', inset = 0.05)
         } else {
             plot(x[[i]][['dc']], per_molecule = per_molecule, ...)
         }

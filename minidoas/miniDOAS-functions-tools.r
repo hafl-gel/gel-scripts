@@ -371,7 +371,7 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', ...)
 
 
 #### process calref rawdata
-read_gas <- function(gas, path_data, from, show = TRUE) {
+read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 10) {
     if (inherits(path_data, 'rawdat')) {
         # pass on
         rawdata <- path_data
@@ -382,7 +382,7 @@ read_gas <- function(gas, path_data, from, show = TRUE) {
     # filter for revolver position
     raw <- filter_position(rawdata, gas)
     # split
-    sets <- split_raw(raw, 10)
+    sets <- split_raw(raw, max.dist)
     if (show) {
         # raw
         x11()
@@ -410,7 +410,7 @@ read_gas <- function(gas, path_data, from, show = TRUE) {
         )
 }
 read_all_gases <- function(path_data, timerange, show = TRUE, 
-    gases = c('N2', 'NH3', 'NO', 'SO2')) {
+    gases = c('N2', 'NH3', 'NO', 'SO2'), max.dist = 10) {
     if (inherits(path_data, 'rawdat')) {
         # pass on
         rawdata <- path_data
@@ -419,7 +419,7 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
         rawdata <- read_data(path_data, from = timerange)
     }
     # loop over gases
-    setNames(lapply(gases, read_gas, path_data = rawdata, show = show), gases)
+    setNames(lapply(gases, read_gas, path_data = rawdata, show = show, max.dist = max.dist), gases)
 }
 
 

@@ -330,11 +330,6 @@ read_calref <- function(...) {
 }
 process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all, 
     n2 = list(nh3 = all, no = all, so2 = all)) {
-    # TODO: check n2 -> single number -> ...; single_entry -> ...
-    if (!is.list(n2) || !all(c('nh3', 'no', 'so2') %in% names(n2))) {
-        cat('todo: fix user defined n2\n')
-        browser()
-    }
     # capture n2 arg
     n2_args <- list(nh3 = all, no = all, so2 = all)
     if (is.list(n2)) {

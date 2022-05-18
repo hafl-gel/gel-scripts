@@ -398,7 +398,8 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 10) {
             })
     }
     # average spectra
-    suppressWarnings(avgs <- lapply(sets, avg_spec))
+    suppressWarnings(avgs <- lapply(sets, avg_spec, correct.straylight = FALSE,
+            correct.linearity = FALSE))
     # get i_max
     i_max <- sapply(avgs, max)
     # return list
@@ -711,6 +712,14 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
             DOASinfo = DOASinfo,
             calref.info = txt
             )
+        # check corrections:
+        if (any(attr(file, 'straylight.corrected'), attr(file, 'linearity.corrected'),
+                attr(file, 'dark.corrected'))) {
+            # TODO: set corrections to FALSE
+            # ...
+            # pass on starylight/dark values
+            stop('Averaged spectra have been corrected before. Fix passing on of straylight and dark values!')
+        }
     } else {
         # if file is result from getSpecSet
         if (is.null(spec)) {
@@ -756,11 +765,11 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
     if (correct.straylight) {
         win <- getWindows(out$DOASinfo)
         dark <- out$data[, mean(cnt[win$pixel_straylight])]
+        out$Calinfo$straylight.value <- dark
         if (!lin_before_dark) {
             out$data[, cnt := cnt - dark]
+            out$Calinfo$straylight.corrected <- TRUE
         }
-        out$Calinfo$straylight.corrected <- TRUE
-        out$Calinfo$straylight.value <- dark
     }
     # correct linearity
     out$Calinfo$linearity.corrected = FALSE
@@ -772,6 +781,7 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
     # correct.straylight afterwards
     if (correct.straylight && lin_before_dark) {
         out$data[, cnt := cnt - dark]
+        out$Calinfo$straylight.corrected <- TRUE
     }
     structure(
         out,
@@ -1105,7 +1115,7 @@ get_cal_infos <- function(dc, compact = TRUE, show = !compact) {
     cinfo <- attr(dc[['nh3']][['dc']], 'meas')$Calinfo
     # straylight + dark
     dark <- 0
-    if (cinfo$dark.corrected) dark <- dark + cinfo$dark.spec
+    if (cinfo$dark.corrected) dark <- dark + mean(cinfo$dark.spec, na.rm = TRUE)
     if (cinfo$straylight.corrected) dark <- dark + cinfo$straylight.value
     # cheng factor
     cheng <- find_cheng(dc[['nh3']][['dc']], show)

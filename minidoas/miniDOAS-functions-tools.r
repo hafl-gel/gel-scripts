@@ -406,7 +406,9 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
         # plot dc
         if (add_cheng && names(x)[i] == 'nh3') {
             cheng <- find_cheng(x[['nh3']][['dc']], show = FALSE, return.cheng.dc = TRUE)
-            if (is.null(ylim)) ylim <- range(c(cheng$cheng$cnt, x[[i]][['dc']]$cnt), na.rm = TRUE)
+            s_cheng <- dc2sigma(cheng$cheng, copy = TRUE)
+            s_dc <- dc2sigma(x[['nh3']][['dc']], copy = TRUE)
+            if (is.null(ylim)) ylim <- range(c(s_cheng$cnt, s_dc$cnt), na.rm = TRUE)
             plot(x[[i]][['dc']], per_molecule = per_molecule, type = 'n', ylim = ylim, ...)
             lines(cheng$cheng, col = 'indianred', per_molecule = per_molecule)
             lines(x[[i]][['dc']], per_molecule = per_molecule, col = 'black')

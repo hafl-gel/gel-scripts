@@ -426,18 +426,29 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3) {
     # split
     sets <- split_raw(raw, max.dist)
     if (show) {
+        # get color palette
+        require(colorspace)
+        cpal <- qualitative_hcl(length(sets))
+        # sweep before
+        med <- apply(data.frame(raw$RawData), 1, median)
+        swept <- raw
+        swept$RawData <- lapply(raw$RawData, '/', med)
         # raw
         x11()
         par(mfrow = c(2, 1))
         plot(raw, main = paste(gas, '- unfiltered'))
-        plot(raw, sweep_fun = '/')
-        # indicate max.dist
-        abline(h = 1 + c(-1, 1) * max.dist, col = 'indianred', lwd = 2)
+        # use different colors for different sets (use color palette also in set figures)
+        plot(swept, ylim = 1 + c(-1, 1) * max(abs(quantile(unlist(swept$RawData), c(0.025, 0.975)) - 1)) * 2, 
+            col = 'lightgrey')
+        # loop over sets
+        for (s in seq_along(sets)) {
+            lines(filter_index(swept, which(names(swept$RawData) %in% names(sets[[s]]$RawData))), col = cpal[s])
+        }
         # sets
         lapply(seq_along(sets), function(i) {
             x11()
             par(mfrow = c(2, 1))
-            plot(sets[[i]], main = paste(gas, '- set', i, '-', length(sets[[i]]$RawData), 'specs'))
+            plot(sets[[i]], main = paste(gas, '- set', i, '-', length(sets[[i]]$RawData), 'specs'), col = cpal[i])
             plot(sets[[i]], sweep_fun = '/')
             })
     }

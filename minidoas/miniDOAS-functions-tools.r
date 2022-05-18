@@ -442,6 +442,12 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
     }
 }
 
+ppm_mgm3 <- function(ppm, T_deg, p_hPa, molar_mass = 17) {
+    ppm * molar_mass * p_hPa / 10 / (8.3144598 * (T_deg + 273.15))
+}
+mgm3_ppm <- function(mgm3, T_deg, p_hPa, molar_mass = 17) {
+    mgm3 * (8.3144598 * (T_deg + 273.15)) * 10 / p_hPa / molar_mass
+}
 
 
 #### process calref rawdata

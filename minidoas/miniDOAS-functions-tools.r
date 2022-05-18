@@ -335,8 +335,20 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
         cat('todo: fix user defined n2\n')
         browser()
     }
+    # capture n2 arg
+    n2_args <- list(nh3 = all, no = all, so2 = all)
+    if (is.list(n2)) {
+        n2 <- n2[names(n2) %in% names(n2_args)]
+        if (length(n2)) {
+            for (nm in names(n2)) {
+                n2_args[[nm]] <- n2[[nm]]
+            }
+        }
+    } else {
+        n2_args <- setNames(rep(list(n2), 3), names(n2_args))
+    }
     # capture args in list
-    args <- list(nh3 = nh3, no = no, so2 = so2, n2 = n2)
+    args <- list(nh3 = nh3, no = no, so2 = so2, n2 = n2_args)
     # use lowercase names for callist
     nms <- names(callist) <- tolower(names(callist))
     # loop over cals
@@ -482,34 +494,36 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
     if (is.list(max.dist)) {
         max.dist <- max.dist[names(max.dist) %in% names(md)]
         if (length(max.dist)) {
-            md[names(max.dist)] <- max.dist
+            for (nm in names(max.dist)) {
+                md[[nm]] <- max.dist[[nm]]
+            }
+            }
+        } else if (!missing(max.dist) && is.numeric(max.dist)) {
+            md <- setNames(rep(list(max.dist), length(md)), names(md))
         }
-    } else if (!missing(max.dist) && is.numeric(max.dist)) {
-        md <- setNames(rep(list(max.dist), length(md)), names(md))
+        # loop over gases
+        setNames(mapply(read_gas, gases, max.dist = max.dist, 
+                MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
+                SIMPLIFY = FALSE), gases)
     }
-    # loop over gases
-    setNames(mapply(read_gas, gases, max.dist = max.dist, 
-            MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
-            SIMPLIFY = FALSE), gases)
-}
 
 
 
 
-#### average raw data
-avg_spec <- function(folder, from = NULL, to = NULL, tz = 'Etc/GMT-1', 
-    doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
-    correct.straylight = TRUE, correct.linearity = TRUE, dark = NULL) {
-    if(inherits(folder, 'rawdat')){
-        if (!is.null(from)) {
-            # convert from/to to POSIXct
-            from <- parse_date_time3(from, tz = tz)
-            to <- parse_date_time3(to, tz = tz)
-            # get indices
-            ind <- which(folder$Header[['et']] > from & folder$Header[['st']] < to)
-        } else {
-            ind <- seq_along(folder$Header$et)
-        }
+    #### average raw data
+    avg_spec <- function(folder, from = NULL, to = NULL, tz = 'Etc/GMT-1', 
+        doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
+        correct.straylight = TRUE, correct.linearity = TRUE, dark = NULL) {
+        if(inherits(folder, 'rawdat')){
+            if (!is.null(from)) {
+                # convert from/to to POSIXct
+                from <- parse_date_time3(from, tz = tz)
+                to <- parse_date_time3(to, tz = tz)
+                # get indices
+                ind <- which(folder$Header[['et']] > from & folder$Header[['st']] < to)
+            } else {
+                ind <- seq_along(folder$Header$et)
+            }
         if (length(ind)) {
             folder$RawData <- folder$RawData[ind]
             folder$Header <- folder$Header[ind, , drop = FALSE]

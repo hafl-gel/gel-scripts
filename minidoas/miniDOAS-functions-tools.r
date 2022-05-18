@@ -374,7 +374,7 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     out[['so2']][['dc']] <- calc_dc(out[['so2']][['cal_spec']], out[['so2']][['ref_spec']])
     structure(out, class = 'calref')
 }
-plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save.path = NULL, ...) {
+plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save.path = NULL, ylim = NULL, ...) {
     # save figure?
     if (!is.null(save.path)) {
         # derive figure name
@@ -406,7 +406,8 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
         # plot dc
         if (add_cheng && names(x)[i] == 'nh3') {
             cheng <- find_cheng(x[['nh3']][['dc']], show = FALSE, return.cheng.dc = TRUE)
-            plot(x[[i]][['dc']], per_molecule = per_molecule, type = 'n', ...)
+            if (is.null(ylim)) ylim <- range(c(cheng$cheng$cnt, x[[i]][['dc']]$cnt), na.rm = TRUE)
+            plot(x[[i]][['dc']], per_molecule = per_molecule, type = 'n', ylim = ylim, ...)
             lines(cheng$cheng, col = 'indianred', per_molecule = per_molecule)
             lines(x[[i]][['dc']], per_molecule = per_molecule, col = 'black')
             legend('bottomright', legend = sprintf('span = %1.3f (+/- %1.3f)\nshift = %1.2f', 

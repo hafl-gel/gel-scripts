@@ -438,8 +438,18 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
         # read data from timerange
         rawdata <- read_data(path_data, from = timerange)
     }
+    # check max.dist
+    md <- list(nh3 = 10, no = 10, so2 = 10, n2 = 10)
+    if (is.list(max.dist)) {
+        max.dist <- max.dist[names(max.dist) %in% names(md)]
+        if (length(max.dist)) {
+            md[names(max.dist)] <- max.dist
+        }
+    } else if (!missing(max.dist) && is.numeric(max.dist)) {
+        md <- setNames(rep(list(max.dist), length(md)), names(md))
+    }
     # loop over gases
-    setNames(lapply(gases, read_gas, path_data = rawdata, show = show, max.dist = max.dist), gases)
+    setNames(mapply(read_gas, gases, max.dist = max.dist, MoreArgs = list(path_data = rawdata, show = show), SIMPLIFY = FALSE), gases)
 }
 
 

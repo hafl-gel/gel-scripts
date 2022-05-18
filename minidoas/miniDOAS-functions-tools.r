@@ -413,7 +413,7 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
 
 
 #### process calref rawdata
-read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3) {
+read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3, min.num = 2) {
     if (inherits(path_data, 'rawdat')) {
         # pass on
         rawdata <- path_data
@@ -425,6 +425,8 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3) {
     raw <- filter_position(rawdata, gas)
     # split
     sets <- split_raw(raw, max.dist)
+    # remove sets with less than min.num
+    sets <- sets[sapply(sets, function(x) length(x$RawData) >= min.num)]
     if (show) {
         # get color palette
         require(colorspace)
@@ -448,7 +450,8 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3) {
         lapply(seq_along(sets), function(i) {
             x11()
             par(mfrow = c(2, 1))
-            plot(sets[[i]], main = paste(gas, '- set', i, '-', length(sets[[i]]$RawData), 'specs'), col = cpal[i])
+            plot(sets[[i]], main = paste(gas, '- set', i, ':', length(sets[[i]]$RawData), 'specs - ', 
+                    sprintf('%1.0f', max(sapply(sets[[i]]$RawData, max, na.rm = TRUE)))), col = cpal[i])
             plot(sets[[i]], sweep_fun = '/')
             })
     }
@@ -466,7 +469,7 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3) {
         )
 }
 read_all_gases <- function(path_data, timerange, show = TRUE, 
-    gases = c('N2', 'NH3', 'NO', 'SO2'), max.dist = 5e-3) {
+    gases = c('N2', 'NH3', 'NO', 'SO2'), max.dist = 5e-3, min.num = 2) {
     if (inherits(path_data, 'rawdat')) {
         # pass on
         rawdata <- path_data
@@ -485,7 +488,9 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
         md <- setNames(rep(list(max.dist), length(md)), names(md))
     }
     # loop over gases
-    setNames(mapply(read_gas, gases, max.dist = max.dist, MoreArgs = list(path_data = rawdata, show = show), SIMPLIFY = FALSE), gases)
+    setNames(mapply(read_gas, gases, max.dist = max.dist, 
+            MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
+            SIMPLIFY = FALSE), gases)
 }
 
 

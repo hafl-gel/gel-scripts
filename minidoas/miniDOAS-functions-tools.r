@@ -368,9 +368,14 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     if (!missing(cuvette.mgm3)) {
         # cuv_conc <- eval(formals(process_callist)$cuvette.mgm3)
         for (nm in names(cuvette.mgm3)) {
+            # fix conc
             cal_read[[nm]]$Calinfo$cuvette.conc <- cuvette.mgm3[[nm]]
             ind <- grep('cuvette conc', cal_read[[nm]]$calref.info)
             cal_read[[nm]]$calref.info[ind] <- sub('([0-9.]*)$', cuvette.mgm3[[nm]], cal_read[[nm]]$calref.info[ind])
+            # fix gas
+            cal_read[[nm]]$Calinfo$cuvette.gas <- toupper(nm)
+            ind <- grep('cuvette gas', cal_read[[nm]]$calref.info)
+            cal_read[[nm]]$calref.info[ind] <- sub(':.*$', paste(':', toupper(nm)), cal_read[[nm]]$calref.info[ind])
         }
     }
     # assamble output

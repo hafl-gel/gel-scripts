@@ -329,7 +329,8 @@ read_calref <- function(...) {
     create_calref(getSpecSet(...))
 }
 process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all, 
-    n2 = list(nh3 = all, no = all, so2 = all)) {
+    n2 = list(nh3 = all, no = all, so2 = all), cuvette.length = 0.075, 
+    cuvette.mgm3 = list(nh3 = 193.4095, no = 593.9938, so2 = 76.29128)) {
     # capture n2 arg
     n2_args <- list(nh3 = all, no = all, so2 = all)
     if (is.list(n2)) {
@@ -361,6 +362,15 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
             read_cal(callist[[x]][['avgs']][[args[[x]]]])
         }
     }), nms)  
+    # correct cuvette concentration
+    if (!missing(cuvette.mgm3)) {
+        # cuv_conc <- eval(formals(process_callist)$cuvette.mgm3)
+        for (nm in names(cuvette.mgm3)) {
+            cal_read[[nm]]$Calinfo$cuvette.conc <- cuvette.mgm3[[nm]]
+            ind <- grep('cuvette conc', cal_read[[nm]]$calref.info)
+            cal_read[[nm]]$calref.info[ind] <- sub('([0-9.]*)$', cuvette.mgm3[[nm]], cal_read[[nm]]$calref.info[ind])
+        }
+    }
     # assamble output
     out <- list()
     out[['nh3']][['cal_spec']] <- cal_read[['nh3']]

@@ -280,7 +280,7 @@ points.single_spec <- function(x, ...) {
 }
 
 # helper functions to process calibration data
-save_calref <- function(x, qs_preset = c('high', 'archive')[2]) {
+save_calref <- function(x, qs_preset = c('high', 'archive')[2], path_rsaves = 'rsaves') {
     name <- deparse(substitute(x))
     qsave(x, file.path(path_rsaves, paste0(name, '.qs')), preset = qs_preset[1])
 }

@@ -36,7 +36,7 @@ print.rawdat <- function(x, ...){
 }
 
 #### plot raw spectra
-plot.rawdat <- function(x, y, sweep_fun = NULL, log = 'y', xlim = c(190, 230), ylim = NULL, 
+plot.rawdat <- function(x, y, sweep_fun = NULL, sweep_stats = median, log = 'y', xlim = c(190, 230), ylim = NULL, 
     col = 'black', lwd = 1, lty = 1, ...) {
     # get wl
     wl <- get_wl(x)
@@ -53,8 +53,8 @@ plot.rawdat <- function(x, y, sweep_fun = NULL, log = 'y', xlim = c(190, 230), y
     # calculate difference to median
     if (!is.null(sweep_fun)) {
         log <- ''
-        med <- apply(data.frame(specs), 1, median)
-        specs <- lapply(specs, sweep_fun, med)
+        stats <- apply(data.frame(specs), 1, sweep_stats)
+        specs <- lapply(specs, sweep_fun, stats)
     }
     # get ylim
     if (is.null(ylim)) ylim <- range(specs)
@@ -408,6 +408,7 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 10) {
         par(mfrow = c(2, 1))
         plot(raw, main = paste(gas, '- unfiltered'))
         plot(raw, sweep_fun = '/')
+        # TODO: add max.dist lines
         # sets
         lapply(seq_along(sets), function(i) {
             x11()

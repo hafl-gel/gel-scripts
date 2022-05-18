@@ -435,11 +435,12 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
             }
             cheng <- find_cheng(x[['nh3']][['dc']], show = FALSE, return.cheng.dc = TRUE, mgm3 = x[['nh3']][['cal_spec']]$Calinfo$cuvette.conc)
             s_cheng <- dc2sigma(cheng$cheng, copy = TRUE)
+            # scale cheng
             s_cheng$cnt <- s_cheng$cnt * scale_cheng
             s_dc <- dc2sigma(x[['nh3']][['dc']], copy = TRUE)
             if (is.null(ylim)) ylim <- range(c(s_cheng$cnt, s_dc$cnt), na.rm = TRUE)
             plot(x[[i]][['dc']], per_molecule = per_molecule, type = 'n', ylim = ylim, ...)
-            lines(cheng$cheng, col = 'indianred', per_molecule = per_molecule)
+            lines(cheng$cheng, fctr = scale_cheng, col = 'indianred', per_molecule = per_molecule)
             lines(x[[i]][['dc']], per_molecule = per_molecule, col = 'black')
             legend('bottomright', legend = sprintf('span = %1.3f (+/- %1.3f)\nshift = %1.2f', 
                     cheng$coefs[2], cheng$se[2], cheng$shift), bty = 'n', inset = 0.05)

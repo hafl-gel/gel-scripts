@@ -81,12 +81,20 @@ lines.rawdat <- function(x, y, sweep_fun = NULL, sweep_stats = median, col = 'bl
 }
 
 # split raw data depending on difference in light level
-split_raw <- function(rawdat, max_dist = 10) {
+split_raw <- function(rawdat, max_dist = 5e-3) {
     # get specs
     specs <- rawdat$RawData
+    # get windows
+    wins <- get_wins(rawdat)
     # calculate distances between all
     dist <- outer(seq_along(specs), seq_along(specs), function(i, j) {
-        mapply(function(x, y) mean(abs(x - y)), x = specs[i], y = specs[j], SIMPLIFY = TRUE)
+        # change to max between 190 and 230
+        mapply(function(x, y) {
+            # subsets
+            xs <- x[wins$pixel_filter]
+            ys <- y[wins$pixel_filter]
+            max(abs(xs - ys) / (xs + ys))
+            }, x = specs[i], y = specs[j], SIMPLIFY = TRUE)
     })
     diag(dist) <- NA
     # set dist > max_dist to NA?
@@ -405,7 +413,7 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
 
 
 #### process calref rawdata
-read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 10) {
+read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3) {
     if (inherits(path_data, 'rawdat')) {
         # pass on
         rawdata <- path_data
@@ -423,14 +431,8 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 10) {
         par(mfrow = c(2, 1))
         plot(raw, main = paste(gas, '- unfiltered'))
         plot(raw, sweep_fun = '/')
-        # get median
-        specs <- raw$RawData
-        med <- apply(data.frame(specs), 1, median)
-        # upper and lower bounds
-        bounds <- raw
-        bounds$RawData <- list((med + max.dist) / med, (med - max.dist) / med)
-        bounds$Header <- raw$Header[, 1:2]
-        lines(bounds, col = 'indianred', lwd = 2)
+        # indicate max.dist
+        abline(h = 1 + c(-1, 1) * max.dist, col = 'indianred', lwd = 2)
         # sets
         lapply(seq_along(sets), function(i) {
             x11()
@@ -453,7 +455,7 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 10) {
         )
 }
 read_all_gases <- function(path_data, timerange, show = TRUE, 
-    gases = c('N2', 'NH3', 'NO', 'SO2'), max.dist = 10) {
+    gases = c('N2', 'NH3', 'NO', 'SO2'), max.dist = 5e-3) {
     if (inherits(path_data, 'rawdat')) {
         # pass on
         rawdata <- path_data
@@ -462,7 +464,7 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
         rawdata <- read_data(path_data, from = timerange)
     }
     # check max.dist
-    md <- list(nh3 = 10, no = 10, so2 = 10, n2 = 10)
+    md <- list(nh3 = 5e-3, no = 5e-3, so2 = 5e-3, n2 = 5e-3)
     if (is.list(max.dist)) {
         max.dist <- max.dist[names(max.dist) %in% names(md)]
         if (length(max.dist)) {
@@ -1446,6 +1448,9 @@ get_wins <- function(x) {
         }
         , 'dc' = {
             getWindows(attr(x, 'meas')[['DOASinfo']])
+        }
+        , 'rawdat' = {
+            getWindows(x[['DOASinfo']])
         }
         , stop('no method definded for current class')
         )

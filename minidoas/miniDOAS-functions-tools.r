@@ -354,6 +354,8 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
             # get n2 args and names
             n2_args <- args[[x]]
             n2_nms <- names(n2_args)
+            # only select references for provided gases
+            n2_nms <- n2_nms[n2_nms %in% nms]
             # loop over n2 entries
             setNames(lapply(n2_nms, function(y) {
                 read_cal(callist[[x]][['avgs']][[n2_args[[y]]]])
@@ -373,15 +375,21 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     }
     # assamble output
     out <- list()
-    out[['nh3']][['cal_spec']] <- cal_read[['nh3']]
-    out[['nh3']][['ref_spec']] <- cal_read[['n2']][['nh3']]
-    out[['no']][['cal_spec']] <- cal_read[['no']]
-    out[['no']][['ref_spec']] <- cal_read[['n2']][['no']]
-    out[['so2']][['cal_spec']] <- cal_read[['so2']]
-    out[['so2']][['ref_spec']] <- cal_read[['n2']][['so2']]
-    out[['nh3']][['dc']] <- calc_dc(out[['nh3']][['cal_spec']], out[['nh3']][['ref_spec']])
-    out[['no']][['dc']] <- calc_dc(out[['no']][['cal_spec']], out[['no']][['ref_spec']])
-    out[['so2']][['dc']] <- calc_dc(out[['so2']][['cal_spec']], out[['so2']][['ref_spec']])
+    if ('nh3' %in% nms) {
+        out[['nh3']][['cal_spec']] <- cal_read[['nh3']]
+        out[['nh3']][['ref_spec']] <- cal_read[['n2']][['nh3']]
+        out[['nh3']][['dc']] <- calc_dc(out[['nh3']][['cal_spec']], out[['nh3']][['ref_spec']])
+    }
+    if ('no' %in% nms) {
+        out[['no']][['cal_spec']] <- cal_read[['no']]
+        out[['no']][['ref_spec']] <- cal_read[['n2']][['no']]
+        out[['no']][['dc']] <- calc_dc(out[['no']][['cal_spec']], out[['no']][['ref_spec']])
+    }
+    if ('so2' %in% nms) {
+        out[['so2']][['cal_spec']] <- cal_read[['so2']]
+        out[['so2']][['ref_spec']] <- cal_read[['n2']][['so2']]
+        out[['so2']][['dc']] <- calc_dc(out[['so2']][['cal_spec']], out[['so2']][['ref_spec']])
+    }
     structure(out, class = 'calref')
 }
 plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save.path = NULL, ylim = NULL, ...) {

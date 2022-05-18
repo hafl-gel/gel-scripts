@@ -281,8 +281,13 @@ points.single_spec <- function(x, ...) {
 
 # helper functions to process calibration data
 save_calref <- function(x, qs_preset = c('high', 'archive')[2], path_rsaves = 'rsaves') {
-    name <- deparse(substitute(x))
-    qsave(x, file.path(path_rsaves, paste0(name, '.qs')), preset = qs_preset[1])
+    # derive name
+    tr <- as.POSIXct(range(lapply(x, function(y) get_timerange(y[['dc']]))), origin = '1970-01-01', tz = 'Etc/GMT-1')
+    name <- paste0('miniDOAS-ref_cal_spec-',
+        paste(format(tr[1], '%y%m%d'), paste(format(tr, '%H%M'), collapse = '_'), sep = '-')
+        , '-', attr(x[['nh3']][['dc']], 'meas')$DOASinfo$DOASmodel, '.qs')
+    # name <- deparse(substitute(x))
+    qsave(x, file.path(path_rsaves, name), preset = qs_preset[1])
 }
 create_calref <- function(spec_set) {
     out <- list()
@@ -339,7 +344,21 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     out[['so2']][['dc']] <- calc_dc(out[['so2']][['cal_spec']], out[['so2']][['ref_spec']])
     structure(out, class = 'calref')
 }
-plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', ...) {
+plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save.path = NULL, ...) {
+    # save figure?
+    if (!is.null(save.path)) {
+        # derive figure name
+        tr <- as.POSIXct(range(lapply(x, function(y) get_timerange(y[['dc']]))), origin = '1970-01-01', tz = 'Etc/GMT-1')
+        name <- paste0('miniDOAS-ref_cal_spec-',
+            paste(format(tr[1], '%y%m%d'), paste(format(tr, '%H%M'), collapse = '_'), sep = '-')
+            , '-', attr(x[['nh3']][['dc']], 'meas')$DOASinfo$DOASmodel, '.jpg')
+        # be verbose
+        cat('saving figure to', file.path(save.path, name), '\n')
+        height <- 480 * 1.5
+        jpeg(file.path(save.path, name), width = height * 1.4, height = height)
+            plot(x, add_cheng = add_cheng, per_molecule = per_molecule, log = log, save.path = NULL, ...)
+        dev.off()
+    }
     par(mfrow = c(3, 3))
     for (i in seq_along(x)) {
         # plot cal spec

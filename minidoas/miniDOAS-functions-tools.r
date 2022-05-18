@@ -64,6 +64,21 @@ plot.rawdat <- function(x, y, sweep_fun = NULL, sweep_stats = median, log = 'y',
         lines(wl, spec, col = col, lwd = lwd, lty = lty)
     }
 }
+lines.rawdat <- function(x, y, sweep_fun = NULL, sweep_stats = median, col = 'black', lwd = 1, lty = 1, ...) {
+    # get wl
+    wl <- get_wl(x)
+    # get specs
+    specs <- x$RawData
+    # calculate difference to median
+    if (!is.null(sweep_fun)) {
+        log <- ''
+        stats <- apply(data.frame(specs), 1, sweep_stats)
+        specs <- lapply(specs, sweep_fun, stats)
+    }
+    for (spec in specs) {
+        lines(wl, spec, col = col, lwd = lwd, lty = lty, ...)
+    }
+}
 
 # split raw data depending on difference in light level
 split_raw <- function(rawdat, max_dist = 10) {
@@ -408,7 +423,14 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 10) {
         par(mfrow = c(2, 1))
         plot(raw, main = paste(gas, '- unfiltered'))
         plot(raw, sweep_fun = '/')
-        # TODO: add max.dist lines
+        # get median
+        specs <- raw$RawData
+        med <- apply(data.frame(specs), 1, median)
+        # upper and lower bounds
+        bounds <- raw
+        bounds$RawData <- list((med + max.dist) / med, (med - max.dist) / med)
+        bounds$Header <- raw$Header[, 1:2]
+        lines(bounds, col = 'indianred', lwd = 2)
         # sets
         lapply(seq_along(sets), function(i) {
             x11()

@@ -397,7 +397,8 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     }
     structure(out, class = 'calref')
 }
-plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save.path = NULL, ylim = NULL, ...) {
+plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save.path = NULL, 
+    scale_cheng = 1, ylim = NULL, ...) {
     # save figure?
     if (!is.null(save.path)) {
         # derive figure name
@@ -434,6 +435,7 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
             }
             cheng <- find_cheng(x[['nh3']][['dc']], show = FALSE, return.cheng.dc = TRUE, mgm3 = x[['nh3']][['cal_spec']]$Calinfo$cuvette.conc)
             s_cheng <- dc2sigma(cheng$cheng, copy = TRUE)
+            s_cheng$cnt <- s_cheng$cnt * scale_cheng
             s_dc <- dc2sigma(x[['nh3']][['dc']], copy = TRUE)
             if (is.null(ylim)) ylim <- range(c(s_cheng$cnt, s_dc$cnt), na.rm = TRUE)
             plot(x[[i]][['dc']], per_molecule = per_molecule, type = 'n', ylim = ylim, ...)

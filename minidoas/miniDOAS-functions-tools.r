@@ -435,7 +435,7 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 10) {
         lapply(seq_along(sets), function(i) {
             x11()
             par(mfrow = c(2, 1))
-            plot(sets[[i]], main = paste(gas, '- set', i))
+            plot(sets[[i]], main = paste(gas, '- set', i, '-', length(sets[[i]]$RawData), 'specs'))
             plot(sets[[i]], sweep_fun = '/')
             })
     }

@@ -441,8 +441,17 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3, min.num
         # read data from timerange
         rawdata <- read_data(path_data, from = from)
     }
-    # filter for revolver position
-    raw <- filter_position(rawdata, gas)
+    if (is.character(gas) && tolower(gas[1]) %in% c('nh3', 'so2', 'no', 'n2')) {
+        # filter for revolver position
+        raw <- filter_position(rawdata, gas)
+        time_filtered <- FALSE
+    } else {
+        # filter by time
+        times <- lapply(gas, function(x) format(ibts::parse_timerange(x, tz = 'Etc/GMT-1')))
+        raw <- filter_time(rawdata, sapply(times, '[', 1), sapply(times, '[', 2))
+        gas <- paste(gas, collapse = '\n')
+        time_filtered <- TRUE
+    }
     # split
     sets <- split_raw(raw, max.dist)
     # remove sets with less than min.num
@@ -470,8 +479,12 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3, min.num
         lapply(seq_along(sets), function(i) {
             x11()
             par(mfrow = c(2, 1))
-            plot(sets[[i]], main = paste(gas, '- set', i, ':', length(sets[[i]]$RawData), 'specs - ', 
-                    sprintf('%1.0f', max(sapply(sets[[i]]$RawData, max, na.rm = TRUE)))), col = cpal[i])
+            plot(sets[[i]], main = paste(
+                    if (time_filtered) paste(sets[[i]]$Header$st[1], 
+                        sets[[i]]$Header$et[length(sets[[i]]$RawData)], sep = ' to ') else gas, 
+                    '- set', i, ':', length(sets[[i]]$RawData), 'specs - ', 
+                    sprintf('%1.0f', max(sapply(sets[[i]]$RawData, max, na.rm = TRUE)))), 
+                col = cpal[i])
             plot(sets[[i]], sweep_fun = '/')
             })
     }
@@ -510,9 +523,15 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
         md <- setNames(rep(list(max.dist), length(md)), names(md))
     }
     # loop over gases
-    setNames(mapply(read_gas, gases, max.dist = max.dist, 
-            MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
-            SIMPLIFY = FALSE), gases)
+    if (is.list(gases)) {
+        setNames(mapply(read_gas, gases, max.dist = max.dist, 
+                MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
+                SIMPLIFY = FALSE), names(gases))
+    } else {
+        setNames(mapply(read_gas, gases, max.dist = max.dist, 
+                MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
+                SIMPLIFY = FALSE), gases)
+    }
 }
 
 
@@ -1783,27 +1802,29 @@ print.fix_pattern <- function(x, ...) {
 #'                   data at the range edges be included?
 #' @return A subset of the initial \code{rawdat} object
 filter_time <- function(rawdat, index, to = NULL, including = TRUE) {
-    # check to
-    if (length(to) > 1) stop('argument "to" should be NULL or of length 1')
     rd_st <- rawdat[['Header']][['st']]
     rd_et <- rawdat[['Header']][['et']]
     rd_tz <- tzone(rd_st)
     # check from
     if (!is.null(to)) {
-        if (length(index) != 1) stop('argument "index" should be of length 1 if providing "to"')
-        # parse from/to
-        if (is.character(index)) {
-            index <- parse_date_time3(index, tz = rd_tz)
+        ind <- integer(0)
+        for (i in seq_along(to)) {
+            # parse from/to
+            if (is.character(index)) {
+                index <- parse_date_time3(index, tz = rd_tz)
+            }
+            if (is.character(to)) {
+                to <- parse_date_time3(to, tz = rd_tz)
+            }
+            # from / to
+            if (including) {
+               ind <- c(ind, which(rd_et > index[i] & rd_st < to[i]))
+            } else {
+               ind <- c(ind, which(rd_st >= index[i] & rd_et <= to[i]))
+            }
         }
-        if (is.character(to)) {
-            to <- parse_date_time3(to, tz = rd_tz)
-        }
-        # from / to
-        if (including) {
-           ind <- which(rd_et > index & rd_st < to) 
-        } else {
-           ind <- which(rd_st >= index & rd_et <= to) 
-        }
+        # sort index
+        ind <- sort(ind)
     } else {
         # index only
         # parse index

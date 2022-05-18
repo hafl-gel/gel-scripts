@@ -423,7 +423,11 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
                 deparse_timerange(get_timerange(x[[i]][['ref_spec']]), sep = ' and ')) )
         # plot dc
         if (add_cheng && names(x)[i] == 'nh3') {
-            cheng <- find_cheng(x[['nh3']][['dc']], show = FALSE, return.cheng.dc = TRUE)
+            if (is.na(x[['nh3']][['cal_spec']]$Calinfo$cuvette.conc)) {
+                stop('NH3 calibration concentration is not specified!\n',
+                    'Most likely, the calibration was done without the cuvette revolver being installed!')
+            }
+            cheng <- find_cheng(x[['nh3']][['dc']], show = FALSE, return.cheng.dc = TRUE, mgm3 = x[['nh3']][['cal_spec']]$Calinfo$cuvette.conc)
             s_cheng <- dc2sigma(cheng$cheng, copy = TRUE)
             s_dc <- dc2sigma(x[['nh3']][['dc']], copy = TRUE)
             if (is.null(ylim)) ylim <- range(c(s_cheng$cnt, s_dc$cnt), na.rm = TRUE)
@@ -1182,12 +1186,12 @@ cnt2wl <- function(wl_from, wl_to, cnt, shift_nm = 0) {
 }
 
 # get Cheng factor
-cheng_factor <- function(dc, shift_cheng = 0, show = FALSE) {
+cheng_factor <- function(dc, shift_cheng = 0, show = FALSE, mgm3 = 193.4095) {
     # S5 cheng dc
     cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref'), shift = shift_cheng))
     # get sigmas
     dc2sigma(cheng)
-    dc <- dc2sigma(dc, copy = TRUE)
+    dc <- dc2sigma(dc, copy = TRUE, mgm3 = mgm3, molar_mass = 17)
     # fit
     mod <- lm(dc$cnt ~ cheng$cnt)
     # show?
@@ -1211,16 +1215,17 @@ cheng_factor <- function(dc, shift_cheng = 0, show = FALSE) {
         )
 }
 
-find_cheng <- function(dc, show = FALSE, interval = c(-1, 1), return.cheng.dc = FALSE) {
+find_cheng <- function(dc, show = FALSE, interval = c(-1, 1), 
+    return.cheng.dc = FALSE, mgm3 = 193.4095) {
     # S5 cheng dc
     cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref')))
     ms <- median(local_minima(dc)$wl_exact - local_minima(cheng)$wl_exact)
     # optimize
     par <- optimize(function(x) {
-        cheng_factor(dc, x)$rmse
+        cheng_factor(dc, x, mgm3 = mgm3)$rmse
         }, interval = interval + ms)
     c(
-        cheng_factor(dc, par$minimum, show = show),
+        cheng_factor(dc, par$minimum, show = show, mgm3 = mgm3),
         shift = par$minimum,
         # return shifted cheng spectrum
         cheng = if (return.cheng.dc) list(cheng2dc(get_Cheng(), attr(dc, 'ref'), shift = par$minimum))

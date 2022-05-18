@@ -825,7 +825,12 @@ get_cnt <- function(x) {
 
 get_integration_time <- function(x) {
     h <- get_header(x)
-    as.numeric(unlist(strsplit(grep('integration', h, value = TRUE), split = ':'))[2])
+    int <- unlist(strsplit(grep('(integration|exposure)', h, value = TRUE), split = ': '))
+    if (length(int) == 3) {
+        as.numeric(sub(')', '', int[3]))
+    } else {
+        as.numeric(int[2])
+    }
 }
 get_header <- function(rawdat) {
     if (inherits(rawdat, 'character')) {

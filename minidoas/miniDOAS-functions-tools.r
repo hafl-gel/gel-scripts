@@ -495,33 +495,33 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
             for (nm in names(max.dist)) {
                 md[[nm]] <- max.dist[[nm]]
             }
-            }
-        } else if (!missing(max.dist) && is.numeric(max.dist)) {
-            md <- setNames(rep(list(max.dist), length(md)), names(md))
         }
-        # loop over gases
-        setNames(mapply(read_gas, gases, max.dist = max.dist, 
-                MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
-                SIMPLIFY = FALSE), gases)
+    } else if (!missing(max.dist) && is.numeric(max.dist)) {
+        md <- setNames(rep(list(max.dist), length(md)), names(md))
     }
+    # loop over gases
+    setNames(mapply(read_gas, gases, max.dist = max.dist, 
+            MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
+            SIMPLIFY = FALSE), gases)
+}
 
 
 
 
     #### average raw data
-    avg_spec <- function(folder, from = NULL, to = NULL, tz = 'Etc/GMT-1', 
-        doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
-        correct.straylight = TRUE, correct.linearity = TRUE, dark = NULL) {
-        if(inherits(folder, 'rawdat')){
-            if (!is.null(from)) {
-                # convert from/to to POSIXct
-                from <- parse_date_time3(from, tz = tz)
-                to <- parse_date_time3(to, tz = tz)
-                # get indices
-                ind <- which(folder$Header[['et']] > from & folder$Header[['st']] < to)
-            } else {
-                ind <- seq_along(folder$Header$et)
-            }
+avg_spec <- function(folder, from = NULL, to = NULL, tz = 'Etc/GMT-1', 
+    doas = sub('.*(S[1-6]).*', '\\1', folder), Serial = NULL, 
+    correct.straylight = TRUE, correct.linearity = TRUE, dark = NULL) {
+    if(inherits(folder, 'rawdat')){
+        if (!is.null(from)) {
+            # convert from/to to POSIXct
+            from <- parse_date_time3(from, tz = tz)
+            to <- parse_date_time3(to, tz = tz)
+            # get indices
+            ind <- which(folder$Header[['et']] > from & folder$Header[['st']] < to)
+        } else {
+            ind <- seq_along(folder$Header$et)
+        }
         if (length(ind)) {
             folder$RawData <- folder$RawData[ind]
             folder$Header <- folder$Header[ind, , drop = FALSE]

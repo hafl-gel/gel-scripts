@@ -472,8 +472,20 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3, min.num
         raw <- filter_position(rawdata, gas)
         time_filtered <- FALSE
     } else {
+        day <- format(get_timerange(rawdata)[1], '%d.%m.%Y ')
+        # split times
+        split_times <- strsplit(gas, split = paste(getOption('time.separators'), collapse = '|'))
         # filter by time
-        times <- lapply(gas, function(x) format(ibts::parse_timerange(x, tz = 'Etc/GMT-1')))
+        times <- lapply(split_times, function(x) {
+            # get days
+            days <- sub('(.*)[0-9]{2}:[0-9]{2}(:[0-9]{2})?$', '\\1', x)
+            days[days == ''] <- day
+            # get times
+            times <- sub('(.*)([0-9]{2}:[0-9]{2}(:[0-9]{2})?)$', '\\2', x)
+            # paste together again
+            x <- paste0(days, times)
+            format(ibts::parse_timerange(x, tz = 'Etc/GMT-1'))
+        })
         raw <- filter_time(rawdata, sapply(times, '[', 1), sapply(times, '[', 2))
         gas <- paste(gas, collapse = '\n')
         time_filtered <- TRUE

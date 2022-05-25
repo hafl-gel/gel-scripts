@@ -562,11 +562,11 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
     }
     # loop over gases
     if (is.list(gases)) {
-        setNames(mapply(read_gas, gases, max.dist = max.dist, 
+        setNames(mapply(read_gas, gases, max.dist = max.dist[tolower(names(gases))], 
                 MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
                 SIMPLIFY = FALSE), names(gases))
     } else {
-        setNames(mapply(read_gas, gases, max.dist = max.dist, 
+        setNames(mapply(read_gas, gases, max.dist = max.dist[tolower(gases)], 
                 MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
                 SIMPLIFY = FALSE), gases)
     }

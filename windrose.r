@@ -25,7 +25,7 @@ windrose <- function(
     scale = 1, center = c(0,0), add = FALSE, border = "black", width = 0.9,
     draw_wd = c(0, 360), exclude = FALSE, start = 0, mirror = FALSE, alpha = 0.5,
     colors = rainbow(max(10, length(breaks) - 1), end = 0.7), freq.cex = 1, nesw.cex = 1,
-    grid.angle = 45, grid.lty = 3, grid.col = "black", draw.grid = TRUE, 
+    grid.angle = 45, grid.lty = 3, grid.col = "black", draw.grid = TRUE, freq.col = lab.col,
     lab.col = grid.col, lab.angle = 30, show.legend = TRUE, legend.args = list(title = "m/s",
     cex = 0.7, x = "topright", y = NULL, bty = "o", text.col = par("col"), bg = par("bg")), 
     ...
@@ -244,14 +244,14 @@ windrose <- function(
 
     if(draw.grid){
         symbols(rep(center[1],length(draw_freqs)),rep(center[2],length(draw_freqs)),circles = draw_freqs * scale, 
-            lty = grid.lty, col = grid.col, add=TRUE, inches = FALSE)
+            lty = grid.lty, fg = grid.col, add=TRUE, inches = FALSE)
         # for(ang in angles) lines(.polar2xy(ang, plot_freqs[c(1,length(plot_freqs))]), lty = grid.lty)
         line_min <- .polar2xy(angles, plot_freqs[1], scale = scale, center = center, asp = asp)
         line_max <- .polar2xy(angles, plot_freqs[length(plot_freqs)], scale = scale, center = center, asp = asp)
         segments(x0=line_min[,1],y0=line_min[,2],x1=line_max[,1],y1=line_max[,2],
             lty = grid.lty, col = grid.col)
         xy_lab <- .polar2xy(lab.angle, draw_freqs[draw_freqs != circ_freq], scale = scale, center = center, asp = asp)
-        text(xy_lab, sprintf("%1.0f%%", draw_freqs[draw_freqs != circ_freq] - circ_freq), col = lab.col, cex = freq.cex)
+        text(xy_lab, sprintf("%1.0f%%", draw_freqs[draw_freqs != circ_freq] - circ_freq), col = freq.col, cex = freq.cex)
         xy_NESW <- .polar2xy(seq(0,270,90), draw_freqs[length(draw_freqs)] * (1 + 0.05 / scale), scale = scale, center = center, asp = asp)
         xy_NESESWNW <- .polar2xy(seq(45,315,90), draw_freqs[length(draw_freqs)] * (1 + 0.08 / scale), scale = scale, center = center, asp = asp)
         text(xy_NESW[1, 1], xy_NESW[1, 2], "N",col = lab.col, cex = nesw.cex)

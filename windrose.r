@@ -20,15 +20,15 @@ hexadec <- function(x){
 }
 
 windrose <- function(
-    data, wd = "wd", ws = "ws", type = c("wedge", "spider"), ws_breaks = 1,
+    data, wd = "wd", ws = "ws", type = c("wedge", "spider"), ws_breaks = 5,
     delta_wd = 22.5, delta_freq = NULL, max_freq = NULL, circ_freq = delta_freq/4,
     scale = 1, center = c(0,0), add = FALSE, border = "black", width = 0.9,
     draw_wd = c(0, 360), exclude = FALSE, start = 0, mirror = FALSE, alpha = 0.5,
-    colors = rainbow(max(10, length(breaks) - 1), end = 0.7),
+    colors = rainbow(max(10, length(breaks) - 1), end = 0.7), freq.cex = 1, nesw.cex = 1,
     grid.angle = 45, grid.lty = 3, grid.col = "black", draw.grid = TRUE, 
-    lab.col = grid.col, lab.angle = 30, key = TRUE, unit = "m/s",
-    legend.cex = 0.7, legend.x = "topright", legend.y = NULL, legend.bty = "o",
-    legend.text.col = par("col"), legend.bg = par("bg"), ...
+    lab.col = grid.col, lab.angle = 30, show.legend = TRUE, legend.args = list(title = "m/s",
+    cex = 0.7, x = "topright", y = NULL, bty = "o", text.col = par("col"), bg = par("bg")), 
+    ...
     ){
 
     if(!requireNamespace("reshape2")) stop("install.packages('reshape2')")
@@ -251,22 +251,26 @@ windrose <- function(
         segments(x0=line_min[,1],y0=line_min[,2],x1=line_max[,1],y1=line_max[,2],
             lty = grid.lty, col = grid.col)
         xy_lab <- .polar2xy(lab.angle, draw_freqs[draw_freqs != circ_freq], scale = scale, center = center, asp = asp)
-        text(xy_lab, sprintf("%1.0f%%", draw_freqs[draw_freqs != circ_freq] - circ_freq), col = lab.col)
-        xy_NESW <- .polar2xy(seq(0,270,90), draw_freqs[length(draw_freqs)] * 1.05, scale = scale, center = center, asp = asp)
-        xy_NESESWNW <- .polar2xy(seq(45,315,90), draw_freqs[length(draw_freqs)] * 1.08, scale = scale, center = center, asp = asp)
-        text(xy_NESW[1, 1], xy_NESW[1, 2], "N",col = lab.col)
-        text(xy_NESW[2, 1], xy_NESW[2, 2], "E",col = lab.col)
-        text(xy_NESW[3, 1], xy_NESW[3, 2], "S",col = lab.col)
-        text(xy_NESW[4, 1], xy_NESW[4, 2], "W",col = lab.col)
-        text(xy_NESESWNW[1, 1], xy_NESESWNW[1, 2], "NE",col = lab.col)
-        text(xy_NESESWNW[2, 1], xy_NESESWNW[2, 2], "SE",col = lab.col)
-        text(xy_NESESWNW[3, 1], xy_NESESWNW[3, 2], "SW",col = lab.col)
-        text(xy_NESESWNW[4, 1], xy_NESESWNW[4, 2], "NW",col = lab.col)
+        text(xy_lab, sprintf("%1.0f%%", draw_freqs[draw_freqs != circ_freq] - circ_freq), col = lab.col, cex = freq.cex)
+        xy_NESW <- .polar2xy(seq(0,270,90), draw_freqs[length(draw_freqs)] * (1 + 0.05 / scale), scale = scale, center = center, asp = asp)
+        xy_NESESWNW <- .polar2xy(seq(45,315,90), draw_freqs[length(draw_freqs)] * (1 + 0.08 / scale), scale = scale, center = center, asp = asp)
+        text(xy_NESW[1, 1], xy_NESW[1, 2], "N",col = lab.col, cex = nesw.cex)
+        text(xy_NESW[2, 1], xy_NESW[2, 2], "E",col = lab.col, cex = nesw.cex)
+        text(xy_NESW[3, 1], xy_NESW[3, 2], "S",col = lab.col, cex = nesw.cex)
+        text(xy_NESW[4, 1], xy_NESW[4, 2], "W",col = lab.col, cex = nesw.cex)
+        text(xy_NESESWNW[1, 1], xy_NESESWNW[1, 2], "NE",col = lab.col, cex = nesw.cex)
+        text(xy_NESESWNW[2, 1], xy_NESESWNW[2, 2], "SE",col = lab.col, cex = nesw.cex)
+        text(xy_NESESWNW[3, 1], xy_NESESWNW[3, 2], "SW",col = lab.col, cex = nesw.cex)
+        text(xy_NESESWNW[4, 1], xy_NESESWNW[4, 2], "NW",col = lab.col, cex = nesw.cex)
     }
 
-    if (key) {
-        legend(x = legend.x, y= legend.y,fill = colors, legend = lvls_ws, title = unit, cex = legend.cex, bty = legend.bty,
-            text.col = legend.text.col, bg = legend.bg)
+    if (show.legend) {
+        # get legend args
+        largs <- eval(formals(windrose)[['legend.args']])
+        largs[names(legend.args)] <- legend.args
+        largs[['legend']] <- lvls_ws
+        largs[['fill']] <- colors
+        do.call(legend, largs)
     }
 
     invisible(freq_tab)

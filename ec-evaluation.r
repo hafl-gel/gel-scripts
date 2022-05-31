@@ -652,7 +652,7 @@ plot_cospec_ogive <- function(ogive,cospec,freq,ylab=NULL,xlim=NULL,cx=1.5,col="
 	if(is.null(xlim))xlim <- rev(range(freq))
 	ylim <- c(min(ogive,0),max(0,max(ogive)))
 	pxlim <- pretty(log10(xlim),n=ceiling(abs(diff(log10(xlim)))))
-	pxlims <- rep(pxlim,each=8) + log10(seq(2, 9)) - 1
+	pxlims <- rep(pxlim,each=9) - 1 + log10(seq(9, 1))
 	pylim <- pretty(ylim)
 	prCo <- pretty(rCo) 
 	y_cf <- (cospec_f - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1]
@@ -666,7 +666,12 @@ plot_cospec_ogive <- function(ogive,cospec,freq,ylab=NULL,xlim=NULL,cx=1.5,col="
 	axis(2,at=pylim,labels=pylim, cex.axis=cx, cex.lab=cx, col=col,col.axis=col,lwd=2,font=2)
 	title(ylab=ylab,col.lab=col, cex.lab=cx,font.lab=2)
 	axis(4,at=py2,labels=prCo, cex.axis=cx, cex.lab=cx)
-	axis(3,at=1/c(0.02,0.05,0.1,1,10,60,120,300,600,1800,3600,7200),labels=c("20ms","50ms","100ms","1s","10s","1min","2min","5min","10min","30min","1hr","2hrs"), cex.axis=cx, cex.lab=cx)
+    at3 <- 1 / c(0.1, 1, 10, 60, 600)
+    lab3 <- c('100ms', '1s', '10s', '1min', '10min')
+    sub3 <- 1 / c(seq(0.01, 0.09, by = 0.01), seq(0.2, 0.9, by = 0.1),
+        seq(2, 9), seq(20, 50, by = 10), seq(120, 540, by = 60)) 
+	axis(3,at=at3,labels=lab3, cex.axis = cx, cex.lab = cx)
+	axis(3,at=sub3,labels=NA, cex.axis = cx, cex.lab = cx, tck = -0.01)
 	lines(cospec_reduced0$freq,y_cf,col="lightgrey")
 	lines(cospec_reduced$freq,y_crm,type="b",col="black",lwd=2)
 	lines(freq,ogive,col=col,lwd=2)
@@ -683,14 +688,19 @@ plot_damping <- function(ogive_damp,freq,ylab=NULL,xlim=NULL,ylim=NULL,cx=1.5,cx
 	if(is.null(xlim))xlim <- rev(range(freq))
 	if(is.null(ylim))ylim <- c(min(0,ogive,ogive_ref_pbreg,ogive_ref_deming),max(0,max(ogive,ogive_ref_pbreg,ogive_ref_deming)))
 	pxlim <- pretty(log10(xlim),n=ceiling(abs(diff(log10(xlim)))))
-	pxlims <- rep(pxlim,each=8) + log10(seq(2, 9)) - 1
+	pxlims <- rep(pxlim,each=9) - 1 + log10(seq(9, 1))
 	pylim <- pretty(ylim)
 
 	plot(1,xlim=xlim,ylim=ylim,main=main, cex.axis=cx, cex.lab=cx,type="n",log="x",xaxt="n",xlab="frequency [Hz]",ylab=ylab,panel.first=abline(h=0,col=col,lty=2))
 	abline(h=0,lty=2,col="darkgrey")
 	axis(1,at=10^pxlims,labels=FALSE,tck=-0.01, cex.axis=cx, cex.lab=cx)
 	axis(1,at=10^pxlim,labels=10 ^ pxlim, cex.axis=cx, cex.lab=cx)
-	axis(3,at=1/c(0.02,0.05,0.1,1,10,60,120,300,600,1800,3600,7200),labels=c("20ms","50ms","100ms","1s","10s","1min","2min","5min","10min","30min","1hr","2hrs"), cex.axis=cx, cex.lab=cx)
+    at3 <- 1 / c(0.1, 1, 10, 60, 600)
+    lab3 <- c('100ms', '1s', '10s', '1min', '10min')
+    sub3 <- 1 / c(seq(0.01, 0.09, by = 0.01), seq(0.2, 0.9, by = 0.1),
+        seq(2, 9), seq(20, 50, by = 10), seq(120, 540, by = 60)) 
+	axis(3,at=at3,labels=lab3, cex.axis = cx, cex.lab = cx)
+	axis(3,at=sub3,labels=NA, cex.axis = cx, cex.lab = cx, tck = -0.01)
 	lines(freq,ogive_ref_deming,col="darkgrey",lwd=2)
 	lines(freq,ogive_ref_pbreg,col="lightgrey",lwd=2)
 	lines(freq,ogive,col=col,lwd=2)

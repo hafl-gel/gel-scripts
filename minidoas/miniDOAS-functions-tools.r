@@ -471,6 +471,10 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3, min.num
         # filter for revolver position
         raw <- filter_position(rawdata, gas)
         time_filtered <- FALSE
+    } else if (is.character(gas) && tolower(gas[1]) %in% 'closed') {
+        # filter for shutter closed
+        raw <- filter_closed(rawdata)
+        time_filtered <- FALSE
     } else {
         day <- format(get_timerange(rawdata)[1], '%d.%m.%Y ')
         # split times
@@ -549,7 +553,7 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
         rawdata <- read_data(path_data, from = timerange)
     }
     # check max.dist
-    md <- list(nh3 = 5e-3, no = 5e-3, so2 = 5e-3, n2 = 5e-3)
+    md <- list(nh3 = 5e-3, no = 5e-3, so2 = 5e-3, n2 = 5e-3, closed = 1e-3)
     if (is.list(max.dist)) {
         max.dist <- max.dist[names(max.dist) %in% names(md)]
         if (length(max.dist)) {
@@ -571,7 +575,9 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
                 SIMPLIFY = FALSE), gases)
     }
 }
-
+read_shutter_closed <- function(path_data, timerange, gases = 'closed', ...) {
+    read_all_gases(path_data, timerange, gases = gases, ...)[['closed']]
+}
 
 
 
@@ -1891,6 +1897,35 @@ filter_index <- function(rawdat, index) {
         list(
             RawData = rawdat[['RawData']][index],
             Header = rawdat[['Header']][index, ],
+            DOASinfo = rawdat[['DOASinfo']]
+            ),
+        class = 'rawdat'
+        )
+}
+
+# filter raw data by revolver position
+filter_closed <- function(rawdat) {
+    # get indices
+    ind <- which(rawdat[['Header']][['ShuPos']] %in% c('close', 'closed'))
+    # throw error if position doesn't exist
+    if (length(ind) == 0) {
+        stop(
+            'Shutter positions "close" or "closed" do not exist!\n',
+            '  Existing positions are:\n    ', 
+            paste(unique(rawdat[['Header']][['ShuPos']]), collapse = ', '),
+            '\n Fix in function "filter_closed" if necessary'
+            )
+    }
+    # check any unlikely errors
+    stopifnot(
+        length(unique(rawdat[['Header']][ind, 'Spectrometer'])) == 1 || 
+        length(unique(rawdat[['Header']][ind, 'DOASmodel'])) == 1
+    )
+    # return rawdat class
+    structure(
+        list(
+            RawData = rawdat[['RawData']][ind],
+            Header = rawdat[['Header']][ind, ],
             DOASinfo = rawdat[['DOASinfo']]
             ),
         class = 'rawdat'

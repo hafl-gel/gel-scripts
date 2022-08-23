@@ -37,15 +37,30 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
         }
 		return(NULL)
 	} else {
+        # valid V9
         out <- out[grepl('^[\x01-\x1A]', V9)]
         # check which columns to convert columns if necessary
         vnums <- paste0('V', c(3, 4, 5, 7))
         is.char <- out[, sapply(.SD, is.character), .SDcols = vnums]
         # convert to numeric
         if (any(is.char)) {
-            out[, vnums[is.char] := {
+            op <- getOption('show.error.messages')
+            options(show.error.messages = FALSE)
+            on.exit(options(show.error.messages = op))
+            check <- try(out[, vnums[is.char] := {
                 lapply(.SD, as.numeric)
-            }, .SDcols = vnums[is.char]]
+            }, .SDcols = vnums[is.char]])
+            if (inherits(check, 'try-error')) {
+                # remove multibyte string
+                ind <- out[, Reduce('&', lapply(.SD, grepl, pattern = '^[-+]?[0-9]+[.][0-9]+$')), .SDcols = vnums[is.char]]
+                out <- out[ind, ]
+                # try to convert again
+                out[, vnums[is.char] := {
+                    lapply(.SD, as.numeric)
+                }, .SDcols = vnums[is.char]]
+            }
+            options(show.error.messages = op)
+            on.exit()
         }
         # remove NA lines that come from conversion
         out <- na.omit(out)

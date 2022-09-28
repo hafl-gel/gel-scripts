@@ -136,28 +136,29 @@ readWindMaster_old_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     if ('V1' %in% names(out)) out[, V1 := NULL]
     # remove NAs
  	out <- na.omit(out)
-	### set times
-	out[,st.dec := fast_strptime(paste0(Date,V2),lt = FALSE,format = "%y%m%d%H:%M:%S",tz = "Etc/GMT-1")+V3][,c("V2","V3"):=NULL]
-	# get start time
-	start_time <- out[, as.POSIXct(trunc(st.dec[1]))]
-	out[, dt := as.numeric(st.dec - start_time, units = "secs")]
-	# correct new day
-	out[(seq_len(.N) > 30) & trunc(dt) == 0, dt := dt + 24 * 3600]
-	out[trunc(dt) < 0, dt := dt + 24 * 3600]
-	# add st column
-	out[, st := start_time + dt]
-	# add Hz column
-	Hz <- out[, .N, by = trunc(dt)][, round(median(N), -1)]
-	out[, Hz := Hz]
-	# remove columns
-	out[, c("st.dec", "dt") := NULL]
+    ## get Hz
+    Hz <- out[, .N, by = V2][, round(median(N), -1)]
+    out[, Hz := Hz]
+	## set times
+	out[, st.dec := fast_strptime(paste0(Date,V2),lt = FALSE,format = "%y%m%d%H:%M:%S",tz = "Etc/GMT-1")+V3][,c("V2","V3"):=NULL]
+    ## fix end of day
+    if (out[, 
+        hour(st.dec[.N]) == 0 && 
+        (hour(st.dec[1]) != 0 || .N > (3 * Hz[1]))
+        ]) {
+        ## fix last 3 * Hz entries, where hour == 0
+        out[.N - seq_len(3 * Hz[1]) + 1, st.dec := {
+            hr <- hour(st.dec)
+            fifelse(hr == 0, st.dec + 24 * 3600, st.dec)
+        }]
+    }
 	### set Output names and order
-	setnames(out,c("u", "v", "w", "T", "Time","Hz"))
+	setnames(out,c("u", "v", "w", "T", "Hz", "Time"))
 	setcolorder(out,c("Time","Hz","u","v","w","T"))
 	### remove 999.99 entries
 	out <- out[!(u%in%999.99|v%in%999.99|w%in%999.99|T%in%999.99),]
 	### change units from °C to K
-	out[,T := T + 273.15]
+	out[, T := T + 273.15]
     setattr(out, "OldDevice", TRUE)
 	out
 }

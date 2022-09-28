@@ -409,7 +409,7 @@ rotate_twoaxis <- function(u,v,w,T,phi=NULL,c.system="Windmaster"){
 	if(is.null(phi)){
 		phi <- atan2(.Internal(mean(w)),.Internal(mean(u1)))
 	}
-
+    # TODO: remove sd_wd, but calc sd(WD) for subints!!
 	list(
 		phi = phi
 		,wd = if(tolower(c.system) %in% "windmaster") (180 - thetam / pi * 180)%%360 else if(tolower(c.system) %in% "art.ec1") ((180 / pi) * -thetam + 150 + 147)%%360

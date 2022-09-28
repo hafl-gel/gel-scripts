@@ -7,8 +7,7 @@ library(ibts)
 #### To Do:
 # - neue readWindMaster Routine
 # - Plotting & anderes Gheu aufräumen
-
-readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
+readWindMaster_ascii1 <- function(FilePath, tz = "Etc/GMT-1"){
 	### get Date
 	bn <- basename(FilePath)
 	if(!grepl("^data_", bn)){
@@ -36,86 +35,88 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
             cat(out)
         }
 		return(NULL)
-	} else {
-        # valid V9
-        out <- out[grepl('^[\x01-\x1A]', V9)]
-        # check which columns to convert columns if necessary
-        vnums <- paste0('V', c(3, 4, 5, 7))
-        is.char <- out[, sapply(.SD, is.character), .SDcols = vnums]
-        # convert to numeric
-        if (any(is.char)) {
-            op <- getOption('show.error.messages')
-            options(show.error.messages = FALSE)
-            on.exit(options(show.error.messages = op))
-            check <- try(out[, vnums[is.char] := {
+	}
+    # select valid V9 only
+    out <- out[grepl('^[\x01-\x1A]', V9)]
+    # check which columns to convert columns if necessary
+    vnums <- paste0('V', c(3, 4, 5, 7))
+    is.char <- out[, sapply(.SD, is.character), .SDcols = vnums]
+    # convert to numeric
+    if (any(is.char)) {
+        op <- getOption('show.error.messages')
+        options(show.error.messages = FALSE)
+        on.exit(options(show.error.messages = op))
+        check <- try(out[, vnums[is.char] := {
+            lapply(.SD, as.numeric)
+        }, .SDcols = vnums[is.char]])
+        if (inherits(check, 'try-error')) {
+            # remove multibyte string
+            ind <- out[, Reduce('&', lapply(.SD, grepl, pattern = '^[-+]?[0-9]+[.][0-9]+$')), .SDcols = vnums[is.char]]
+            out <- out[ind, ]
+            # try to convert again
+            out[, vnums[is.char] := {
                 lapply(.SD, as.numeric)
-            }, .SDcols = vnums[is.char]])
-            if (inherits(check, 'try-error')) {
-                # remove multibyte string
-                ind <- out[, Reduce('&', lapply(.SD, grepl, pattern = '^[-+]?[0-9]+[.][0-9]+$')), .SDcols = vnums[is.char]]
-                out <- out[ind, ]
-                # try to convert again
-                out[, vnums[is.char] := {
-                    lapply(.SD, as.numeric)
-                }, .SDcols = vnums[is.char]]
-            }
-            options(show.error.messages = op)
-            on.exit()
+            }, .SDcols = vnums[is.char]]
         }
-        # remove NA lines that come from conversion
-        out <- na.omit(out)
-        # be verbose and print sonic names:
-        sonic <- out[, sub('[\x01-\x1A]', '', V2[1])]
-        cat(paste0("data recorded by sonic-", tolower(sonic), "\n"))
-        sonic_file <- sub("data_(.*)_[0-9]{8}_[0-9]{6}([.]gz)?$", "\\1", bn)
-        if(sonic != toupper(sub("sonic-", "", sonic_file))){
-            warning(paste0("Sonic name '", sonic, "', and hostname '", sonic_file, "' don't match!"), call. = FALSE)
-        }
-        # check units
-        if(out[, V6[1]] != "M"){
-            stop("Units of recorded data not compatible with evaluation script! Column 6 should contain 'M' for m/s!")
-        }
-        # only call dt once
-        out[, c(
-            # remove them
-            'V1', 'V2', 'V6', 'V8', 'V9',
-            # add them
-            'sonic', 'Time', 'Hz',
-            # replace °C by K
-            'V7'
-            ) := {
-            # set times correctly
-            st.dec <- fast_strptime(paste(Date, V1), lt = FALSE, format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")
-            # get start time
-            start_time <- as.POSIXct(st.dec[1])
-            dt <- as.numeric(st.dec - start_time, units = "secs")
-            # correct new day
-            ind <- trunc(dt) <= 0L
-            # exclude first cuple of 20Hz data since trunc 0
-            ind[1:min(.N, 30)] <- FALSE
-            dt[ind] <- dt[ind] + 24 * 3600
-            # return list
-            list(
-                # remove them
-                NULL, NULL, NULL, NULL, NULL,
-                # sonic
-                sonic,
-                # Time
-                start_time + dt,
-                # Hz
-                round(median(tabulate(trunc(dt))), -1),
-                # T
-                V7 + 273.15
-                )
-        }]
-        ### set Output names and order
-        setnames(out, c("u", "v", "w", "T", "sonic", "Time","Hz"))
-        setcolorder(out,c("Time","Hz","u","v","w","T", "sonic"))
-        # check if old sonic
-        if (out[, sonic[1] %in% c('C', 'D')]) setattr(out, 'OldDevice', TRUE)
-        # return
-        out
+        options(show.error.messages = op)
+        on.exit()
     }
+    # remove NA lines that come from conversion
+    out <- na.omit(out)
+    # be verbose and print sonic names:
+    sonic <- out[, sub('[\x01-\x1A]', '', V2[1])]
+    cat(paste0("data recorded by sonic-", tolower(sonic), "\n"))
+    sonic_file <- sub("data_(.*)_[0-9]{8}_[0-9]{6}([.]gz)?$", "\\1", bn)
+    if(sonic != toupper(sub("sonic-", "", sonic_file))){
+        warning(paste0("Sonic name '", sonic, "', and hostname '", sonic_file, "' don't match!"), call. = FALSE)
+    }
+    # check units
+    if(out[, V6[1]] != "M"){
+        stop("Units of recorded data not compatible with evaluation script! Column 6 should contain 'M' for m/s!")
+    }
+    # fix time etc.
+    out[, c(
+        # remove columns
+        'V1', 'V2', 'V6', 'V8', 'V9',
+        # add columns
+        'sonic', 'Time', 'Hz',
+        # replace °C by K
+        'V7'
+        ) := {
+        # set times correctly
+        st.dec <- fast_strptime(paste(Date, V1), lt = FALSE, format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")
+        # get Hz (faster than as.factor(sub('[.].*', '', V1)) !
+        Hz <- round(median(tabulate(trunc(as.numeric(st.dec) - as.numeric(st.dec[1])))), -1)
+        if (
+            hour(st.dec[.N]) == 0 && 
+            (hour(st.dec[1]) != 0 || .N > (3 * Hz))
+        ) {
+            ## fix last 3 * Hz entries, where hour == 0
+            sub.st <- st.dec[.N - seq_len(3 * Hz) + 1]
+            hr <- hour(sub.st)
+            st.dec[.N - seq_len(3 * Hz) + 1] <- fifelse(hr == 0, sub.st + 24 * 3600, sub.st)
+        }
+        # return list
+        list(
+            # remove columns
+            NULL, NULL, NULL, NULL, NULL,
+            # sonic
+            sonic,
+            # Time
+            st.dec,
+            # Hz
+            Hz,
+            # T
+            V7 + 273.15
+            )
+    }]
+    ### set Output names and order
+    setnames(out, c("u", "v", "w", "T", "sonic", "Time","Hz"))
+    setcolorder(out,c("Time","Hz","u","v","w","T", "sonic"))
+    # check if old sonic
+    if (out[, sonic[1] %in% c('C', 'D')]) setattr(out, 'OldDevice', TRUE)
+    # return
+    out
 }
 
 # readWindMaster_ascii("~/repos/3_Scripts/5_shellSonic/test_data/data_sonicb_20210120_170910")

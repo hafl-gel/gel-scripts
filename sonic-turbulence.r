@@ -126,9 +126,16 @@ readWindMaster_old_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	### get Date
 	bn <- basename(FilePath)
 	Date <- gsub("^..._([0-9]{6})_.*","\\1",bn)
+    ### check if rg is available
+    use_rg <- try(system('rg -V', intern = TRUE), silent = TRUE)
+    # use_rg <- length(system('command -v rg', intern = TRUE)) > 0
 	### read File
 	# browser()
-	suppressWarnings(out <- fread(cmd=paste0("grep -v -e ',,' -e [A-Za-z] '",path.expand(FilePath),"'"),fill = TRUE,blank.lines.skip = TRUE))
+    if (inherits(use_rg, 'try-error')) {
+        suppressWarnings(out <- fread(cmd=paste0("grep -v -e ',,' -e '[A-Za-z]' '",path.expand(FilePath),"'"),fill = TRUE,blank.lines.skip = TRUE))
+    } else {
+        suppressWarnings(out <- fread(cmd=paste0("rg -v -e ',,' -e '[A-Za-z]' '",path.expand(FilePath),"'"),fill = TRUE,blank.lines.skip = TRUE))
+    }
 	if(nrow(out) == 0){
 		cat("File empty:",path.expand(FilePath),"\n")
 		return(NULL)

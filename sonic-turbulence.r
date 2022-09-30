@@ -7,7 +7,7 @@ library(ibts)
 #### To Do:
 # - neue readWindMaster Routine
 # - Plotting & anderes Gheu aufräumen
-readWindMaster_ascii1 <- function(FilePath, tz = "Etc/GMT-1"){
+readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	### get Date
 	bn <- basename(FilePath)
 	if(!grepl("^data_", bn)){

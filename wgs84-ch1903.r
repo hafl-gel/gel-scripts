@@ -183,6 +183,7 @@ CH.to.WGS <- function(x,y=NULL){
 
 ##
 WGS.to.map <- function(MyMap, lat, lon=NULL, zoom){
+    require(RgoogleMaps, quietly = TRUE)
 	if(inherits(lat,"Sources")&&ncol(lat)==4){
 		out <- lat
 		dummy <- LatLon2XY.centered(MyMap, lat[,3], lat[,2], zoom)
@@ -214,80 +215,117 @@ CH.to.map <- function(MyMap,x,y=NULL,...){
 	WGS.to.map(MyMap,WGS84)
 } 
 
+## ~~~~ new functions using EPSG ~~~~ ##
 
-  # rosavent2 <- function (frec, fnum = 4, fint = 5, flab = 2, ang = 3 * pi/16, 
-  #     col = rainbow(10, 0.5, 0.92, start = 0.33, end = 0.2), margen = c(0, 
-  #         0, 0, 0), key = TRUE, uni = "m/s",num.rast=4,dRfrac=0.8,polyOnly=FALSE,farb = "black",farbT = farb,cex.uleg=1, ...){
-  #     # old.par <- par(no.readonly = TRUE)
-  #     # on.exit(par(old.par))
-  #     dR <- max(diff(par("usr")[1:2]),diff(par("usr")[3:4]))/2*dRfrac
-  #     if(is.table(frec)){
-  #       if(length(dim(frec)) > 1){
-  #         class(frec) <- "matrix"
-  #       } else {
-  #         frec <- as.numeric(frec)
-  #       }
-  #     } 
-  #     # if (is.matrix(frec)) 
-  #     #     frec <- as.data.frame(frec)
-  #     if (is.vector(frec)) {
-  #         ndir <- length(frec)
-  #         nr <- 1
-  #     }
-  #     else {
-  #         ndir <- length(frec[1, ])
-  #         nr <- nrow(frec)
-  #     }
-  #     fmax <- fnum * fint
-  #     tot <- sum(frec)
-  #     fr <- 100 * frec/tot
-  #     key <- (nr > 1) && key
-  #     if (key) 
-  #         mlf <- 3
-  #     else mlf <- 1
-  #     # par(mar = margen, new = FALSE, bg = dev.bg, cex=cex)
-  #     fx <- cos(pi/2 - (2 * pi/ndir * 0:(ndir - 1)))
-  #     fy <- sin(pi/2 - (2 * pi/ndir * 0:(ndir - 1)))
-  #     # plot(fx, fy, xlim = c(-fmax - mlf * fint, fmax + fint), ylim = c(-fmax - 
-  #     #     fint, fmax + fint), xaxt = "n", yaxt = "n", xlab = "", 
-  #     #     ylab = "", bty = "n", asp = 1, type = "n", ...)
-  #     if (nr == 1) {
-  #         cx <- fx * fr
-  #         cy <- fy * fr
-  #     }
-  #     else {
-  #       f <- colSums(fr)
-  #         cx <- fx * f
-  #         cy <- fy * f
-  #         for (i in nr:2) {
-  #           # browser()
-  #             f <- f - fr[i, ]
-  #             cx <- c(cx, NA, fx * f)
-  #             cy <- c(cy, NA, fy * f)
-  #         }
-  #     }
-  #     # browser()
-  #     polygon(cx/fmax*dR, cy/fmax*dR, col = col[nr:1])
-  #     if(!polyOnly){
-  #       symbols(c(0 * 1:fnum), c(0 * 1:fnum), circles = c(fint * 
-  #           1:fnum)/fmax*dR, inches = FALSE, add = TRUE,fg=farb)
-  #       segments(0 * 1:num.rast, 0 * 1:num.rast, dR * cos(pi/2 - (2 * pi/num.rast * 0:(num.rast - 1))), dR * sin(pi/2 - (2 * pi/num.rast * 0:(num.rast - 1))),col=farb)
-  #       fmaxi <- (fmax + fint/4)/fmax*dR
-  #       text(0, fmaxi, "N",col=farbT)
-  #       text(0, -fmaxi, "S",col=farbT)
-  #       text(fmaxi, 0, "E",col=farbT)
-  #       text(-fmaxi, 0, "W",col=farbT)
-  #       if (flab == 2) 
-  #           for (i in 1:fnum) text(i * fint * cos(ang)/fmax*dR, i * fint * 
-  #               sin(ang)/fmax*dR, paste(i * fint, "%"),col=farbT)
-  #       else if (flab == 1) 
-  #           text(dR * cos(ang), dR * sin(ang), paste(fmax, "%"),col=farbT)
-  #       if (key) {
-  #         # browser()
-  #           legend("topright",fill = col, legend = rownames(frec),title=uni,cex=cex.uleg)
-  #           # text(-fmaxi - 0.4 * fint/fmax*dR, fmaxi + 0.9 * fint/fmax*dR, uni)
-  #       }
-  #   }
-  #     invisible()
-  #   }
+# WGS_to_CH
+# CH_to_WGS
+# WGS_to_map
+# CH_to_map
+# # map_to_WGS
+# # map_to_CH
+
+# check EPSG codes on https://epsg.io
+# wgs84: 4326
+# ch1903/LV03: 21781
+# ch1903/LV95: 2056
+
+library(sf, quietly = TRUE)
+st_sfc
+st_transform
+st_crs
+
+x <- data.frame(lat = 47, lon = 7.5)
+
+.change_coords <- function(x, y, crs_from = NULL, crs_to = NULL, swap_xy = FALSE) {
+    # insist on numeric
+    x <- as.numeric(x)
+    y <- as.numeric(y)
+    # swap y > x?
+    if (swap_xy && (
+        (y[1] < 100 && y[1] < x[1]) || 
+        (y[1] > 100 && y[1] > x[1])
+        ))
+    {
+        xcp <- x
+        x <- y
+        y <- xcp
+    }
+    # check xy crs
+    if (is.null(crs_from)) {
+        if (y[1] < 90) {
+            # wgs84
+            crs_from <- 'EPSG:4326'
+        } else if (y[1] > 5e5) {
+            # LV95
+            crs_from <- 'EPSG:21781'
+        } else {
+            # LV03
+            crs_from <- 'EPSG:2056'
+        }
+    }
+    # check output crs
+    if (is.null(crs_to)) {
+        if (crs_from == 'EPSG:4326' || crs_from == 4326) {
+            # LV95
+            crs_to <- 'EPSG:2056'
+        } else {
+            # WGS84
+            crs_to <- 'EPSG:4326'
+        }
+    }
+    obj <- st_sfc(st_multipoint(cbind(x, y)))
+    st_crs(obj) <- crs_from
+    out <- st_transform(obj, crs_to)
+    as.matrix(out[[1]])
+}
+
+change_coords <- function(x, y = NULL, crs_from = NULL, 
+    crs_to = NULL, swap = FALSE) {
+	if (inherits(x, "Sources") && ncol(x) == 4) {
+		out <- x
+		out[, 2:3] <- .change_coords(x[, 2], x[, 3], 
+            crs_from = crs_from, crs_to = crs_to, 
+            swap_xy = swap_xy)
+	} else if (inherits(x, "Sensors") && ncol(x) >= 7) {
+		out <- convert(x)
+        out[, c('x-Coord (m)', 'y-Coord (m)')] <- .change_coords(
+            y[, 'x-Coord (m)'], y[, 'y-Coord (m)'], 
+            crs_from = crs_from, crs_to = crs_to, 
+            swap_xy = swap_xy)
+	} else {
+		if (is.null(y)) {
+			if (is.matrix(x)) {
+				y <- x[, 2]
+				x <- x[, 1]
+			} else {
+				y <- x[[2]]
+				x <- x[[1]]
+			}
+		}
+        out <- .change_coords(x, y, 
+            crs_from = crs_from, crs_to = crs_to, 
+            swap_xy = swap_xy)
+        colnames(out) <- c('x', 'y')
+	}
+	return(out)
+}
+
+## 
+wgs_to_ch <- function(lon, lat = NULL) {
+    change_coords(lon, lat, 
+        crs_from = 4326, crs_to = 2056,
+        swap_xy = TRUE)
+}
+ch_to_wgs <- function(x, y = NULL) {
+    change_coords(x, y, 
+        crs_from = NULL, crs_to = 4326,
+        swap_xy = TRUE)
+}
+
+##
+wgs_to_map <- WGS.to.map
+ch_to_map <- function(MyMap, x, y = NULL, ...) {
+	WGS84 <- ch_to_wgs(x, y)
+	wgs_to_map(MyMap, WGS84, ...)
+} 
 

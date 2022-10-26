@@ -40,10 +40,10 @@ x <- data.frame(lat = 47, lon = 7.5)
             crs_from <- 'EPSG:4326'
         } else if (y[1] > 5e5) {
             # LV95
-            crs_from <- 'EPSG:21781'
+            crs_from <- 'EPSG:2056'
         } else {
             # LV03
-            crs_from <- 'EPSG:2056'
+            crs_from <- 'EPSG:21781'
         }
     }
     # check output crs
@@ -63,7 +63,7 @@ x <- data.frame(lat = 47, lon = 7.5)
 }
 
 change_coords <- function(x, y = NULL, crs_from = NULL, 
-    crs_to = NULL, swap = FALSE) {
+    crs_to = NULL, swap_xy = FALSE) {
 	if (inherits(x, "Sources") && ncol(x) == 4) {
 		out <- x
 		out[, 2:3] <- .change_coords(x[, 2], x[, 3], 

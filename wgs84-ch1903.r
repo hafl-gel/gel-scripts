@@ -19,10 +19,11 @@ st_crs
 
 x <- data.frame(lat = 47, lon = 7.5)
 
-.change_coords <- function(x, y, crs_from = NULL, crs_to = NULL, swap_xy = FALSE) {
+.change_coords <- function(x, y, crs_from = NULL, crs_to = NULL, swap_xy = FALSE,
+    offset = c(0, 0)) {
     # insist on numeric
-    x <- as.numeric(x)
-    y <- as.numeric(y)
+    x <- as.numeric(x) + offset[1]
+    y <- as.numeric(y) + offset[2]
     # swap y > x?
     if (swap_xy && (
         (y[1] < 100 && y[1] < x[1]) || 
@@ -63,32 +64,66 @@ x <- data.frame(lat = 47, lon = 7.5)
 }
 
 change_coords <- function(x, y = NULL, crs_from = NULL, 
-    crs_to = NULL, swap_xy = FALSE) {
+    crs_to = NULL, swap_xy = FALSE, x_col = 1, y_col = 2,
+    as_list = FALSE, offset = c(0, 0)) {
+    offset <- as.numeric(offset)
 	if (inherits(x, "Sources") && ncol(x) == 4) {
 		out <- x
 		out[, 2:3] <- .change_coords(x[, 2], x[, 3], 
             crs_from = crs_from, crs_to = crs_to, 
-            swap_xy = swap_xy)
+            swap_xy = swap_xy, offset = offset)
 	} else if (inherits(x, "Sensors") && ncol(x) >= 7) {
 		out <- convert(x)
         out[, c('x-Coord (m)', 'y-Coord (m)')] <- .change_coords(
-            y[, 'x-Coord (m)'], y[, 'y-Coord (m)'], 
+            x[, 'x-Coord (m)'], x[, 'y-Coord (m)'], 
             crs_from = crs_from, crs_to = crs_to, 
-            swap_xy = swap_xy)
+            swap_xy = swap_xy, offset = offset)
 	} else {
 		if (is.null(y)) {
+            out <- copy(x)
 			if (is.matrix(x)) {
-				y <- x[, 2]
-				x <- x[, 1]
+                out[, c(x_col, y_col)] <- .change_coords(
+                    x[, x_col], x[, y_col],
+                    crs_from = crs_from, crs_to = crs_to, 
+                    swap_xy = swap_xy, offset = offset)
+            } else if (inherits(x, 'area_sources')) {
+                out[, c('x', 'y') :=  change_coords(
+                    x, y, crs_from = crs_from,
+                    crs_to = crs_to, swap_xy = swap_xy, x_col = 'x',
+                    y_col = 'y', as_list = TRUE, offset = offset)]
+                attr(out, 'cadastre')[, c('x', 'y') := change_coords(
+                    attr(..x, 'cadastre')[, .(x, y)], crs_from = crs_from,
+                    crs_to = crs_to, swap_xy = swap_xy, x_col = 'x',
+                    y_col = 'y', as_list = TRUE, offset = offset)]
+            } else if (is.data.table(x)) {
+                if (is.numeric(x_col)) x_col <- names(out)[x_col]
+                if (is.numeric(y_col)) y_col <- names(out)[y_col]
+                out[, c(x_col, y_col) :=  change_coords(
+                    x, y, crs_from = crs_from,
+                    crs_to = crs_to, swap_xy = swap_xy, 
+                    as_list = TRUE, offset = offset)]
+            } else if (is.data.frame(x) || is.list(x)) {
+                stop('Fix me in change_coords()!')
 			} else {
-				y <- x[[2]]
-				x <- x[[1]]
+				y <- x[[y_col]]
+				x <- x[[x_col]]
+                out <- .change_coords(x, y, 
+                    crs_from = crs_from, crs_to = crs_to, 
+                    swap_xy = swap_xy, offset = offset)
+                colnames(out) <- c('x', 'y')
+                if (as_list) {
+                    out <- as.list(as.data.frame(out))
+                }
 			}
-		}
-        out <- .change_coords(x, y, 
-            crs_from = crs_from, crs_to = crs_to, 
-            swap_xy = swap_xy)
-        colnames(out) <- c('x', 'y')
+		} else {
+            out <- .change_coords(x, y, 
+                crs_from = crs_from, crs_to = crs_to, 
+                swap_xy = swap_xy, offset = offset)
+            colnames(out) <- c('x', 'y')
+            if (as_list) {
+                out <- as.list(as.data.frame(out))
+            }
+        }
 	}
 	return(out)
 }
@@ -106,8 +141,10 @@ ch_to_wgs <- function(x, y = NULL) {
 }
 
 ##
-wgs_to_map <- function(MyMap, lat, lon = NULL, zoom) {
+wgs_to_map <- function(MyMap, lat, lon = NULL, zoom,
+    x_col = 1, y_col = 2) {
     require(RgoogleMaps, quietly = TRUE)
+    if (missing(zoom)) zoom <- MyMap$zoom
 	if (inherits(lat, "Sources") && ncol(lat) == 4) {
 		out <- lat
 		dummy <- LatLon2XY.centered(MyMap, lat[, 3], lat[, 2], zoom)
@@ -120,16 +157,25 @@ wgs_to_map <- function(MyMap, lat, lon = NULL, zoom) {
 		return(out)
 	} else {
 		if (is.null(lon)) {
-			if (!is.matrix(lat) & !is.data.frame(lat)) {
-				lon <- lat[2]
-				lat <- lat[1]
+            out <- copy(lat)
+            if (inherits(lat, 'area_sources')) {
+                out[, c('x', 'y') := {
+                    LatLon2XY.centered(MyMap, y, x, zoom)
+                }]
+                attr(out, 'cadastre')[, c('x', 'y') := {
+                    LatLon2XY.centered(MyMap, y, x, zoom)
+                }]
+            } else if (is.data.table(lat)) {
+                out[, c(x_col, y_col) := {
+                    LatLon2XY.centered(MyMap, get(y_col), get(x_col), zoom)
+                }]
+            } else if (!is.matrix(lat) & !is.data.frame(lat)) {
+                stop('fix me in wgs_to_map()')
 			} else {
-				lon <- lat[, 2]
-				lat <- lat[, 1]
+                stop('fix me in wgs_to_map() data.frame/matrix')
 			}
 		}
-		out <- LatLon2XY.centered(MyMap, lat, lon, zoom)
-		return(cbind(x = out$newX, y = out$newY))
+        return(out)
 	}
 }
 
@@ -137,6 +183,34 @@ ch_to_map <- function(MyMap, x, y = NULL, ...) {
 	WGS84 <- ch_to_wgs(x, y)
 	wgs_to_map(MyMap, WGS84, ...)
 } 
+ch_to_wgs <- function(x, y = NULL) {
+    change_coords(x, y, 
+        crs_from = NULL, crs_to = 4326,
+        swap_xy = TRUE)
+}
+
+xy_to_ch <- function(x, y = NULL, crs_from, offset,
+    x_col = 'x', y_col = 'y') {
+    if (missing(offset) || missing(crs_from)) {
+        stop('crs_from and offset between xy and crs_from are both required!')
+    }
+    change_coords(x, y, 
+        crs_from = crs_from, crs_to = 2056, 
+        swap_xy = TRUE, offset = offset, x_col = x_col, y_col = y_col)
+}
+xy_to_wgs <- function(x, y = NULL, crs_from, offset, x_col = 'x', y_col = 'y') {
+    if (missing(offset) || missing(crs_from)) {
+        stop('crs_from and offset between xy and crs_from are both required!')
+    }
+    change_coords(x, y, x_col = x_col, y_col = y_col,
+        crs_from = crs_from, crs_to = 4326, 
+        swap_xy = TRUE, offset = offset)
+}
+xy_to_map <- function(MyMap, x, y = NULL, crs_from, offset,
+    x_col = 'x', y_col = 'y', ...) {
+	WGS84 <- xy_to_wgs(x, y, crs_from = crs_from, offset = offset, x_col = x_col, y_col = y_col)
+	wgs_to_map(MyMap, WGS84, x_col = x_col, y_col = y_col, ...)
+}
 
 ## RgoogleMaps convenience wrappers
 get_map <- function(loc, file = NULL, zoom = 16, 

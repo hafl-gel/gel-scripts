@@ -138,3 +138,56 @@ ch_to_map <- function(MyMap, x, y = NULL, ...) {
 	wgs_to_map(MyMap, WGS84, ...)
 } 
 
+## RgoogleMaps convenience wrappers
+get_map <- function(loc, file = NULL, zoom = 16, 
+    maptype = 'satellite', type = 'google',
+    token = Sys.getenv('R_GOOGLE_MAPS'), crs_from = NULL,
+    fix_xy = TRUE, ...) {
+    require(RgoogleMaps, quietly = TRUE)
+    # get temporary file
+    if (is.null(file)) {
+        file <- tempfile('staticMap', fileext = '.png')
+    }
+    # convert loc
+    loc_wgs <- change_coords(loc, crs_to = 4326, swap_xy = fix_xy, 
+        crs_from = crs_from)
+    colnames(loc_wgs) <- c('lon', 'lat')
+    # check token
+    if (type != 'google') token <- ''
+    if (token == '' && type == 'google') {
+        type <- 'osm'
+        if (maptype == 'satellite') maptype <- 'roadmap'
+    }
+    # check center or bbox
+    if (nrow(loc_wgs) == 1) {
+        fu <- function(...) GetMap(loc_wgs[, c('lat', 'lon')], destfile = file, zoom = zoom,
+            maptype = maptype, type = type, ...)
+        cat('center: lon:', 
+            round(loc_wgs[, 1], 1), 
+            ' lat:', 
+            round(loc_wgs[, 2], 1), 
+            '\n')
+    # get map
+    } else {
+        # get range
+        loc_bbox <- apply(loc_wgs, 2, range, na.rm = TRUE)
+        # get map
+        fu <- function(...) GetMap.bbox(loc_bbox[, 1], loc_bbox[, 2], destfile = file, 
+            maptype = maptype, type = type, ...)
+        loc_ctr <- colMeans(loc_bbox)
+        cat('bbox:\n  lon:', 
+            round(loc_bbox[, 1], 1), 
+            '\n  lat:', 
+            round(loc_bbox[, 2], 1), 
+            '\n')
+    }
+    if (token != '') {
+        fu(API_console_key = token, ...)
+    } else {
+        fu(...)
+    }
+}
+plot.staticMap <- function(x, y, ...) {
+    PlotOnStaticMap(x, NEWMAP = FALSE, ...)
+}
+

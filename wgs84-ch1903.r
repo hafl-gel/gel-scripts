@@ -265,3 +265,12 @@ plot.staticMap <- function(x, y, ...) {
     PlotOnStaticMap(x, NEWMAP = FALSE, ...)
 }
 
+# TODO:
+# use S3 methods
+# user coord (m) -> crs (m)
+# user coord (m) <- crs (m)
+# crs (m) -> crs/wgs84
+# crs (m) <- crs/wgs84
+# wgs84 -> RgoogleMaps
+# wgs84 <- RgoogleMaps
+

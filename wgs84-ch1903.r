@@ -1,11 +1,21 @@
 ## ~~~~ new functions using EPSG ~~~~ ##
 
-# WGS_to_CH
-# CH_to_WGS
-# WGS_to_map
-# CH_to_map
-# # map_to_WGS
-# # map_to_CH
+## functions:
+# coord_transf
+#   -> crs: map, local, crs
+#   -> local or map: check origin not missing!!!
+#   -> crs_to/crs_from == Map?
+# ev. swap_coords (ch1903 <-> wgs84)
+# local_to_...
+# ch1903_to_...
+# wgs84_to_...
+# map_to_...
+#
+# - 1 function to change in-between all of them
+# - use S3 methods for different classes
+# - use attributes to store offset & coordinates
+# - use st_point for offset & st_multipoint for resid
+# - more partial functions
 
 # check EPSG codes on https://epsg.io
 # wgs84: 4326
@@ -13,6 +23,133 @@
 # ch1903/LV95: 2056
 
 library(sf, quietly = TRUE)
+
+## ~~~ general helpers
+get_names <- function(obj) UseMethod('get_names')
+get_names.default <- function(obj) names(obj)
+get_names.matrix <- function(obj) colnames(obj)
+get_length <- function(obj) UseMethod('get_length')
+get_length.default <- function(obj) length(obj)
+get_length.matrix <- function(obj) ncol(obj)
+names_exist <- function(obj, col) UseMethod('names_exist')
+setMethod('names_exist', 
+    signature(obj = 'ANY', col = 'numeric'),
+    function(obj, col) {
+        col <= get_length(obj)
+    })
+setMethod('names_exist', 
+    signature(obj = 'ANY', col = 'character'),
+    function(obj, col) {
+        col %in% get_names(obj)
+    })
+setMethod('names_exist', 
+    signature(obj = 'ANY', col = 'NULL'),
+    function(obj, col) {
+        TRUE
+    })
+
+## ~~~ mess with coordinate attributes
+coord_attr_name <- function(obj, what, which_coord = NULL) {
+    attr_name <- switch(what
+        # coordinate column names
+        , 'coord_name' = {
+            stopifnot(length(which_coord) == 1 && which_coord %in% c('x', 'y'))
+            paste0(which_coord, '_coord')
+        }
+        # else
+        , stop('attribute ', what, ' does not exist')
+        )
+}
+coord_attr <- function(obj, what, which_coord = NULL) {
+    attr(obj, coord_attr_name(obj, what, which_coord = which_coord))
+}
+'coord_attr<-' <- function(obj, what, which_coord = NULL, value) {
+    attr(obj, coord_attr_name(obj, what, which_coord = which_coord)) <- value
+    obj
+}
+'coord_name_x<-' <- function(obj, value) {
+    # check if name exists
+    if (length(value) > 1 || !names_exist(obj, value)) {
+        stop('value with length > 1 cannot be assigned to coord_name x')
+    }
+    # assign
+    coord_attr(obj, 'coord_name', 'x') <- value
+    obj
+}
+'coord_name_y<-' <- function(obj, value) {
+    # check if name exists
+    if (length(value) > 1 || !names_exist(obj, value)) {
+        stop('value with length > 1 cannot be assigned to coord_name y')
+    }
+    # assign
+    coord_attr(obj, 'coord_name', 'y') <- value
+    obj
+}
+'coord_names<-' <- function(obj, value) {
+    nms <- get_names(value)
+    if (!is.null(nms)) {
+        stopifnot(all(nms %in% c('x', 'y')))
+    } else {
+        names(value) <- c('x', 'y')
+    }
+    coord_name_x(obj) <- value[['x']]
+    coord_name_y(obj) <- value[['y']]
+    obj
+}
+coord_name_x <- function(obj) {
+    guess coord name here if missing?
+    coord_attr(obj, 'coord_name', 'x')
+}
+coord_name_y <- function(obj) {
+    coord_attr(obj, 'coord_name', 'y')
+}
+coord_names <- function(obj) {
+    c(
+        x = coord_name_x(obj),
+        y = coord_name_y(obj)
+        )
+}
+
+## automatically assign/fix missing coordinate names
+fix_coord_col <- function(obj)
+
+## additional functions:
+coords <- function(obj)
+'coords<-' <- function(obj)
+coord_x
+coord_y
+'coord_x<-'
+'coord_y<-'
+
+Also: make only certain functions visible for final version
+
+## --- local -> map ---
+## local -> crs (proj) -> wgs84 -> map
+
+## ~~~ local x/y -> ch1903/crs_proj
+local_to_ch1903/crs_proj:
+    - obj_local, origin (in ch1903/crs_proj), LV03 = FALSE
+
+local_to_ch1903 <- function(obj_local, origin = NULL, LV03 = FALSE) {
+    if (LV03) {
+        crs_to <- 'EPSG:21781'
+    } else {
+        crs_to <- 'EPSG:2056'
+    }
+    transform(obj_local, crs_from = NULL, crs_to = crs_to)
+}
+
+## ~~~ ch1903/crs_proj -> wgs84
+ch1903_to_wgs84:
+    - obj_ch1903
+
+## ~~~ wgs84 -> map
+wgs84_to_map:
+    - obj_wgs84, map
+
+## ~~~ map x/y -> local
+map_to_local:
+    - obj_map, map, origin (in crs_local), crs_local != NULL
 
 .change_coords <- function(x, y, crs_from = NULL, crs_to = NULL, swap_xy = FALSE,
     offset = c(0, 0)) {

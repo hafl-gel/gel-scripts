@@ -13,11 +13,6 @@
 # ch1903/LV95: 2056
 
 library(sf, quietly = TRUE)
-st_sfc
-st_transform
-st_crs
-
-x <- data.frame(lat = 47, lon = 7.5)
 
 .change_coords <- function(x, y, crs_from = NULL, crs_to = NULL, swap_xy = FALSE,
     offset = c(0, 0)) {
@@ -152,8 +147,8 @@ wgs_to_map <- function(MyMap, lat, lon = NULL, zoom,
 		return(out)
 	} else if (inherits(lat, "Sensors") && ncol(lat) >= 7) {
 		out <- convert(lat)
-		dummy <- LatLon2XY.centered(MyMap, lat[, "y-Coord (m) "], lat[, "x-Coord (m) "], zoom)
-		out[, c("x-Coord (m) ", "y-Coord (m) ")] <- cbind(dummy$newX, dummy$newY)
+		dummy <- LatLon2XY.centered(MyMap, lat[, "y-Coord (m)"], lat[, "x-Coord (m)"], zoom)
+		out[, c("x-Coord (m)", "y-Coord (m)")] <- cbind(dummy$newX, dummy$newY)
 		return(out)
 	} else {
 		if (is.null(lon)) {

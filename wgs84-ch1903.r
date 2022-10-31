@@ -110,10 +110,63 @@ coord_names <- function(obj) {
         )
 }
 
+guess_coord_x <- function(obj, value = TRUE) {
+    nms <- get_names(obj)
+    # check null
+    if (is.null(nms)) {
+        if (is.character(obj)) {
+            nms <- obj
+        } else {
+            return(NULL)
+        }
+    }
+    # check x
+    x_nm <- grep('^((x|X)(.*(c|C)oord.*)?)$|^((c|C)oord.*(x|X))$', nms, value = value)
+    if (length(x_nm) == 0) {
+        # check lon
+        x_nm <- grep('^(l|L)on((g|gitude).*)?$', nms, value = value)
+    }
+    x_nm
+}
+guess_coord_y <- function(obj, value = TRUE) {
+    nms <- get_names(obj)
+    # check null
+    if (is.null(nms)) {
+        if (is.character(obj)) {
+            nms <- obj
+        } else {
+            return(NULL)
+        }
+    }
+    # check y
+    y_nm <- grep('^((y|Y)(.*(c|C)oord.*)?)$|^((c|C)oord.*(y|Y))$', nms, value = value)
+    if (length(y_nm) == 0) {
+        # check lon
+        y_nm <- grep('^(l|L)at(itude.*)?$', nms, value = value)
+    }
+    y_nm
+}
+guess_coords <- function(obj, value = TRUE) {
+    c(
+        guess_coord_x(obj)[1], 
+        guess_coord_y(obj)[1]
+    )
+}
+
 ## automatically assign/fix missing coordinate names
-fix_coord_col <- function(obj)
+fix_coord_col <- function(obj) {
+    # check if coord name x/y is missing
+    # if not missing
+        # check if column exists and if numeric
+            # if inexistent -> missing
+            # else ok
+    # if missing
+        # search for x/y or lat/lon
+        # check numeric columns (1st -> x, 2nd -> y)
+}
 
 ## additional functions:
+# get coordinate values (format matrix? list?)
 coords <- function(obj)
 'coords<-' <- function(obj)
 coord_x

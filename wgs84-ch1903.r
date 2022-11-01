@@ -154,9 +154,10 @@ guess_coords <- function(obj, value = TRUE) {
 }
 
 ## automatically assign/fix missing coordinate names
-fix_coord_col <- function(obj) {
+fix_coord_name_x <- function(obj) {
     # check if coord name x/y is missing
-    # if not missing
+    cn <- coord_name_x(obj)
+    # if existing
         # check if column exists and if numeric
             # if inexistent -> missing
             # else ok
@@ -164,6 +165,8 @@ fix_coord_col <- function(obj) {
         # search for x/y or lat/lon
         # check numeric columns (1st -> x, 2nd -> y)
 }
+fix_coord_name_y
+fix_coord_names
 
 ## additional functions:
 # get coordinate values (format matrix? list?)

@@ -1,26 +1,32 @@
 
-# transition from require/library to box::use
-if ('box' %in% .packages(TRUE) && length(box::name()) != 0) {
-    # although considered bad praxis, we want all
-    # data.table functions available in .GlobalEnv:
-    evalq(box::use(data.table[...]), .GlobalEnv)
-    # load ibts/data.table package for module
-    cat(paste0('*** ibts namespace not available ***\n-> Consider adding:\n\n',
-        'box::use(ibts[...])\n\n',
-        'to your script...\n*** ~~~~~~~~~~~~~~~~~~ ***\n'))
-    # import necessary functions
-    box::use(
-        data.table[...], 
-        ibts[as.ibts], 
-        lubridate[fast_strptime],
-        utils[unzip],
-        graphics[par]
-        )
-} else {
-    library(lubridate)
-    library(data.table)
-    library(ibts)
-}
+# # transition from require/library to box::use
+# if ('box' %in% .packages(TRUE) && length(box::name()) != 0) {
+#     # load ibts/data.table package for module
+#     # although considered bad praxis, we want all
+#     # data.table functions available in .GlobalEnv:
+#     evalq(box::use(data.table[...]), .GlobalEnv)
+#     evalq(box::use(ibts[...]), .GlobalEnv)
+#     # import necessary functions
+#     box::use(
+#         data.table[...], 
+#         ibts[as.ibts], 
+#         lubridate[fast_strptime],
+#         utils[unzip],
+#         graphics[par]
+#         )
+# } else {
+#     library(lubridate)
+#     library(data.table)
+#     library(ibts)
+# }
+
+# transition to box needs some investment!
+require(data.table)
+require(ibts)
+require(lubridate)
+
+# attach to search path
+idaweb <- new.env()
 
 #' Print IDA data summary 
 #'
@@ -29,7 +35,7 @@ if ('box' %in% .packages(TRUE) && length(box::name()) != 0) {
 #' @param x A `data.table` containing idaweb data
 #' @return A `data.table` with a data summary (one row per id)
 #' @export
-smry_ida <- function(x) {
+idaweb$smry_ida <- function(x) {
     nms0 <- names(x[, id:et])
     nms1 <- names(x)[!(names(x) %in% nms0)]
     x[, c(
@@ -57,7 +63,7 @@ smry_ida <- function(x) {
 #' @param x A `data.table` containing idaweb data
 #' @return A `data.table` with data coverage summary (one row per id)
 #' @export
-check_ida <- function(x) {
+idaweb$check_ida <- function(x) {
     nms0 <- names(x[, id:et])
     nms1 <- names(x)[!(names(x) %in% nms0)]
     x[, 
@@ -73,7 +79,7 @@ check_ida <- function(x) {
 #'
 #' @param x A `data.table` containing idaweb data
 #' @export
-plot_ida <- function(x) {
+idaweb$plot_ida <- function(x) {
     ch <- check_ida(x)
     nms1 <- names(ch[, -1])
     nt <- sum(ch[, mget(nms1)] > 0)
@@ -101,7 +107,7 @@ plot_ida <- function(x) {
 #' @param File character. The path to an idaweb zip file.
 #' @return A `data.table` containing idaweb data
 #' @export
-read_ida <- function(File) {
+idaweb$read_ida <- function(File) {
 
     # get zipped file names
     zip_names <- unzip(File, list = TRUE)$Name
@@ -191,3 +197,11 @@ read_ida <- function(File) {
     out
 }
 
+try(detach('user:idaweb', character.only = TRUE), silent = TRUE)
+attach(idaweb, name = 'user:idaweb')
+
+cat("Attaching environment 'user:idaweb' to searchpaths().\n\nattached objects:\n")
+print(ls(envir = idaweb))
+cat('\n')
+
+rm(idaweb)

@@ -1,24 +1,58 @@
-
-hexadec <- function(x){
-    hd_string <- c(0:9, letters[1:6])
-    r16 <- function(r) {
-        f <- (r %% 16) + 1L
-        new <- floor(r / 16)
-        if (new == 0) {
-            hd_string[f]
-        } else {
-            paste0(r16(new), hd_string[f])
-        }
-    }
-    r16(x)
+# transition from require/library to box::use
+if ('box' %in% .packages(TRUE) && length(box::name()) != 0) {
+    # import necessary functions
+    box::use(
+        data.table[is.data.table],
+        graphics[par, polygon]
+    )
+} else {
+    require(data.table)
 }
 
 
-.polar2xy <- function(wd, ws, scale = 1, center = c(0, 0), asp = 1){
-    z <- scale * ws * exp((90 - wd) / 180 * pi * 1i)
-    data.frame(x = Re(z) + center[1], y = Im(z) * asp + center[2])
-}
-
+#' windrose plot
+#'
+#' plot a windrose either with wedges or as a spider plot
+#'
+#' @param data \code{data.frame} containing columns defined by arguments \code{wd} and \code{wd}.
+#' @param wd name of the column which contains circular values (e.g wind direction).
+#' @param ws name of the column which contains the 'level' values (e.g. wind speed).
+#' @param type type of the windrose. Either \code{"wedge"} or \code{"spider"}.
+#' @param ws_breaks numeric vector defining the breaks/limits for the 'level' values.
+#' @param delta_wd numeric. Width of the wedge/spider sectors.
+#' @param delta_freq numeric. Steps of the frequency. (TODO: explain better!)
+#' @param max_freq numeric. maximum limit of the frequency axis.
+#' @param circ_freq ???
+#' @param scale numeric. scaling of windrose plot. default = 1.
+#' @param center numeric vector of length two providing the center of the windrose plot. Defaults to \code{c(0, 0)}.
+#' @param add
+#' @param border
+#' @param width
+#' @param draw_wd
+#' @param exclude
+#' @param start
+#' @param mirror
+#' @param alpha
+#' @param colors
+#' @param grid.angle
+#' @param grid.lty
+#' @param grid.col
+#' @param draw.grid
+#' @param lab.col
+#' @param lab.angle
+#' @param key
+#' @param unit
+#' @param legend.cex
+#' @param legend.x
+#' @param legend.y
+#' @param legend.bty
+#' @param legend.text.col
+#' @param legend.bg
+#' @param ...
+#'
+#' @return
+#'
+#' @export
 windrose <- function(
     data, wd = "wd", ws = "ws", type = c("wedge", "spider"), ws_breaks = 5,
     delta_wd = 22.5, delta_freq = NULL, max_freq = NULL, circ_freq = delta_freq/4,
@@ -274,4 +308,25 @@ windrose <- function(
     }
 
     invisible(freq_tab)
+}
+
+#' helper function to convert to hexadec
+hexadec <- function(x){
+    hd_string <- c(0:9, letters[1:6])
+    r16 <- function(r) {
+        f <- (r %% 16) + 1L
+        new <- floor(r / 16)
+        if (new == 0) {
+            hd_string[f]
+        } else {
+            paste0(r16(new), hd_string[f])
+        }
+    }
+    r16(x)
+}
+
+#' helper function to convert from polar coordinates
+.polar2xy <- function(wd, ws, scale = 1, center = c(0, 0), asp = 1){
+    z <- scale * ws * exp((90 - wd) / 180 * pi * 1i)
+    data.frame(x = Re(z) + center[1], y = Im(z) * asp + center[2])
 }

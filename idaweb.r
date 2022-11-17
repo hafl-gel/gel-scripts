@@ -197,11 +197,15 @@ idaweb$read_ida <- function(File) {
     out
 }
 
-try(detach('user:idaweb', character.only = TRUE), silent = TRUE)
-attach(idaweb, name = 'user:idaweb')
+pos_name <- 'user:idaweb'
+try(detach(pos_name, character.only = TRUE), silent = TRUE)
+attach(idaweb, name = pos_name)
 
-cat("Attaching environment 'user:idaweb' to searchpaths().\n\nattached objects:\n")
+cat('\n**~~~~~~~ new environment ~~~~~~~**\n\n')
+cat("Attaching environment '", pos_name, "' to searchpaths().\n\n", sep = '')
+cat("run ls(pos = '", pos_name, "') to list attached objects\n\n", sep = '')
+cat("attached objects:\n")
 print(ls(envir = idaweb))
-cat('\n')
+cat('\n**~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~**\n\n')
 
 rm(idaweb)

@@ -56,7 +56,7 @@ require(data.table)
 #'
 #' @export
 windrose <- function(
-    data, wd = "wd", ws = "ws", type = c("wedge", "spider"), ws_breaks = 5,
+    data, wd = "wd", ws = "ws", type = c("wedge", "spider"), ws_breaks = NULL, n_breaks = 5,
     delta_wd = 22.5, delta_freq = NULL, max_freq = NULL, circ_freq = delta_freq/4,
     scale = 1, center = c(0,0), add = FALSE, border = "black", width = 0.9,
     draw_wd = c(0, 360), exclude = FALSE, start = 0, mirror = FALSE, alpha = 0.5,
@@ -95,7 +95,9 @@ windrose <- function(
     }
 
     ## wind speed
-    if (length(ws_breaks) == 1 && ws_breaks <= max(df_nona[!ind0, ws])) {
+    if (is.null(ws_breaks)) {
+        breaks <- n_breaks
+    } else if (length(ws_breaks) == 1 && ws_breaks <= max(df_nona[!ind0, ws])) {
         breaks <- seq(0, max(df_nona[!ind0, ws]) + ws_breaks, by = ws_breaks)
     } else {
         # -> warning if data outside?

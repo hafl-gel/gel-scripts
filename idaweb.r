@@ -118,7 +118,7 @@ read_ida <- function(File) {
 
     # get Stationen and Parameter
     iEmpty <- grep('^$', leg)
-    iSf <- grep('Stationen', leg) + 2
+    iSf <- grep('(Stationen|Stations)', leg) + 2
     iPf <- grep('^Parameter$', leg) + 2
     iSt <- iEmpty[which(iEmpty > iSf)[1]] - 1
     iPt <- iEmpty[which(iEmpty > iPf)[1]] - 1
@@ -130,7 +130,7 @@ read_ida <- function(File) {
     # read Stationen
     Stats <- unique(
         fread(text = gsub('([ ]{2, }|[[]km[]])', '\\1,', leg[iSf:iSt]), sep = ',',
-            check.names = TRUE)[, c('Datenquelle', 'Parameter') := NULL]
+            check.names = TRUE)
         )
 
     # read zipped data
@@ -168,20 +168,21 @@ read_ida <- function(File) {
         , use.names = TRUE, fill = TRUE)
 
     # merge Data and Stats
-    Stat2 <- Stats[, .(stn, name = Name, 
-        id = paste0('id', seq_len(.N)),
-        ch.x = as.numeric(sub('([0-9]{6})[/].*', '\\1', Koordinaten..km.)),
-        ch.y = as.numeric(sub('[0-9]{6}[/]([0-9]{6})', '\\1', Koordinaten..km.)),
-        # m.asl = Höhe.ü..M...m.
-        m.asl = get('H\u00f6he.\u00fc..M...m.')
+    coord_name <- grep('(Koordinaten..km|Coordinates..km)', names(Stats), value = TRUE)
+    level <- grep('(H\u00f6he[.]\u00fc[.][.]M[.][.][.]m[.]|Elevation[.][.]m[.])', names(Stats), value = TRUE)
+    setnames(Stats, c(coord_name, level), c('coords', 'level'))
+    Stat2 <- unique(Stats, by = 'stn')[, .(stn, name = Name, 
+        ch.x = as.numeric(sub('([0-9]{6})[/].*', '\\1', coords)),
+        ch.y = as.numeric(sub('[0-9]{6}[/]([0-9]{6})', '\\1', coords)),
+        m.asl = level
         )]
     out <- merge(Data, Stat2, all = TRUE)[, time := NULL][]
 
     # set key column
-    setkey(out, id)
+    setkey(out, stn, granularity)
 
     # prepare output columns
-    nms0 <- c('id', 'stn', 'name', 'ch.x', 'ch.y', 'm.asl', 'granularity', 'st', 'et')
+    nms0 <- c('stn', 'granularity', 'name', 'ch.x', 'ch.y', 'm.asl', 'st', 'et')
     nms1 <- names(out)[!(names(out) %in% nms0)]
 
     # change column order

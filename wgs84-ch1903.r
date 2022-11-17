@@ -48,6 +48,39 @@ setMethod('names_exist',
         TRUE
     })
 
+get_col_classes <- function(obj) UseMethod('get_col_classes')
+setMethod('get_col_classes',
+    signature(obj = 'ANY'),
+    function(obj) {
+        unlist(lapply(obj, class))
+    })
+setMethod('get_col_classes',
+    signature(obj = 'matrix'),
+    function(obj) {
+        setNames(
+            rep(class(obj[[1]]), ncol(obj)),
+            colnames(obj)
+            )
+    })
+check_numeric <- function(obj, name) UseMethod('check_numeric')
+setMethod('check_numeric',
+    signature(obj = 'ANY', name = 'ANY'),
+    function(obj, name) {
+        cc <- get_col_classes(obj)[name] 
+        setNames(
+            cc %in% c('integer', 'numeric'),
+            names(cc)
+            )
+    })
+setMethod('check_numeric',
+    signature(obj = 'ANY', name = 'missing'),
+    function(obj, name) {
+        setNames(
+            get_col_classes(obj) %in% c('integer', 'numeric'),
+            get_names(obj)
+            )
+    })
+
 ## ~~~ mess with coordinate attributes
 coord_attr_name <- function(obj, what, which_coord = NULL) {
     attr_name <- switch(what
@@ -97,7 +130,6 @@ coord_attr <- function(obj, what, which_coord = NULL) {
     obj
 }
 coord_name_x <- function(obj) {
-    guess coord name here if missing?
     coord_attr(obj, 'coord_name', 'x')
 }
 coord_name_y <- function(obj) {
@@ -110,6 +142,7 @@ coord_names <- function(obj) {
         )
 }
 
+## guess coordinate columns
 guess_coord_x <- function(obj, value = TRUE) {
     nms <- get_names(obj)
     # check null
@@ -153,17 +186,23 @@ guess_coords <- function(obj, value = TRUE) {
     )
 }
 
+obj <- data.frame(x = 1:3, y = 1:3)
+
 ## automatically assign/fix missing coordinate names
 fix_coord_name_x <- function(obj) {
     # check if coord name x/y is missing
     cn <- coord_name_x(obj)
     # if existing
+    if (!is.null(cn)) {
         # check if column exists and if numeric
+        names_exist(cn)
             # if inexistent -> missing
-            # else ok
-    # if missing
-        # search for x/y or lat/lon
-        # check numeric columns (1st -> x, 2nd -> y)
+            # else return cn
+    }
+    # coord name not ok
+    # search for x/y or lat/lon
+    cn <- guess_coord_x(obj)
+    # check numeric columns (1st -> x, 2nd -> y)
 }
 fix_coord_name_y
 fix_coord_names

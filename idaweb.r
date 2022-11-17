@@ -25,9 +25,6 @@ require(data.table)
 require(ibts)
 require(lubridate)
 
-# attach to search path
-idaweb <- new.env()
-
 #' Print IDA data summary 
 #'
 #' This function prints a short summary of a idaweb data set.
@@ -35,7 +32,7 @@ idaweb <- new.env()
 #' @param x A `data.table` containing idaweb data
 #' @return A `data.table` with a data summary (one row per id)
 #' @export
-idaweb$smry_ida <- function(x) {
+smry_ida <- function(x) {
     nms0 <- names(x[, id:et])
     nms1 <- names(x)[!(names(x) %in% nms0)]
     x[, c(
@@ -63,7 +60,7 @@ idaweb$smry_ida <- function(x) {
 #' @param x A `data.table` containing idaweb data
 #' @return A `data.table` with data coverage summary (one row per id)
 #' @export
-idaweb$check_ida <- function(x) {
+check_ida <- function(x) {
     nms0 <- names(x[, id:et])
     nms1 <- names(x)[!(names(x) %in% nms0)]
     x[, 
@@ -79,7 +76,7 @@ idaweb$check_ida <- function(x) {
 #'
 #' @param x A `data.table` containing idaweb data
 #' @export
-idaweb$plot_ida <- function(x) {
+plot_ida <- function(x) {
     ch <- check_ida(x)
     nms1 <- names(ch[, -1])
     nt <- sum(ch[, mget(nms1)] > 0)
@@ -107,7 +104,7 @@ idaweb$plot_ida <- function(x) {
 #' @param File character. The path to an idaweb zip file.
 #' @return A `data.table` containing idaweb data
 #' @export
-idaweb$read_ida <- function(File) {
+read_ida <- function(File) {
 
     # get zipped file names
     zip_names <- unzip(File, list = TRUE)$Name
@@ -197,6 +194,15 @@ idaweb$read_ida <- function(File) {
     out
 }
 
+# add objects to environment (directly adding objects breaks ctags)
+idaweb <- new.env()
+idaweb$check_ida <- check_ida
+idaweb$plot_ida <- plot_ida
+idaweb$read_ida <- read_ida
+idaweb$smry_ida <- smry_ida
+rm(check_ida, plot_ida, read_ida, smry_ida)
+
+# attach to search path
 pos_name <- 'user:idaweb'
 try(detach(pos_name, character.only = TRUE), silent = TRUE)
 attach(idaweb, name = pos_name)
@@ -208,4 +214,4 @@ cat("attached objects:\n")
 print(ls(envir = idaweb))
 cat('\n**~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~**\n\n')
 
-rm(idaweb)
+rm(idaweb, pos_name)

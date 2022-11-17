@@ -30,10 +30,10 @@ require(lubridate)
 #' This function prints a short summary of a idaweb data set.
 #'
 #' @param x A `data.table` containing idaweb data
-#' @return A `data.table` with a data summary (one row per id)
+#' @return A `data.table` with a data summary (one row per stn)
 #' @export
 smry_ida <- function(x) {
-    nms0 <- names(x[, id:et])
+    nms0 <- names(x[, stn:et])
     nms1 <- names(x)[!(names(x) %in% nms0)]
     x[, c(
             list(
@@ -43,13 +43,17 @@ smry_ida <- function(x) {
             ),
             lapply(mget(nms1), function(x) {
                 vls <- sum(!is.na(x)) / .N * 100
-                sprintf('%s%% (%s, %s)',
-                    as.character(round(vls, 1)),
-                    as.character(ifelse(vls > 0, round(min(x, na.rm = TRUE), 2), NA)),
-                    as.character(ifelse(vls > 0, round(max(x, na.rm = TRUE), 2), NA))
-                )
+                if (vls > 0) {
+                    sprintf('%s%% (%s, %s)',
+                        as.character(round(vls, 1)),
+                        as.character(round(min(x, na.rm = TRUE), 2)),
+                        as.character(round(max(x, na.rm = TRUE), 2))
+                    )
+                } else {
+                    sprintf('%s%%', vls)
+                }
             })
-        ), by = .(id, stn, name)]
+        ), by = .(stn, name)]
 }
 
 #' Check IDA data coverage
@@ -58,15 +62,15 @@ smry_ida <- function(x) {
 #' an idaweb data set.
 #'
 #' @param x A `data.table` containing idaweb data
-#' @return A `data.table` with data coverage summary (one row per id)
+#' @return A `data.table` with data coverage summary (one row per stn)
 #' @export
 check_ida <- function(x) {
-    nms0 <- names(x[, id:et])
+    nms0 <- names(x[, stn:et])
     nms1 <- names(x)[!(names(x) %in% nms0)]
     x[, 
         lapply(mget(nms1), function(x) {
             sum(!is.na(x)) / .N * 100
-            }) , by = id]
+            }) , by = stn]
 }
 
 #' Plot IDA data time series
@@ -88,12 +92,12 @@ plot_ida <- function(x) {
     x[, {
         y <- as.ibts(mget(nms1), st = st, et = et, tz = 'UTC')
         for (nm in nms1) {
-            if (ch[id %in% .BY$id, get(nm) > 0]) plot(y[, nm], 
+            if (ch[stn %in% .BY$stn, get(nm) > 0]) plot(y[, nm], 
                 main = paste(.BY$stn, pars[nm, 3], sep = ' - '),
                 ylab = paste0(nm, ' (', pars[nm, 2], ')'),
                 xlab_fmt = '%y-%m-%d')
         }
-        }, by = .(id, stn, name)]
+        }, by = .(stn, name)]
     invisible(NULL)
 }
 

@@ -195,13 +195,27 @@ read_ida <- function(File) {
     out
 }
 
+# convenience functions
+parameters <- function(obj) {
+    attr(obj, 'parameters')
+}
+stations <- function(obj) {
+    if (is.data.table(obj)) {
+        unique(obj[, .(stn, name, ch.x, ch.y, m.asl)])
+    } else {
+        unique(obj[, c('stn', 'name', 'ch.x', 'ch.y', 'm.asl')])
+    }
+}
+
 # add objects to environment (directly adding objects breaks ctags)
 idaweb <- new.env()
 idaweb$check_ida <- check_ida
 idaweb$plot_ida <- plot_ida
 idaweb$read_ida <- read_ida
 idaweb$smry_ida <- smry_ida
-rm(check_ida, plot_ida, read_ida, smry_ida)
+idaweb$parameters <- parameters
+idaweb$stations <- stations
+rm(check_ida, plot_ida, read_ida, smry_ida, parameters, stations)
 
 # attach to search path
 pos_name <- 'user:idaweb'

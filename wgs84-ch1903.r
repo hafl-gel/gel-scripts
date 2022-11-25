@@ -516,10 +516,6 @@ crs_ch <- st_as_text(st_crs(o_ch))
 ## user defined
 crs_user <- sub('CH1903 / LV03', 'User', crs_ch)
 crs_user <- sub('600000', '0', crs_user)
-# TODO: create local/user-defined crs from projection with 
-#   - UNIT[\"metre\",1] -> check if true
-#   - PARAMETER[\"false_northing\",200000] -> check for false_northing
-#   - PARAMETER[\"false_easting\",600000] -> check for false_easting
 
 st_transform(o, crs = crs_ch)
 st_transform(o, crs = crs_user)
@@ -527,6 +523,30 @@ st_transform(o, crs = crs_user)
 st_as_text(st_crs('EPSG:21781'))
 st_as_text(st_crs('EPSG:2056'))
 st_as_text(st_crs('EPSG:2057'))
+# TODO: create local/user-defined crs from projection with 
+#   - UNIT[\"metre\",1] -> check if true
+#   - PARAMETER[\"false_northing\",200000] -> check for false_northing
+#   - PARAMETER[\"false_easting\",600000] -> check for false_easting
+#   - what about scale_factor != 1??
+crs_test <- st_as_text(st_crs('EPSG:2057'))
+#   - UNIT[\"metre\",1] -> check if true
+grepl('UNIT["metre",1]', crs_test, fixed = TRUE)
+#   - PARAMETER[\"false_northing\",3044969.194] -> check for false_northing
+sub('.*PARAMETER\\["false_northing",(\\d(\\d|[.])+)\\].*', '\\1', crs_test)
+#   - PARAMETER[\"false_easting\",658377.437] -> check for false_easting
+sub('.*PARAMETER\\["false_easting",(\\d(\\d|[.])+)\\].*', '\\1', crs_test)
+#   - what about scale_factor != 1??
+test_ch <- st_sfc(st_multipoint(cbind(x = c(600000, 610000), y = c(200000, 210000))))
+st_crs(test_ch) <- 'EPSG:21781'
+# st_transform(test_ch, crs = 'EPSG:4326')
+crs_ch <- st_as_text(st_crs(o_ch))
+## user defined
+crs_user <- sub('CH1903 / LV03', 'User', crs_ch)
+crs_user <- sub('600000', '0', crs_user)
+crs_user <- sub('200000', '0', crs_user)
+test_2 <- st_transform(test_ch, crs = crs_user)
+crs_user2 <- sub('scale_factor",1', 'scale_factor",0.5', crs_user, fixed = TRUE)
+test_2_scaled <- st_transform(test_ch, crs = crs_user2)
 
 {
   "$schema": "https://proj.org/schemas/v0.2/projjson.schema.json",

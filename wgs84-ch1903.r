@@ -501,3 +501,174 @@ plot.staticMap <- function(x, y, ...) {
 # wgs84 -> RgoogleMaps
 # wgs84 <- RgoogleMaps
 
+# sf package
+library(sf)
+
+obj <- data.frame(lon = 7.4, lat = 47)
+o <- st_sfc(st_point(as.matrix(obj)))
+st_crs(o) <- 'EPSG:4326'
+cat(st_as_text(st_crs(o), projjson = TRUE))
+
+o_ch <- st_transform(o, crs = 'EPSG:21781')
+cat(st_as_text(st_crs(o_ch), projjson = TRUE))
+
+crs_ch <- st_as_text(st_crs(o_ch))
+## user defined
+crs_user <- sub('CH1903 / LV03', 'User', crs_ch)
+crs_user <- sub('600000', '0', crs_user)
+# TODO: create local/user-defined crs from projection with 
+#   - UNIT[\"metre\",1] -> check if true
+#   - PARAMETER[\"false_northing\",200000] -> check for false_northing
+#   - PARAMETER[\"false_easting\",600000] -> check for false_easting
+
+st_transform(o, crs = crs_ch)
+st_transform(o, crs = crs_user)
+
+st_as_text(st_crs('EPSG:21781'))
+st_as_text(st_crs('EPSG:2056'))
+st_as_text(st_crs('EPSG:2057'))
+
+{
+  "$schema": "https://proj.org/schemas/v0.2/projjson.schema.json",
+  "type": "ProjectedCRS",
+  "name": "CH1903 / LV03",
+  "base_crs": {
+    "name": "CH1903",
+    "datum": {
+      "type": "GeodeticReferenceFrame",
+      "name": "CH1903",
+      "ellipsoid": {
+        "name": "Bessel 1841",
+        "semi_major_axis": 6377397.155,
+        "inverse_flattening": 299.1528128
+      }
+    },
+    "coordinate_system": {
+      "subtype": "ellipsoidal",
+      "axis": [
+        {
+          "name": "Geodetic latitude",
+          "abbreviation": "Lat",
+          "direction": "north",
+          "unit": "degree"
+        },
+        {
+          "name": "Geodetic longitude",
+          "abbreviation": "Lon",
+          "direction": "east",
+          "unit": "degree"
+        }
+      ]
+    },
+    "id": {
+      "authority": "EPSG",
+      "code": 4149
+    }
+  },
+  "conversion": {
+    "name": "Swiss Oblique Mercator 1903M",
+    "method": {
+      "name": "Hotine Oblique Mercator (variant B)",
+      "id": {
+        "authority": "EPSG",
+        "code": 9815
+      }
+    },
+    "parameters": [
+      {
+        "name": "Latitude of projection centre",
+        "value": 46.9524055555556,
+        "unit": "degree",
+        "id": {
+          "authority": "EPSG",
+          "code": 8811
+        }
+      },
+      {
+        "name": "Longitude of projection centre",
+        "value": 7.43958333333333,
+        "unit": "degree",
+        "id": {
+          "authority": "EPSG",
+          "code": 8812
+        }
+      },
+      {
+        "name": "Azimuth of initial line",
+        "value": 90,
+        "unit": "degree",
+        "id": {
+          "authority": "EPSG",
+          "code": 8813
+        }
+      },
+      {
+        "name": "Angle from Rectified to Skew Grid",
+        "value": 90,
+        "unit": "degree",
+        "id": {
+          "authority": "EPSG",
+          "code": 8814
+        }
+      },
+      {
+        "name": "Scale factor on initial line",
+        "value": 1,
+        "unit": "unity",
+        "id": {
+          "authority": "EPSG",
+          "code": 8815
+        }
+      },
+      {
+        "name": "Easting at projection centre",
+        "value": 600000,
+        "unit": "metre",
+        "id": {
+          "authority": "EPSG",
+          "code": 8816
+        }
+      },
+      {
+        "name": "Northing at projection centre",
+        "value": 200000,
+        "unit": "metre",
+        "id": {
+          "authority": "EPSG",
+          "code": 8817
+        }
+      }
+    ]
+  },
+  "coordinate_system": {
+    "subtype": "Cartesian",
+    "axis": [
+      {
+        "name": "Easting",
+        "abbreviation": "Y",
+        "direction": "east",
+        "unit": "metre"
+      },
+      {
+        "name": "Northing",
+        "abbreviation": "X",
+        "direction": "north",
+        "unit": "metre"
+      }
+    ]
+  },
+  "scope": "Cadastre, engineering survey, topographic mapping (large and medium scale).",
+  "area": "Liechtenstein; Switzerland.",
+  "bbox": {
+    "south_latitude": 45.82,
+    "west_longitude": 5.96,
+    "north_latitude": 47.81,
+    "east_longitude": 10.49
+  },
+  "id": {
+    "authority": "EPSG",
+    "code": 21781
+  }
+
+
+

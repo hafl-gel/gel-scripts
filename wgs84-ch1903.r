@@ -535,7 +535,7 @@ grepl('UNIT["metre",1]', crs_test, fixed = TRUE)
 sub('.*PARAMETER\\["false_northing",(\\d(\\d|[.])+)\\].*', '\\1', crs_test)
 #   - PARAMETER[\"false_easting\",658377.437] -> check for false_easting
 sub('.*PARAMETER\\["false_easting",(\\d(\\d|[.])+)\\].*', '\\1', crs_test)
-#   - what about scale_factor != 1??
+#   - what about scale_factor != 1?? -> don't mess with it :)
 test_ch <- st_sfc(st_multipoint(cbind(x = c(600000, 610000), y = c(200000, 210000))))
 st_crs(test_ch) <- 'EPSG:21781'
 # st_transform(test_ch, crs = 'EPSG:4326')
@@ -547,148 +547,37 @@ crs_user <- sub('200000', '0', crs_user)
 test_2 <- st_transform(test_ch, crs = crs_user)
 crs_user2 <- sub('scale_factor",1', 'scale_factor",0.5', crs_user, fixed = TRUE)
 test_2_scaled <- st_transform(test_ch, crs = crs_user2)
+# false easting/northing -> check epsg code in Table F.3 (https://docs.ogc.org/is/18-010r7/18-010r7.html#106)
 
-{
-  "$schema": "https://proj.org/schemas/v0.2/projjson.schema.json",
-  "type": "ProjectedCRS",
-  "name": "CH1903 / LV03",
-  "base_crs": {
-    "name": "CH1903",
-    "datum": {
-      "type": "GeodeticReferenceFrame",
-      "name": "CH1903",
-      "ellipsoid": {
-        "name": "Bessel 1841",
-        "semi_major_axis": 6377397.155,
-        "inverse_flattening": 299.1528128
-      }
-    },
-    "coordinate_system": {
-      "subtype": "ellipsoidal",
-      "axis": [
-        {
-          "name": "Geodetic latitude",
-          "abbreviation": "Lat",
-          "direction": "north",
-          "unit": "degree"
-        },
-        {
-          "name": "Geodetic longitude",
-          "abbreviation": "Lon",
-          "direction": "east",
-          "unit": "degree"
-        }
-      ]
-    },
-    "id": {
-      "authority": "EPSG",
-      "code": 4149
-    }
-  },
-  "conversion": {
-    "name": "Swiss Oblique Mercator 1903M",
-    "method": {
-      "name": "Hotine Oblique Mercator (variant B)",
-      "id": {
-        "authority": "EPSG",
-        "code": 9815
-      }
-    },
-    "parameters": [
-      {
-        "name": "Latitude of projection centre",
-        "value": 46.9524055555556,
-        "unit": "degree",
-        "id": {
-          "authority": "EPSG",
-          "code": 8811
-        }
-      },
-      {
-        "name": "Longitude of projection centre",
-        "value": 7.43958333333333,
-        "unit": "degree",
-        "id": {
-          "authority": "EPSG",
-          "code": 8812
-        }
-      },
-      {
-        "name": "Azimuth of initial line",
-        "value": 90,
-        "unit": "degree",
-        "id": {
-          "authority": "EPSG",
-          "code": 8813
-        }
-      },
-      {
-        "name": "Angle from Rectified to Skew Grid",
-        "value": 90,
-        "unit": "degree",
-        "id": {
-          "authority": "EPSG",
-          "code": 8814
-        }
-      },
-      {
-        "name": "Scale factor on initial line",
-        "value": 1,
-        "unit": "unity",
-        "id": {
-          "authority": "EPSG",
-          "code": 8815
-        }
-      },
-      {
-        "name": "Easting at projection centre",
-        "value": 600000,
-        "unit": "metre",
-        "id": {
-          "authority": "EPSG",
-          "code": 8816
-        }
-      },
-      {
-        "name": "Northing at projection centre",
-        "value": 200000,
-        "unit": "metre",
-        "id": {
-          "authority": "EPSG",
-          "code": 8817
-        }
-      }
-    ]
-  },
-  "coordinate_system": {
-    "subtype": "Cartesian",
-    "axis": [
-      {
-        "name": "Easting",
-        "abbreviation": "Y",
-        "direction": "east",
-        "unit": "metre"
-      },
-      {
-        "name": "Northing",
-        "abbreviation": "X",
-        "direction": "north",
-        "unit": "metre"
-      }
-    ]
-  },
-  "scope": "Cadastre, engineering survey, topographic mapping (large and medium scale).",
-  "area": "Liechtenstein; Switzerland.",
-  "bbox": {
-    "south_latitude": 45.82,
-    "west_longitude": 5.96,
-    "north_latitude": 47.81,
-    "east_longitude": 10.49
-  },
-  "id": {
-    "authority": "EPSG",
-    "code": 21781
-  }
+st_crs('+proj=laea +lat_0=<LAT> +lon_0=<LON> +ellps=WGS84 +units=m +no_defs')
+crs_wgs84_m <- st_crs('+proj=laea +lat_0=47 +lon_0=7.4 +ellps=WGS84 +units=m +no_defs')
+crs_wgs84 <- st_crs('EPSG:4326')
+cat(st_as_text(crs_wgs84_m, projjson = TRUE))
+require(jsonlite)
+crs_json1 <- parse_json(st_as_text(crs_wgs84_m, projjson = TRUE))
+crs_json2 <- parse_json(st_as_text(crs_wgs84, projjson = TRUE))
 
+test_wgs84_m <- st_transform(test_ch, crs = crs_wgs84_m)
 
+apply(st_coordinates(test_ch), 2, diff)
+apply(st_coordinates(test_wgs84_m), 2, diff)
 
+parse_wkt <- function(wkt_string) {
+    # wkt_string <- crs_wgs84$wkt
+    wkt_string <- gsub('\n', '', wkt_string)
+    wkt_string <- gsub('[', ' = list(', wkt_string, fixed = TRUE)
+    wkt_string <- gsub(']', ')', wkt_string, fixed = TRUE)
+    eval(parse(text = paste('list(', wkt_string, ')')))
+}
+
+wkt_s <- gsub('\\s*\\n\\s*', '', crs_wgs84$wkt)
+strsplit(wkt_s, split = '(?<=(\\[|,))', perl = TRUE)
+gsub('[', '=(',
+
+### sf blsmodelr -> TODO: change to sf in blsmodelr!!!
+poly <- st_polygon(list(cbind(
+            x = c(0, 0, 10, 10, 0),
+            y = c(0, 10, 10, 0, 0)
+            )))
+pts <- st_multipoint(cbind(-5:5, -5:5))
+st_intersection(pts, poly)

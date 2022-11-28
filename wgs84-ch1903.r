@@ -562,17 +562,24 @@ test_wgs84_m <- st_transform(test_ch, crs = crs_wgs84_m)
 apply(st_coordinates(test_ch), 2, diff)
 apply(st_coordinates(test_wgs84_m), 2, diff)
 
-parse_wkt <- function(wkt_string) {
-    # wkt_string <- crs_wgs84$wkt
-    wkt_string <- gsub('\n', '', wkt_string)
-    wkt_string <- gsub('[', ' = list(', wkt_string, fixed = TRUE)
-    wkt_string <- gsub(']', ')', wkt_string, fixed = TRUE)
-    eval(parse(text = paste('list(', wkt_string, ')')))
+parse_wkt <- function(crs) {
+    # crs <- st_crs('EPSG:2056')
+    wkt_a <- gsub('\\s*\\n\\s*', '', crs$wkt)
+    # replace ,[] inside string with {1}, {2}[ {3}]
+    wkt_a2 <- gsub('([,]|\\[|\\])(?=([^"]*["][^"]*["])*[^"]*$)', '{\\1}', wkt_a, perl = TRUE)
+    wkt_b <- unlist(strsplit(wkt_a2, split = '(?<=[{](\\[|,)[}])', perl = TRUE))
+    wkt_c <- sub('^([^0-9^"]+)\\{,}', 'as.name("\\1"),', wkt_b)
+    wkt_d <- sub('{[}', '=list(', wkt_c, fixed = TRUE)
+    wkt_e <- gsub('{]}', ')', wkt_d, fixed = TRUE)
+    wkt_f <- gsub('{,}', ',', wkt_e, fixed = TRUE)
+    eval(parse(text = paste0('list(', paste(wkt_f, collapse = ''), ')')))
 }
 
-wkt_s <- gsub('\\s*\\n\\s*', '', crs_wgs84$wkt)
-strsplit(wkt_s, split = '(?<=(\\[|,))', perl = TRUE)
-gsub('[', '=(',
+x <- parse_wkt(crs_wgs84_m)
+y <- parse_wkt(st_crs('EPSG:2056'))
+
+lapply(x[['PROJCRS']][['CONVERSION']], names)
+lapply(y[['PROJCRS']][['CONVERSION']], names)
 
 ### sf blsmodelr -> TODO: change to sf in blsmodelr!!!
 poly <- st_polygon(list(cbind(

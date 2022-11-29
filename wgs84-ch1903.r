@@ -581,6 +581,28 @@ y <- parse_wkt(st_crs('EPSG:2056'))
 lapply(x[['PROJCRS']][['CONVERSION']], names)
 lapply(y[['PROJCRS']][['CONVERSION']], names)
 
+y[['PROJCRS']][['CONVERSION']][['PARAMETER']]
+
+traverse <- function(x, i = numeric(0)) {
+    if (is.list(x)) {
+        out <- mapply(traverse, x, i = lapply(seq_along(x), function(a) c(i, a)), SIMPLIFY = FALSE)
+        # out <- mapply(traverse, x, i = paste(i, seq_along(x), sep = ','), SIMPLIFY = FALSE)
+        do.call(rbind, out)
+        # do.call(rbind, lapply(x, traverse, i = paste(i, seq_along(x), sep = ':')))
+    } else {
+        cbind(list(i), x)
+    }
+}
+
+# find EPSG code:
+yt <- traverse(y)
+i_epsg <- which(yt[, 2] %in% 'EPSG')
+ind <- which(yt[i_epsg + 1, 2] %in% 8814)
+y[[yt[[i_epsg[ind] + 1]]]]
+index <- yt[[i_epsg[ind] + 1]]
+index <- c(index[-length(index) + (0:1)], 2)
+y[[index]]
+
 ### sf blsmodelr -> TODO: change to sf in blsmodelr!!!
 poly <- st_polygon(list(cbind(
             x = c(0, 0, 10, 10, 0),

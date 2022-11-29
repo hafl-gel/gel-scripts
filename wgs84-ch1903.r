@@ -603,6 +603,32 @@ index <- yt[[i_epsg[ind] + 1]]
 index <- c(index[-length(index) + (0:1)], 2)
 y[[index]]
 
+# change_epsg <- function(
+
+## check angle!
+rect_ch <- st_sfc(st_polygon(list(cbind(
+                c(6e5, 6.1e5, 6.1e5, 6.05e5, 6e5), 
+                c(200000, 2e5, 2.1e5, 2.1e5, 2e5)
+                ))))
+st_crs(rect_ch) <- crs_ch
+y2 <- y
+y2[[c(1, 3, 6)]]
+y2[[c(1, 3, 6 , 2)]] <- 25
+y2[[1]][[1]] <- "User"
+# noch nicht ganz ok: (don't remove stuff inside string!)
+dep_crs <- deparse(y2)
+dep2 <- gsub('(\\))(?=([^"]*["][^"]*["])*[^"]*$)', '{\\1}', dep_crs, perl = TRUE)
+crs_a25 <- paste(sub('(^list\\(|\\]$)', '', gsub('{)}', ']', gsub(' = list(', '[', dep2, fixed = TRUE),
+        fixed = TRUE)), collapse = '')
+rect_a25 <- st_transform(rect_ch, crs = st_crs(crs_a25))
+
+par(mfrow = c(2, 1))
+plot(rect_ch, asp = 1, axes = TRUE)
+plot(rect_a25, asp = 1, axes = TRUE)
+sqrt(rowSums(apply(st_coordinates(rect_ch)[, 1:2], 2, function(x) diff(x)) ^ 2))
+sqrt(rowSums(apply(st_coordinates(rect_a25)[, 1:2], 2, function(x) diff(x)) ^ 2))
+
+
 ### sf blsmodelr -> TODO: change to sf in blsmodelr!!!
 poly <- st_polygon(list(cbind(
             x = c(0, 0, 10, 10, 0),

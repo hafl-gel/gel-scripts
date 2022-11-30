@@ -548,6 +548,11 @@ test_2 <- st_transform(test_ch, crs = crs_user)
 crs_user2 <- sub('scale_factor",1', 'scale_factor",0.5', crs_user, fixed = TRUE)
 test_2_scaled <- st_transform(test_ch, crs = crs_user2)
 # false easting/northing -> check epsg code in Table F.3 (https://docs.ogc.org/is/18-010r7/18-010r7.html#106)
+tabf.3 <- list(
+    false_easting = c(8806, 8816, 8826),
+    false_northing = c(8807, 8817, 8827),
+    angle_northing = 8814
+    )
 
 st_crs('+proj=laea +lat_0=<LAT> +lon_0=<LON> +ellps=WGS84 +units=m +no_defs')
 crs_wgs84_m <- st_crs('+proj=laea +lat_0=47 +lon_0=7.4 +ellps=WGS84 +units=m +no_defs')
@@ -574,6 +579,12 @@ parse_wkt <- function(crs) {
     wkt_f <- gsub('{,}', ',', wkt_e, fixed = TRUE)
     eval(parse(text = paste0('list(', paste(wkt_f, collapse = ''), ')')))
 }
+deparse_wkt <- function(x) {
+    dep_crs <- deparse(x)
+    dep2 <- gsub('(\\))(?=([^"]*["][^"]*["])*[^"]*$)', '{\\1}', dep_crs, perl = TRUE)
+    paste(sub('(^list\\(|\\]$)', '', gsub('{)}', ']', gsub(' = list(', '[', dep2, fixed = TRUE),
+            fixed = TRUE)), collapse = '')
+}
 
 x <- parse_wkt(crs_wgs84_m)
 y <- parse_wkt(st_crs('EPSG:2056'))
@@ -595,15 +606,74 @@ traverse <- function(x, i = numeric(0)) {
 }
 
 # find EPSG code:
-yt <- traverse(y)
-i_epsg <- which(yt[, 2] %in% 'EPSG')
-ind <- which(yt[i_epsg + 1, 2] %in% 8814)
-y[[yt[[i_epsg[ind] + 1]]]]
-index <- yt[[i_epsg[ind] + 1]]
-index <- c(index[-length(index) + (0:1)], 2)
-y[[index]]
+get_index <- function(t_wkt, code) {
+    i_epsg <- which(t_wkt[, 2] %in% 'EPSG')
+    ind <- which(t_wkt[i_epsg + 1, 2] %in% code)
+    if (length(ind) > 1) {
+        stop('several codes ', paste(t_wkt[i_epsg[ind] + 1, 2], collapse = ' + '),
+            ' (n != 1) were found in wkt string')
+    }
+    index <- t_wkt[[i_epsg[ind] + 1]]
+    c(index[-length(index) + (0:1)], 2)
+    # y[[index]]
+}
 
-# change_epsg <- function(
+modify_epsg <- function(base_crs, new_center = NULL, new_angle = NULL) {
+    if (missing(base_crs)) {
+        stop('base crs is missing')
+    }
+    if (is.character(base_crs)) {
+        base_crs <- try(st_crs(base_crs), silent = TRUE)
+    }
+    if (!inherits(base_crs, 'crs')) {
+        stop('base crs argument is not a valid crs')
+    }
+    if (is.null(new_center) && is.null(new_angle)) {
+        return(base_crs)
+    }
+    # parse wkt
+    p_wkt <- parse_wkt(base_crs)
+    # traverse wkt
+    i_wkt <- traverse(p_wkt)
+    # false easting/northing -> check epsg code in Table F.3 (https://docs.ogc.org/is/18-010r7/18-010r7.html#106)
+    tabf.3 <- list(
+        false_easting = c(8806, 8816, 8826),
+        false_northing = c(8807, 8817, 8827),
+        angle_northing = 8814
+        )
+    if (!is.null(new_center)) {
+        if (!is.numeric(new_center)) {
+            stop('argument new_center must be numeric')
+        }
+        if (length(new_center) != 2) {
+            stop('argument new_center must be of length 2')
+        }
+        # get false easting (x-axis)
+        i_x <- get_index(i_wkt, tabf.3[['false_easting']])
+        # get false northing (y-axis)
+        i_y <- get_index(i_wkt, tabf.3[['false_northing']])
+        # replace values
+        p_wkt[[i_x]] <- new_center[1]
+        p_wkt[[i_y]] <- new_center[2]
+    }
+    if (!is.null(new_angle)) {
+        if (!is.numeric(new_angle)) {
+            stop('argument new_angle must be numeric')
+        }
+        if (length(new_angle) != 1) {
+            stop('argument new_angle must be of length 1')
+        }
+        # get angle northing
+        i_n <- get_index(i_wkt, tabf.3[['angle_northing']])
+        # replace value
+        p_wkt[[i_n]] <- new_angle
+    }
+    # replace name
+    p_wkt[[1]][[1]] <- "User"
+    deparse_wkt(p_wkt)
+}
+
+crs_user3 <- modify_epsg('EPSG:2056', c(0, 0), 60)
 
 ## check angle!
 rect_ch <- st_sfc(st_polygon(list(cbind(
@@ -611,16 +681,8 @@ rect_ch <- st_sfc(st_polygon(list(cbind(
                 c(200000, 2e5, 2.1e5, 2.1e5, 2e5)
                 ))))
 st_crs(rect_ch) <- crs_ch
-y2 <- y
-y2[[c(1, 3, 6)]]
-y2[[c(1, 3, 6 , 2)]] <- 25
-y2[[1]][[1]] <- "User"
-# noch nicht ganz ok: (don't remove stuff inside string!)
-dep_crs <- deparse(y2)
-dep2 <- gsub('(\\))(?=([^"]*["][^"]*["])*[^"]*$)', '{\\1}', dep_crs, perl = TRUE)
-crs_a25 <- paste(sub('(^list\\(|\\]$)', '', gsub('{)}', ']', gsub(' = list(', '[', dep2, fixed = TRUE),
-        fixed = TRUE)), collapse = '')
-rect_a25 <- st_transform(rect_ch, crs = st_crs(crs_a25))
+# transform
+rect_a25 <- st_transform(rect_ch, crs = crs_user3)
 
 par(mfrow = c(2, 1))
 plot(rect_ch, asp = 1, axes = TRUE)

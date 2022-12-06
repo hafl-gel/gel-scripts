@@ -46,17 +46,13 @@ gm_ch95 <- change_coords(gm_ch03, 'ch95')
 gm_ch03_user <- change_coords(gm_ch95, 'ch03', new_origin_at = c(6e5, 2e5))
 
 # data.frame
-change_coords(gps, 'ch95')
+change_coords(gps, 'ch95', crs_from = 'wgs84')
 
 # list
-change_coords(gps_l)
+change_coords(gps_l, 'ch03', crs_from = 'wgs84')
 
 # x + y
-change_coords(gps$x, gps$y)
-
-check_numeric(gps)
-get_names(gps)
-
+change_coords(gps$x, gps$y, crs_from = 'wgs84')
 
 ## ~~~~~~~~~~~~~~~ functions
 
@@ -322,11 +318,16 @@ guess_coords <- function(obj, value = TRUE) {
     sf_project(crs_from, crs_to, cbind(x, y))
 }
 
-change_coords <- function(x, crs_to = NULL, 
+change_coords <- function(x, crs_to,
     y = NULL, crs_from = NULL, 
-    x_column = 1, y_column = 2,
+    x_column = guess_coord_x(x), 
+    y_column = guess_coord_y(x),
     as_list = FALSE, new_origin_at = NULL,
     old_origin_at = NULL, add_crs = TRUE) {
+    # check crs_to
+    if (missing(crs_to)) {
+        stop('argument crs_to is missing')
+    }
     # convert to numeric
     if (!is.null(new_origin_at)) {
         new_origin_at <- as.numeric(new_origin_at)
@@ -342,11 +343,17 @@ change_coords <- function(x, crs_to = NULL,
     } else {
         crs_from <- fix_crs(crs_from, old_origin_at)
     }
+    # check crs_from
+    if (is.null(crs_from)) stop('crs of argument x is unknown')
     # fix crs to
     if (post_convert <- inherits(crs_to, 'staticMap')) {
         map <- crs_to
         crs_to <- 'EPSG:4326'
         new_origin_at <- NULL
+    }
+    # check crs_to
+    if (!inherits(crs_to, 'crs') && length(crs_to) > 1) {
+        stop('argument crs_to is not a valid crs input')
     }
     # save crs + offset
     crs_out <- list(crs = crs_to, new_origin_at = new_origin_at)
@@ -387,11 +394,14 @@ change_coords <- function(x, crs_to = NULL,
                     x, y, crs_from = crs_from,
                     crs_to = crs_to, as_list = TRUE)]
             } else if (is.data.frame(x) || is.list(x)) {
-                # TODO: guess columns with x/y
-                # check numeric
-                # check names
-                # guess_coord_x
-                stop('Fix me in change_coords()!')
+                out <- x
+				y <- x[[y_column]]
+				x <- x[[x_column]]
+                coords <- .change_coords(x, y, 
+                    crs_from = crs_from, crs_to = crs_to)
+                colnames(coords) <- c('x', 'y')
+                out[[x_column]] <- coords[, 'x']
+                out[[y_column]] <- coords[, 'y']
 			} else {
 				y <- x[[y_column]]
 				x <- x[[x_column]]
@@ -426,7 +436,8 @@ change_coords <- function(x, crs_to = NULL,
 
 ##
 wgs_to_map <- function(MyMap, lat, lon = NULL, zoom,
-    x_column = 1, y_column = 2) {
+    x_column = guess_coord_x(lat), 
+    y_column = guess_coord_y(lat)) {
     require(RgoogleMaps, quietly = TRUE)
     if (missing(zoom)) zoom <- MyMap$zoom
 	if (inherits(lat, "Sources") && ncol(lat) == 4) {
@@ -465,7 +476,8 @@ wgs_to_map <- function(MyMap, lat, lon = NULL, zoom,
 
 ##
 map_to_wgs <- function(MyMap, x, y = NULL, zoom,
-    x_column = 1, y_column = 2) {
+    x_column = guess_coord_x(lat), 
+    y_column = guess_coord_y(lat)) {
     require(RgoogleMaps, quietly = TRUE)
     if (missing(zoom)) zoom <- MyMap$zoom
 	if (inherits(x, "Sources") && ncol(x) == 4) {

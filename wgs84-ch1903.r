@@ -46,13 +46,16 @@ gm_ch95 <- change_coords(gm_ch03, 'ch95')
 gm_ch03_user <- change_coords(gm_ch95, 'ch03', new_origin_at = c(6e5, 2e5))
 
 # data.frame
-change_coords(gps)
+change_coords(gps, 'ch95')
 
 # list
 change_coords(gps_l)
 
 # x + y
 change_coords(gps$x, gps$y)
+
+check_numeric(gps)
+get_names(gps)
 
 
 ## ~~~~~~~~~~~~~~~ functions
@@ -95,9 +98,9 @@ set_crs <- function(obj, crs = NULL,
 
 
 # ## ~~~ general helpers
-# get_names <- function(obj) UseMethod('get_names')
-# get_names.default <- function(obj) names(obj)
-# get_names.matrix <- function(obj) colnames(obj)
+get_names <- function(obj) UseMethod('get_names')
+get_names.default <- function(obj) names(obj)
+get_names.matrix <- function(obj) colnames(obj)
 # get_length <- function(obj) UseMethod('get_length')
 # get_length.default <- function(obj) length(obj)
 # get_length.matrix <- function(obj) ncol(obj)
@@ -118,38 +121,83 @@ set_crs <- function(obj, crs = NULL,
 #         TRUE
 #     })
 
-# get_col_classes <- function(obj) UseMethod('get_col_classes')
-# setMethod('get_col_classes',
-#     signature(obj = 'ANY'),
-#     function(obj) {
-#         unlist(lapply(obj, class))
-#     })
-# setMethod('get_col_classes',
-#     signature(obj = 'matrix'),
-#     function(obj) {
-#         setNames(
-#             rep(class(obj[[1]]), ncol(obj)),
-#             colnames(obj)
-#             )
-#     })
-# check_numeric <- function(obj, name) UseMethod('check_numeric')
-# setMethod('check_numeric',
-#     signature(obj = 'ANY', name = 'ANY'),
-#     function(obj, name) {
-#         cc <- get_col_classes(obj)[name] 
-#         setNames(
-#             cc %in% c('integer', 'numeric'),
-#             names(cc)
-#             )
-#     })
-# setMethod('check_numeric',
-#     signature(obj = 'ANY', name = 'missing'),
-#     function(obj, name) {
-#         setNames(
-#             get_col_classes(obj) %in% c('integer', 'numeric'),
-#             get_names(obj)
-#             )
-#     })
+get_col_classes <- function(obj) UseMethod('get_col_classes')
+setMethod('get_col_classes',
+    signature(obj = 'ANY'),
+    function(obj) {
+        unlist(lapply(obj, class))
+    })
+setMethod('get_col_classes',
+    signature(obj = 'matrix'),
+    function(obj) {
+        setNames(
+            rep(class(obj[[1]]), ncol(obj)),
+            colnames(obj)
+            )
+    })
+check_numeric <- function(obj, name) UseMethod('check_numeric')
+setMethod('check_numeric',
+    signature(obj = 'ANY', name = 'ANY'),
+    function(obj, name) {
+        cc <- get_col_classes(obj)[name] 
+        setNames(
+            cc %in% c('integer', 'numeric'),
+            names(cc)
+            )
+    })
+setMethod('check_numeric',
+    signature(obj = 'ANY', name = 'missing'),
+    function(obj, name) {
+        setNames(
+            get_col_classes(obj) %in% c('integer', 'numeric'),
+            get_names(obj)
+            )
+    })
+guess_coord_x <- function(obj, value = TRUE) {
+    isn <- check_numeric(obj)
+    nms <- get_names(obj)[isn]
+    # check null
+    if (is.null(nms)) {
+        if (is.character(obj)) {
+            nms <- obj
+        } else {
+            return(NULL)
+        }
+    }
+    # check x
+    x_nm <- grep('^((x|X)(.*(c|C)oord.*)?)$|^((c|C)oord.*(x|X))$', nms, value = value)
+    if (length(x_nm) == 0) {
+        # check lon
+        x_nm <- grep('^(l|L)on((g|gitude).*)?$', nms, value = value)
+    }
+    x_nm
+}
+guess_coord_y <- function(obj, value = TRUE) {
+    isn <- check_numeric(obj)
+    nms <- get_names(obj)[isn]
+    # check null
+    if (is.null(nms)) {
+        if (is.character(obj)) {
+            nms <- obj
+        } else {
+            return(NULL)
+        }
+    }
+    # check y
+    y_nm <- grep('^((y|Y)(.*(c|C)oord.*)?)$|^((c|C)oord.*(y|Y))$', nms, value = value)
+    if (length(y_nm) == 0) {
+        # check lon
+        y_nm <- grep('^(l|L)at(itude.*)?$', nms, value = value)
+    }
+    y_nm
+}
+guess_coords <- function(obj, value = TRUE) {
+    c(
+        guess_coord_x(obj)[1], 
+        guess_coord_y(obj)[1]
+    )
+}
+
 
 # ## ~~~ mess with coordinate attributes
 # coord_attr_name <- function(obj, what, which_coord = NULL) {
@@ -213,48 +261,6 @@ set_crs <- function(obj, crs = NULL,
 # }
 
 # ## guess coordinate columns
-# guess_coord_x <- function(obj, value = TRUE) {
-#     nms <- get_names(obj)
-#     # check null
-#     if (is.null(nms)) {
-#         if (is.character(obj)) {
-#             nms <- obj
-#         } else {
-#             return(NULL)
-#         }
-#     }
-#     # check x
-#     x_nm <- grep('^((x|X)(.*(c|C)oord.*)?)$|^((c|C)oord.*(x|X))$', nms, value = value)
-#     if (length(x_nm) == 0) {
-#         # check lon
-#         x_nm <- grep('^(l|L)on((g|gitude).*)?$', nms, value = value)
-#     }
-#     x_nm
-# }
-# guess_coord_y <- function(obj, value = TRUE) {
-#     nms <- get_names(obj)
-#     # check null
-#     if (is.null(nms)) {
-#         if (is.character(obj)) {
-#             nms <- obj
-#         } else {
-#             return(NULL)
-#         }
-#     }
-#     # check y
-#     y_nm <- grep('^((y|Y)(.*(c|C)oord.*)?)$|^((c|C)oord.*(y|Y))$', nms, value = value)
-#     if (length(y_nm) == 0) {
-#         # check lon
-#         y_nm <- grep('^(l|L)at(itude.*)?$', nms, value = value)
-#     }
-#     y_nm
-# }
-# guess_coords <- function(obj, value = TRUE) {
-#     c(
-#         guess_coord_x(obj)[1], 
-#         guess_coord_y(obj)[1]
-#     )
-# }
 
 # ## automatically assign/fix missing coordinate names
 # fix_coord_name_x <- function(obj) {
@@ -374,13 +380,17 @@ change_coords <- function(x, crs_to = NULL,
                     attr(..x, 'cadastre')[, .(x, y)], crs_from = crs_from,
                     crs_to = crs_to, x_column = 'x',
                     y_column = 'y', as_list = TRUE)]
-            } else if (is.data.table(x)) {
+            } else if (inherits(x, 'data.table')) {
                 if (is.numeric(x_column)) x_column <- names(out)[x_column]
                 if (is.numeric(y_column)) y_column <- names(out)[y_column]
                 out[, c(x_column, y_column) :=  change_coords(
                     x, y, crs_from = crs_from,
                     crs_to = crs_to, as_list = TRUE)]
             } else if (is.data.frame(x) || is.list(x)) {
+                # TODO: guess columns with x/y
+                # check numeric
+                # check names
+                # guess_coord_x
                 stop('Fix me in change_coords()!')
 			} else {
 				y <- x[[y_column]]
@@ -439,7 +449,7 @@ wgs_to_map <- function(MyMap, lat, lon = NULL, zoom,
                 attr(out, 'cadastre')[, c('x', 'y') := {
                     LatLon2XY.centered(MyMap, y, x, zoom)
                 }]
-            } else if (is.data.table(lat)) {
+            } else if (inherits(lat, 'data.table')) {
                 out[, c(x_column, y_column) := {
                     LatLon2XY.centered(MyMap, get(y_column), get(x_column), zoom)
                 }]
@@ -478,7 +488,7 @@ map_to_wgs <- function(MyMap, x, y = NULL, zoom,
                 attr(out, 'cadastre')[, c('x', 'y') := {
                     XY2LatLon(MyMap, y, x, zoom)
                 }]
-            } else if (is.data.table(x)) {
+            } else if (inherits(x, 'data.table')) {
                 out[, c(x_column, y_column) := {
                     XY2LatLon(MyMap, get(y_column), get(x_column), zoom)
                 }]

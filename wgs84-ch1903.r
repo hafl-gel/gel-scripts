@@ -32,15 +32,16 @@
 
 ## read gps data
 gps <- read.table('~/repos/4_Projects/6_EVEMBI/01_Waedenswil/MK2/Point_2.csv', fill = TRUE, sep = '\t', header = TRUE)
+library(RgoogleMaps)
+rgmap <- ReadMapTile("~/repos/4_Projects/6_EVEMBI/01_Waedenswil/MK1/RSaves/Christoph/Waedi.png")
 
 gps_m <- as.matrix(gps[77:100, c('x', 'y')])
 gps_l <- as.list(gps)
 
 # matrix
-gm_ch03 <- change_coords(gps_m, 'wgs84', 'ch03')
-gm_ch95 <- change_coords(gm_ch03, 'ch03', 'ch95')
-gm_ch03_user <- change_coords(gm_ch95, 'ch95', 'ch03'
-    origin = c(..., ...))
+gm_ch03 <- change_coords(gps_m, 'ch03', crs_from = 'wgs84')
+gm_ch95 <- change_coords(gm_ch03, 'ch95')
+gm_ch03_user <- change_coords(gm_ch95, 'ch03', new_origin_at = c(6e5, 2e5))
 
 # data.frame
 change_coords(gps)
@@ -51,9 +52,8 @@ change_coords(gps_l)
 # x + y
 change_coords(gps$x, gps$y)
 
-get_crs <- function(obj) {
-    new_origin_at <- attr(obj, 'origin')
-    crs <- attr(obj, 'crs_gel')
+fix_crs <- function(crs = NULL,
+    new_origin_at = NULL) {
     if (is.null(crs)) {
         return(NULL)
     }
@@ -71,10 +71,13 @@ get_crs <- function(obj) {
     }
     crs <- st_crs(crs)
     if (!is.null(new_origin_at)) {
-        old_origin <- get_origin(crs)
-        crs <- modify_crs(crs, new_origin = as.numeric(new_origin_at) - old_origin)
+        base_origin <- get_origin(crs)
+        crs <- modify_crs(crs, new_origin = as.numeric(new_origin_at) - base_origin)
     }
     crs
+}
+get_crs <- function(obj) {
+    fix_crs(obj, attr(obj, 'crs_gel'), attr(obj, 'origin'))
 }
 set_crs <- function(obj, crs = NULL,
     new_origin_at = NULL) {
@@ -251,8 +254,6 @@ guess_coords <- function(obj, value = TRUE) {
     )
 }
 
-obj <- data.frame(x = 1:3, y = 1:3)
-
 ## automatically assign/fix missing coordinate names
 fix_coord_name_x <- function(obj) {
     # check if coord name x/y is missing
@@ -311,98 +312,78 @@ wgs84_to_map:
 map_to_local:
     - obj_map, map, origin (in crs_local), crs_local != NULL
 
-.change_coords <- function(x, y, crs_from = NULL, crs_to = NULL, swap_xy = FALSE,
-    offset = c(0, 0)) {
-    # insist on numeric
-    x <- as.numeric(x) + offset[1]
-    y <- as.numeric(y) + offset[2]
-    # swap y > x?
-    if (swap_xy && (
-        (y[1] < 100 && y[1] < x[1]) || 
-        (y[1] > 100 && y[1] > x[1])
-        ))
-    {
-        xcp <- x
-        x <- y
-        y <- xcp
-    }
-    # check xy crs
-    if (is.null(crs_from)) {
-        if (y[1] < 90) {
-            # wgs84
-            crs_from <- 'EPSG:4326'
-        } else if (y[1] > 5e5) {
-            # LV95
-            crs_from <- 'EPSG:2056'
-        } else {
-            # LV03
-            crs_from <- 'EPSG:21781'
-        }
-    }
-    # check output crs
-    if (is.null(crs_to)) {
-        if (crs_from == 'EPSG:4326' || crs_from == 4326) {
-            # LV95
-            crs_to <- 'EPSG:2056'
-        } else {
-            # WGS84
-            crs_to <- 'EPSG:4326'
-        }
-    }
-    obj <- st_sfc(st_multipoint(cbind(x, y)))
-    st_crs(obj) <- crs_from
-    out <- st_transform(obj, crs_to)
-    as.matrix(out[[1]])
+.change_coords <- function(x, y, crs_from = NULL, crs_to = NULL) {
+    sf_project(crs_from, crs_to, cbind(x, y))
 }
 
 change_coords <- function(x, crs_to = NULL, 
-    swap_xy = FALSE, y = NULL, crs_from = NULL, 
+    y = NULL, crs_from = NULL, 
     x_column = 1, y_column = 2,
-    as_list = FALSE, new_origin_at = c(0, 0)) {
-    new_origin_at <- as.numeric(new_origin_at)
+    as_list = FALSE, new_origin_at = NULL) {
+    # convert to numeric
+    if (!is.null(new_origin_at)) {
+        new_origin_at <- as.numeric(new_origin_at)
+    }
+    # check crs from
+    if (inherits(crs_from, 'staticMap')) {
+        x <- map_to_wgs(crs_from, x, x_column = x_column,
+            y_column = y_column)
+        crs_from <- 'EPSG:4326'
+    }
+    if (is.null(crs_from)) {
+        crs_from <- get_crs(x)
+    } else {
+        crs_from <- fix_crs(crs_from)
+    }
+    # fix crs to
+    if (post_convert <- inherits(crs_to, 'staticMap')) {
+        map <- crs_to
+        crs_to <- 'EPSG:4326'
+        new_origin_at <- NULL
+    }
+    crs_to <- fix_crs(crs_to, new_origin_at)
 	if (inherits(x, "Sources") && ncol(x) == 4) {
 		out <- x
 		out[, 2:3] <- .change_coords(x[, 2], x[, 3], 
-            crs_from = crs_from, crs_to = crs_to, 
-            swap_xy = swap_xy, new_origin_at = new_origin_at)
+            crs_from = crs_from, crs_to = crs_to)
 	} else if (inherits(x, "Sensors") && ncol(x) >= 7) {
 		out <- convert(x)
         out[, c('x-Coord (m)', 'y-Coord (m)')] <- .change_coords(
             x[, 'x-Coord (m)'], x[, 'y-Coord (m)'], 
-            crs_from = crs_from, crs_to = crs_to, 
-            swap_xy = swap_xy, new_origin_at = new_origin_at)
+            crs_from = crs_from, crs_to = crs_to)
 	} else {
 		if (is.null(y)) {
-            out <- copy(x)
+            if (inherits(x, 'data.table')) {
+                out <- data.table::copy(x)
+            } else {
+                out <- x
+            }
 			if (is.matrix(x)) {
                 out[, c(x_column, y_column)] <- .change_coords(
                     x[, x_column], x[, y_column],
-                    crs_from = crs_from, crs_to = crs_to, 
-                    swap_xy = swap_xy, new_origin_at = new_origin_at)
+                    crs_from = crs_from, crs_to = crs_to)
             } else if (inherits(x, 'area_sources')) {
                 out[, c('x', 'y') :=  change_coords(
                     x, y, crs_from = crs_from,
-                    crs_to = crs_to, swap_xy = swap_xy, x_column = 'x',
-                    y_column = 'y', as_list = TRUE, new_origin_at = new_origin_at)]
+                    crs_to = crs_to, x_column = 'x',
+                    y_column = 'y', as_list = TRUE)]
                 attr(out, 'cadastre')[, c('x', 'y') := change_coords(
                     attr(..x, 'cadastre')[, .(x, y)], crs_from = crs_from,
-                    crs_to = crs_to, swap_xy = swap_xy, x_column = 'x',
-                    y_column = 'y', as_list = TRUE, new_origin_at = new_origin_at)]
+                    crs_to = crs_to, x_column = 'x',
+                    y_column = 'y', as_list = TRUE)]
             } else if (is.data.table(x)) {
                 if (is.numeric(x_column)) x_column <- names(out)[x_column]
                 if (is.numeric(y_column)) y_column <- names(out)[y_column]
                 out[, c(x_column, y_column) :=  change_coords(
                     x, y, crs_from = crs_from,
-                    crs_to = crs_to, swap_xy = swap_xy, 
-                    as_list = TRUE, new_origin_at = new_origin_at)]
+                    crs_to = crs_to, as_list = TRUE)]
             } else if (is.data.frame(x) || is.list(x)) {
                 stop('Fix me in change_coords()!')
 			} else {
 				y <- x[[y_column]]
 				x <- x[[x_column]]
                 out <- .change_coords(x, y, 
-                    crs_from = crs_from, crs_to = crs_to, 
-                    swap_xy = swap_xy, new_origin_at = new_origin_at)
+                    crs_from = crs_from, crs_to = crs_to)
                 colnames(out) <- c('x', 'y')
                 if (as_list) {
                     out <- as.list(as.data.frame(out))
@@ -410,27 +391,20 @@ change_coords <- function(x, crs_to = NULL,
 			}
 		} else {
             out <- .change_coords(x, y, 
-                crs_from = crs_from, crs_to = crs_to, 
-                swap_xy = swap_xy, new_origin_at = new_origin_at)
+                crs_from = crs_from, crs_to = crs_to)
             colnames(out) <- c('x', 'y')
             if (as_list) {
                 out <- as.list(as.data.frame(out))
             }
         }
 	}
+    # check if we need to convert
+    # from wgs84 to map
+    if (post_convert) {
+        out <- wgs_to_map(map, out, x_column = x_column,
+            y_column = y_column)
+    }
 	return(out)
-}
-
-## 
-wgs_to_ch <- function(lon, lat = NULL) {
-    change_coords(lon, lat, 
-        crs_from = 4326, crs_to = 2056,
-        swap_xy = TRUE)
-}
-ch_to_wgs <- function(x, y = NULL) {
-    change_coords(x, y, 
-        crs_from = NULL, crs_to = 4326,
-        swap_xy = TRUE)
 }
 
 ##
@@ -472,6 +446,56 @@ wgs_to_map <- function(MyMap, lat, lon = NULL, zoom,
 	}
 }
 
+##
+map_to_wgs <- function(MyMap, x, y = NULL, zoom,
+    x_column = 1, y_column = 2) {
+    require(RgoogleMaps, quietly = TRUE)
+    if (missing(zoom)) zoom <- MyMap$zoom
+	if (inherits(x, "Sources") && ncol(x) == 4) {
+		out <- x
+		dummy <- XY2LatLon(MyMap, x[, 3], x[, 2], zoom)
+		out[, 2:3] <- cbind(dummy$newX, dummy$newY)
+		return(out)
+	} else if (inherits(x, "Sensors") && ncol(x) >= 7) {
+		out <- convert(x)
+		dummy <- XY2LatLon(MyMap, x[, "y-Coord (m)"], x[, "x-Coord (m)"], zoom)
+		out[, c("x-Coord (m)", "y-Coord (m)")] <- cbind(dummy$newX, dummy$newY)
+		return(out)
+	} else {
+		if (is.null(lon)) {
+            out <- copy(x)
+            if (inherits(x, 'area_sources')) {
+                out[, c('x', 'y') := {
+                    XY2LatLon(MyMap, y, x, zoom)
+                }]
+                attr(out, 'cadastre')[, c('x', 'y') := {
+                    XY2LatLon(MyMap, y, x, zoom)
+                }]
+            } else if (is.data.table(x)) {
+                out[, c(x_column, y_column) := {
+                    XY2LatLon(MyMap, get(y_column), get(x_column), zoom)
+                }]
+            } else if (!is.matrix(x) & !is.data.frame(x)) {
+                stop('fix me in map_to_wgs()')
+			} else {
+                stop('fix me in map_to_wgs() data.frame/matrix')
+			}
+		}
+        return(out)
+	}
+}
+
+
+## 
+wgs_to_ch <- function(lon, lat = NULL) {
+    change_coords(lon, lat, 
+        crs_from = 4326, crs_to = 2056)
+}
+ch_to_wgs <- function(x, y = NULL) {
+    crs_ch <- guess_ch(x, y)
+    change_coords(x, y, 
+        crs_from = crs_ch, crs_to = 4326)
+}
 ch_to_map <- function(MyMap, x, y = NULL, ...) {
 	WGS84 <- ch_to_wgs(x, y)
 	wgs_to_map(MyMap, WGS84, ...)

@@ -462,38 +462,51 @@ map_to_wgs <- function(MyMap, x, y = NULL, zoom,
     y_column = guess_coord_y(x)) {
     require(RgoogleMaps, quietly = TRUE)
     if (missing(zoom)) zoom <- MyMap$zoom
+    # Sources?
 	if (inherits(x, "Sources") && ncol(x) == 4) {
 		out <- x
 		dummy <- XY2LatLon(MyMap, x[, 3], x[, 2], zoom)
 		out[, 2:3] <- cbind(dummy$newX, dummy$newY)
 		return(out)
-	} else if (inherits(x, "Sensors") && ncol(x) >= 7) {
+	} 
+    # Sensors?
+    if (inherits(x, "Sensors") && ncol(x) >= 7) {
 		out <- convert(x)
 		dummy <- XY2LatLon(MyMap, x[, "y-Coord (m)"], x[, "x-Coord (m)"], zoom)
 		out[, c("x-Coord (m)", "y-Coord (m)")] <- cbind(dummy$newX, dummy$newY)
 		return(out)
-	} else {
-		if (is.null(lon)) {
+	} 
+    # other
+    if (is.null(y)) {
+        if (inherits(x, 'data.table')) {
             out <- copy(x)
-            if (inherits(x, 'area_sources')) {
-                out[, c('x', 'y') := {
-                    XY2LatLon(MyMap, y, x, zoom)
-                }]
-                attr(out, 'cadastre')[, c('x', 'y') := {
-                    XY2LatLon(MyMap, y, x, zoom)
-                }]
-            } else if (inherits(x, 'data.table')) {
-                out[, c(x_column, y_column) := {
-                    XY2LatLon(MyMap, get(y_column), get(x_column), zoom)
-                }]
-            } else if (!is.matrix(x) & !is.data.frame(x)) {
-                stop('fix me in map_to_wgs()')
-			} else {
-                stop('fix me in map_to_wgs() data.frame/matrix')
-			}
-		}
-        return(out)
-	}
+        } else {
+            out <- x
+        }
+        if (inherits(x, 'area_sources')) {
+            out[, c('x', 'y') := {
+                XY2LatLon(MyMap, y, x, zoom)
+            }]
+            attr(out, 'cadastre')[, c('x', 'y') := {
+                XY2LatLon(MyMap, y, x, zoom)
+            }]
+        } else if (inherits(x, 'data.table')) {
+            out[, c(x_column, y_column) := {
+                XY2LatLon(MyMap, get(y_column), get(x_column), zoom)
+            }]
+        } else if (!is.matrix(x) & !is.data.frame(x)) {
+            stop('fix me in map_to_wgs()')
+        } else {
+            coords <- XY2LatLon(MyMap,
+                x[, x_column], x[, y_column], zoom)
+            out[, x_column] <- coords[, 'lon']
+            out[, y_column] <- coords[, 'lat']
+        }
+    } else {
+        stop('fix me in map_to_wgs() argument y is not null')
+    }
+    # return
+    out
 }
 
 guess_ch <- function(x, y = NULL) {
@@ -818,6 +831,9 @@ if (FALSE) {
     PlotOnStaticMap(rgmap)
     points(gm_map2, cex = 1.5, col = 'orange', lwd = 2)
     # map_to_*
+    map_to_wgs(rgmap, gm_map)
+    map_to_ch
+    map_to_user
     # user_to_*
     # -> add function check_crs to get attributes as list
 

@@ -811,8 +811,12 @@ if (FALSE) {
     points(gm_map, cex = 1.5, col = 'orange', lwd = 2)
     # wgs_to_*
     wgs_to_ch(gps_m)
-    wgs_to_user
-    wgs_to_map
+    wgs_to_ch(gps_m, FALSE)
+    args(wgs_to_user)
+    wgs_to_user(gps_m, 'lv95', c(2.6e6, 1.2e6))
+    gm_map2 <- wgs_to_map(rgmap, gps_m)
+    PlotOnStaticMap(rgmap)
+    points(gm_map2, cex = 1.5, col = 'orange', lwd = 2)
     # map_to_*
     # user_to_*
     # -> add function check_crs to get attributes as list

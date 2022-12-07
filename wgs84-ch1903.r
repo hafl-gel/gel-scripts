@@ -491,7 +491,7 @@ map_to_wgs <- function(MyMap, x, y = NULL, zoom,
 
 guess_ch <- function(x, y = NULL) {
     if (is.null(y)) {
-        crs_gel <- get_crs(x)
+        crs_gel <- attr(x, 'crs_gel')
         if (!is.null(crs_gel)) {
             return(crs_gel)
         }
@@ -770,6 +770,8 @@ if (FALSE) {
     rgmap <- ReadMapTile("~/repos/4_Projects/6_EVEMBI/01_Waedenswil/MK1/RSaves/Christoph/Waedi.png")
     gps_m <- as.matrix(gps[77:100, c('x', 'y')])
     gps_l <- as.list(gps)
+    # TODO:
+    # test Sources/Sensors/gral classes!
 
     ### ~~~~~~~~ change_coords
     # matrix
@@ -795,6 +797,8 @@ if (FALSE) {
     # test convenience wrappers
     # ch_to_*
     ch_to_wgs(gm_ch03)
+    ch_to_user(gm_ch95, c(2.6e6, 1.2e6))
+    ch_to_map
     # wgs_to_*
     # map_to_*
     # user_to_*

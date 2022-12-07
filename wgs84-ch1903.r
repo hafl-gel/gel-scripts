@@ -675,6 +675,15 @@ plot.staticMap <- function(x, y, ...) {
 get_map_wgs <- function(loc, ...) get_map(loc, crs_from = 4326, ...)
 get_map_ch <- function(loc, ...) get_map(loc, crs_from = guess_ch(loc), ...)
 
+# https://gis.stackexchange.com/a/87159
+metric_wgs84 <- function(lon, lat) {
+    st_crs(
+        paste0('+proj=laea +lat_0=',
+            lat, ' +lon_0=', lon, 
+            ' +ellps=WGS84 +units=m +no_defs'
+            )
+        )
+}
 
 ## ~~~~~~~~~~~~~ Tests
 

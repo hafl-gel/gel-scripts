@@ -588,7 +588,8 @@ wgs_to_ch <- function(lon, lv95 = TRUE, lat = NULL) {
 }
 # wgs_to_map -> see above
 
-map_to_user <- function(MyMap, x, y = NULL, zoom,
+map_to_user <- function(MyMap, x, crs_to,
+    new_origin_at = NULL, y = NULL, zoom,
     x_column = guess_coord_x(x),
     y_column = guess_coord_y(x)) {
     WGS84 <- map_to_wgs(MyMap, x, y, zoom, x_column, y_column)
@@ -598,7 +599,7 @@ map_to_ch <- function(MyMap, x, lv95 = TRUE, y = NULL, zoom,
     x_column = guess_coord_x(x),
     y_column = guess_coord_y(x)) {
     WGS84 <- map_to_wgs(MyMap, x, y, zoom, x_column, y_column)
-    wgs_to_ch(WGS84, lv95, new_origin_at)
+    wgs_to_ch(WGS84, lv95)
 }
 # map_to_wgs -> see above
 
@@ -832,8 +833,9 @@ if (FALSE) {
     points(gm_map2, cex = 1.5, col = 'orange', lwd = 2)
     # map_to_*
     map_to_wgs(rgmap, gm_map)
-    map_to_ch
-    map_to_user
+    map_to_ch(rgmap, gm_map)
+    map_to_ch(rgmap, gm_map, FALSE)
+    map_to_user(rgmap, gm_map, 'lv03', c(6e5, 2e5))
     # user_to_*
     # -> add function check_crs to get attributes as list
 

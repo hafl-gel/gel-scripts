@@ -489,6 +489,31 @@ map_to_wgs <- function(MyMap, x, y = NULL, zoom,
 	}
 }
 
+guess_ch <- function(x, y = NULL) {
+    if (is.null(y)) {
+        crs_gel <- get_crs(x)
+        if (!is.null(crs_gel)) {
+            return(crs_gel)
+        }
+        cnms <- guess_coords(x)
+        if (is.matrix(x)) {
+            y <- x[, cnms[2]]
+            x <- x[, cnms[1]]
+        } else {
+            y <- x[[cnms[2]]]
+            x <- x[[cnms[1]]]
+        }
+    }
+    if (y > x) {
+        stop('ch coordinates should be provided as x pointing',
+            ' towards east and y pointing towards north\n',
+            'This is contrary to the official axis naming of "CH1903 / LV03" and "CH1903 / LV95"')
+    }
+    if (x < 1e6) {
+        return('CH1903/LV03')
+    }
+    return('CH1903/LV95')
+}
 
 ## 
 wgs_to_ch <- function(lon, lat = NULL) {

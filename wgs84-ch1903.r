@@ -51,7 +51,7 @@ fix_crs <- function(crs = NULL,
     crs <- st_crs(crs)
     if (!is.null(new_origin_at) && length(new_origin_at) > 0) {
         base_origin <- get_origin(crs)
-        crs <- modify_crs(crs, new_origin = as.numeric(new_origin_at) - base_origin)
+        crs <- modify_crs(crs, new_origin = base_origin - as.numeric(new_origin_at))
     }
     crs
 }

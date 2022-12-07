@@ -752,10 +752,13 @@ if (FALSE) {
     change_coords(gps_l, 'ch03', crs_from = 'wgs84')
 
     # x + y
-    change_coords(gps$x, gps$y, crs_from = 'wgs84')
+    change_coords(gps$x, gps$y, crs_from = 'wgs84') # fails
+    change_coords(gps$x, y = gps$y, crs_from = 'wgs84') # fails
+    change_coords(gps$x, 'ch03', y = gps$y, crs_from = 'wgs84')
 
-    # test 
+    # test convenience wrappers
     # ch_to_*
+    ch_to_wgs(gm_ch03)
     # wgs_to_*
     # map_to_*
     # user_to_*

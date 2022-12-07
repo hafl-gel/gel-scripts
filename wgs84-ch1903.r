@@ -55,14 +55,21 @@ fix_crs <- function(crs = NULL,
     }
     crs
 }
-get_crs <- function(obj) {
-    fix_crs(attr(obj, 'crs_gel'), attr(obj, 'origin'))
+get_crs <- function(obj, fix = FALSE) {
+    out <- list(
+        crs_gel = attr(obj, 'crs_gel'),
+        origin = attr(obj, 'origin')
+        )
+    if (fix) {
+        out <- fix_crs(out$crs_gel, out$origin)
+    }
+    out
 }
 set_crs <- function(obj, crs = NULL,
     new_origin_at = NULL) {
+    validate_crs <- fix_crs(crs, new_origin_at)
     attr(obj, 'crs_gel') <- crs
     attr(obj, 'origin') <- new_origin_at
-    validate_crs <- get_crs(obj)
     obj
 }
 
@@ -314,7 +321,7 @@ change_coords <- function(x, crs_to,
         crs_from <- 'EPSG:4326'
     }
     if (is.null(crs_from)) {
-        crs_from <- get_crs(x)
+        crs_from <- get_crs(x, TRUE)
     } else {
         crs_from <- fix_crs(crs_from, old_origin_at)
     }
@@ -553,7 +560,12 @@ ch_to_user <- function(x, new_origin_at = NULL, y = NULL) {
 
 user_to_ch <- function(x, crs_from, origin_at, lv95 = TRUE,
     y = NULL, x_column = 'x', y_column = 'y') {
-    if (missing(origin_at) || missing(crs_from)) {
+    # check crs
+    crs_x <- get_crs(x)
+    if (!is.null(crs_x)) {
+        if (missing(origin_at)) origin_at <- crs_x$origin_at
+        if (missing(crs_from)) crs_from <- crs_x$crs_from
+    } else if (missing(origin_at) || missing(crs_from)) {
         stop('crs_from and origin_at are both required!')
     }
     change_coords(x, y, 
@@ -563,8 +575,13 @@ user_to_ch <- function(x, crs_from, origin_at, lv95 = TRUE,
 }
 user_to_wgs <- function(x, crs_from, origin_at, y = NULL,
     x_column = 'x', y_column = 'y') {
-    if (missing(origin_at) || missing(crs_from)) {
-        stop('crs_from and origin_at between xy and crs_from are both required!')
+    # check crs
+    crs_x <- get_crs(x)
+    if (!is.null(crs_x)) {
+        if (missing(origin_at)) origin_at <- crs_x$origin_at
+        if (missing(crs_from)) crs_from <- crs_x$crs_from
+    } else if (missing(origin_at) || missing(crs_from)) {
+        stop('crs_from and origin_at are both required!')
     }
     change_coords(x, y, x_column = x_column, y_column = y_column,
         crs_from = crs_from, crs_to = 4326, 
@@ -800,6 +817,7 @@ if (FALSE) {
     gm_ch03 <- change_coords(gps_m, 'ch03', crs_from = 'wgs84')
     gm_ch95 <- change_coords(gm_ch03, 'ch95')
     gm_ch03_user <- change_coords(gm_ch95, 'ch03', new_origin_at = colMeans(gm_ch03))
+    gm_user2 <- set_crs(gm_ch03_user, NULL)
     par(mfrow = c(2, 2))
     plot(gm_ch03, type = 'b')
     plot(gm_ch95, type = 'b')
@@ -837,6 +855,15 @@ if (FALSE) {
     map_to_ch(rgmap, gm_map, FALSE)
     map_to_user(rgmap, gm_map, 'lv03', c(6e5, 2e5))
     # user_to_*
-    # -> add function check_crs to get attributes as list
+    # part crs defined by obj
+    user_to_wgs(gm_ch03_user)
+    user_to_ch(gm_ch03_user)
+    user_to_ch(gm_ch03_user, lv95 = FALSE)
+    user_to_map(rgmap, gm_ch03_user)
+    # part crs undefined by obj
+    user_to_wgs(gm_user2, 'ch03', attr(gm_ch03_user, 'origin'))
+    user_to_ch(gm_user2, 'ch03', attr(gm_ch03_user, 'origin'))
+    user_to_ch(gm_user2, lv95 = FALSE, 'ch03', attr(gm_ch03_user, 'origin'))
+    user_to_map(rgmap, gm_user2, 'ch03', attr(gm_ch03_user, 'origin'))
 
 }

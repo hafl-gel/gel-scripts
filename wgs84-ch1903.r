@@ -410,36 +410,36 @@ change_coords <- function(x, crs_to,
 }
 
 ##
-wgs_to_map <- function(MyMap, lat, lon = NULL, zoom,
-    x_column = guess_coord_x(lat), 
-    y_column = guess_coord_y(lat)) {
+wgs_to_map <- function(MyMap, lon, lat = NULL, zoom,
+    x_column = guess_coord_x(lon), 
+    y_column = guess_coord_y(lon)) {
     require(RgoogleMaps, quietly = TRUE)
     if (missing(zoom)) zoom <- MyMap$zoom
-	if (inherits(lat, "Sources") && ncol(lat) == 4) {
-		out <- lat
-		dummy <- LatLon2XY.centered(MyMap, lat[, 3], lat[, 2], zoom)
+	if (inherits(lon, "Sources") && ncol(lon) == 4) {
+		out <- lon
+		dummy <- LatLon2XY.centered(MyMap, lon[, 3], lon[, 2], zoom)
 		out[, 2:3] <- cbind(dummy$newX, dummy$newY)
 		return(out)
-	} else if (inherits(lat, "Sensors") && ncol(lat) >= 7) {
-		out <- convert(lat)
-		dummy <- LatLon2XY.centered(MyMap, lat[, "y-Coord (m)"], lat[, "x-Coord (m)"], zoom)
+	} else if (inherits(lon, "Sensors") && ncol(lon) >= 7) {
+		out <- convert(lon)
+		dummy <- LatLon2XY.centered(MyMap, lon[, "y-Coord (m)"], lon[, "x-Coord (m)"], zoom)
 		out[, c("x-Coord (m)", "y-Coord (m)")] <- cbind(dummy$newX, dummy$newY)
 		return(out)
 	} else {
-		if (is.null(lon)) {
-            out <- copy(lat)
-            if (inherits(lat, 'area_sources')) {
+		if (is.null(lat)) {
+            out <- copy(lon)
+            if (inherits(lon, 'area_sources')) {
                 out[, c('x', 'y') := {
                     LatLon2XY.centered(MyMap, y, x, zoom)
                 }]
                 attr(out, 'cadastre')[, c('x', 'y') := {
                     LatLon2XY.centered(MyMap, y, x, zoom)
                 }]
-            } else if (inherits(lat, 'data.table')) {
+            } else if (inherits(lon, 'data.table')) {
                 out[, c(x_column, y_column) := {
                     LatLon2XY.centered(MyMap, get(y_column), get(x_column), zoom)
                 }]
-            } else if (!is.matrix(lat) & !is.data.frame(lat)) {
+            } else if (!is.matrix(lon) & !is.data.frame(lon)) {
                 stop('fix me in wgs_to_map()')
 			} else {
                 stop('fix me in wgs_to_map() data.frame/matrix')

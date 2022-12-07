@@ -139,7 +139,7 @@ guess_coord_x <- function(obj, value = TRUE) {
         if (is.character(obj)) {
             nms <- obj
         } else {
-            return(NULL)
+            return(which(isn)[1])
         }
     }
     # check x
@@ -147,6 +147,7 @@ guess_coord_x <- function(obj, value = TRUE) {
     if (length(x_nm) == 0) {
         # check lon
         x_nm <- grep('^(l|L)on((g|gitude).*)?$', nms, value = value)
+        if (length(x_nm) == 0) return(which(isn)[1])
     }
     x_nm
 }
@@ -158,7 +159,7 @@ guess_coord_y <- function(obj, value = TRUE) {
         if (is.character(obj)) {
             nms <- obj
         } else {
-            return(NULL)
+            return(which(isn)[2])
         }
     }
     # check y
@@ -166,6 +167,7 @@ guess_coord_y <- function(obj, value = TRUE) {
     if (length(y_nm) == 0) {
         # check lon
         y_nm <- grep('^(l|L)at(itude.*)?$', nms, value = value)
+        if (length(y_nm) == 0) return(which(isn)[2])
     }
     y_nm
 }
@@ -623,16 +625,16 @@ map_to_ch <- function(MyMap, x, lv95 = TRUE, y = NULL, zoom,
 ## RgoogleMaps convenience wrappers
 get_map <- function(loc, file = NULL, zoom = 16, 
     maptype = 'satellite', type = 'google',
-    token = Sys.getenv('R_GOOGLE_MAPS'), crs_from = NULL,
-    fix_xy = TRUE, ...) {
+    token = Sys.getenv('R_GOOGLE_MAPS'),
+    crs_from = NULL, crs_origin_at = NULL, ...) {
     require(RgoogleMaps, quietly = TRUE)
     # get temporary file
     if (is.null(file)) {
         file <- tempfile('staticMap', fileext = '.png')
     }
     # convert loc
-    loc_wgs <- change_coords(loc, crs_to = 4326, swap_xy = fix_xy, 
-        crs_from = crs_from)
+    loc_wgs <- change_coords(loc, crs_to = 4326, 
+        crs_from = crs_from, old_origin_at = crs_origin_at)
     colnames(loc_wgs) <- c('lon', 'lat')
     # check token
     if (type != 'google') token <- ''

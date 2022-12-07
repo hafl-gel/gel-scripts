@@ -516,10 +516,6 @@ guess_ch <- function(x, y = NULL) {
 }
 
 ## 
-wgs_to_ch <- function(lon, lat = NULL) {
-    change_coords(lon, lat, 
-        crs_from = 4326, crs_to = 2056)
-}
 ch_to_wgs <- function(x, y = NULL) {
     crs_ch <- guess_ch(x, y)
     change_coords(x, y, 
@@ -529,8 +525,13 @@ ch_to_map <- function(MyMap, x, y = NULL, ...) {
 	WGS84 <- ch_to_wgs(x, y)
 	wgs_to_map(MyMap, WGS84, ...)
 } 
+ch_to_user <- function(x, new_origin_at = NULL, y = NULL) {
+    crs_from <- guess_ch(x)
+    change_coords(x, y = y, crs_from = crs_from,
+        crs_to = crs_from, new_origin_at = new_origin_at)
+}
 
-user_to_ch <- function(x, y = NULL, crs_from, origin_at,
+user_to_ch <- function(x, crs_from, origin_at, y = NULL, 
     x_column = 'x', y_column = 'y') {
     if (missing(origin_at) || missing(crs_from)) {
         stop('crs_from and origin_at are both required!')
@@ -540,7 +541,8 @@ user_to_ch <- function(x, y = NULL, crs_from, origin_at,
         old_origin_at = origin_at, x_column = x_column, 
         y_column = y_column)
 }
-user_to_wgs <- function(x, y = NULL, crs_from, origin_at, x_column = 'x', y_column = 'y') {
+user_to_wgs <- function(x, crs_from, origin_at, y = NULL,
+    x_column = 'x', y_column = 'y') {
     if (missing(origin_at) || missing(crs_from)) {
         stop('crs_from and origin_at between xy and crs_from are both required!')
     }
@@ -548,28 +550,37 @@ user_to_wgs <- function(x, y = NULL, crs_from, origin_at, x_column = 'x', y_colu
         crs_from = crs_from, crs_to = 4326, 
         old_origin_at = origin_at)
 }
-user_to_map <- function(MyMap, x, y = NULL, crs_from, origin_at,
-    x_column = 'x', y_column = 'y', ...) {
+user_to_map <- function(MyMap, x, crs_from, origin_at,
+    x_column = 'x', y_column = 'y', y = NULL, ...) {
 	WGS84 <- user_to_wgs(x, y, crs_from = crs_from, 
         origin_at = origin_at, x_column = x_column, 
         y_column = y_column)
 	wgs_to_map(MyMap, WGS84, x_column = x_column, y_column = y_column, ...)
 }
-ch_to_user <- function(x, new_origin_at = NULL, y = NULL) {
-    crs_from <- guess_ch(x)
-    change_coords(x, y = y, crs_from = crs_from,
-        crs_to = crs_from, new_origin_at = new_origin_at)
+
+wgs_to_user <- function(lon, crs_to, new_origin_at = NULL, lat = NULL) {
+    change_coords(lon, crs_to = crs_to, new_origin_at = new_origin_at,
+        crs_from = 'wgs84', y = lat)
 }
-wgs_to_user <- function(x, crs_to, new_origin_at = NULL, y = NULL) {
-    change_coords(x, crs_to = crs_to, new_origin_at = new_origin_at,
-        crs_from = 'wgs84', y = y)
+wgs_to_ch <- function(lon, lat = NULL) {
+    change_coords(lon, lat, 
+        crs_from = 4326, crs_to = 2056)
 }
+# wgs_to_map -> see above
+
 map_to_user <- function(MyMap, x, y = NULL, zoom,
     x_column = guess_coord_x(x),
     y_column = guess_coord_y(x)) {
     WGS84 <- map_to_wgs(MyMap, x, y, zoom, x_column, y_column)
     wgs_to_user(WGS84, crs_to, new_origin_at)
 }
+map_to_ch <- function(MyMap, x, y = NULL, zoom,
+    x_column = guess_coord_x(x),
+    y_column = guess_coord_y(x)) {
+    WGS84 <- map_to_wgs(MyMap, x, y, zoom, x_column, y_column)
+    wgs_to_ch(WGS84, crs_to, new_origin_at)
+}
+# map_to_wgs -> see above
 
 ## RgoogleMaps convenience wrappers
 get_map <- function(loc, file = NULL, zoom = 16, 

@@ -26,33 +26,8 @@
 # ch1903/LV03: 21781
 # ch1903/LV95: 2056
 
-## ~~~~~~~~~~~~~~~ start over again
-
 library(sf, quietly = TRUE)
 
-## ~~ input format
-
-## read gps data
-gps <- read.table('~/repos/4_Projects/6_EVEMBI/01_Waedenswil/MK2/Point_2.csv', fill = TRUE, sep = '\t', header = TRUE)
-library(RgoogleMaps)
-rgmap <- ReadMapTile("~/repos/4_Projects/6_EVEMBI/01_Waedenswil/MK1/RSaves/Christoph/Waedi.png")
-
-gps_m <- as.matrix(gps[77:100, c('x', 'y')])
-gps_l <- as.list(gps)
-
-# matrix
-gm_ch03 <- change_coords(gps_m, 'ch03', crs_from = 'wgs84')
-gm_ch95 <- change_coords(gm_ch03, 'ch95')
-gm_ch03_user <- change_coords(gm_ch95, 'ch03', new_origin_at = c(6e5, 2e5))
-
-# data.frame
-change_coords(gps, 'ch95', crs_from = 'wgs84')
-
-# list
-change_coords(gps_l, 'ch03', crs_from = 'wgs84')
-
-# x + y
-change_coords(gps$x, gps$y, crs_from = 'wgs84')
 
 ## ~~~~~~~~~~~~~~~ functions
 
@@ -476,8 +451,8 @@ wgs_to_map <- function(MyMap, lat, lon = NULL, zoom,
 
 ##
 map_to_wgs <- function(MyMap, x, y = NULL, zoom,
-    x_column = guess_coord_x(lat), 
-    y_column = guess_coord_y(lat)) {
+    x_column = guess_coord_x(x), 
+    y_column = guess_coord_y(x)) {
     require(RgoogleMaps, quietly = TRUE)
     if (missing(zoom)) zoom <- MyMap$zoom
 	if (inherits(x, "Sources") && ncol(x) == 4) {
@@ -555,13 +530,21 @@ user_to_map <- function(MyMap, x, y = NULL, crs_from, origin_at,
         y_column = y_column)
 	wgs_to_map(MyMap, WGS84, x_column = x_column, y_column = y_column, ...)
 }
-ch_to_user <- function(x, y = NULL, new_origin_at = NULL) {
-    change_coords(x, y, crs_from = crs_from,
+ch_to_user <- function(x, new_origin_at = NULL, y = NULL) {
+    crs_from <- guess_ch(x)
+    change_coords(x, y = y, crs_from = crs_from,
         crs_to = crs_from, new_origin_at = new_origin_at)
 }
-# TODO:
-# wgs_to_user
-# map_to_user
+wgs_to_user <- function(x, crs_to, new_origin_at = NULL, y = NULL) {
+    change_coords(x, crs_to = crs_to, new_origin_at = new_origin_at,
+        crs_from = 'wgs84', y = y)
+}
+map_to_user <- function(MyMap, x, y = NULL, zoom,
+    x_column = guess_coord_x(x),
+    y_column = guess_coord_y(x)) {
+    WGS84 <- map_to_wgs(MyMap, x, y, zoom, x_column, y_column)
+    wgs_to_user(WGS84, crs_to, new_origin_at)
+}
 
 ## RgoogleMaps convenience wrappers
 get_map <- function(loc, file = NULL, zoom = 16, 
@@ -738,4 +721,32 @@ get_origin <- function(base_crs) {
     # get false northing (y-axis)
     i_y <- get_index(i_wkt, tabf.3[['false_northing']])
     as.numeric(c(p_wkt[[i_x]], p_wkt[[i_y]]))
+}
+
+## ~~~~~~~~~~~~~ Tests
+
+if (FALSE) {
+
+    ## read gps data
+    gps <- read.table('~/repos/4_Projects/6_EVEMBI/01_Waedenswil/MK2/Point_2.csv', fill = TRUE, sep = '\t', header = TRUE)
+    library(RgoogleMaps)
+    rgmap <- ReadMapTile("~/repos/4_Projects/6_EVEMBI/01_Waedenswil/MK1/RSaves/Christoph/Waedi.png")
+
+    gps_m <- as.matrix(gps[77:100, c('x', 'y')])
+    gps_l <- as.list(gps)
+
+    # matrix
+    gm_ch03 <- change_coords(gps_m, 'ch03', crs_from = 'wgs84')
+    gm_ch95 <- change_coords(gm_ch03, 'ch95')
+    gm_ch03_user <- change_coords(gm_ch95, 'ch03', new_origin_at = c(6e5, 2e5))
+
+    # data.frame
+    change_coords(gps, 'ch95', crs_from = 'wgs84')
+
+    # list
+    change_coords(gps_l, 'ch03', crs_from = 'wgs84')
+
+    # x + y
+    change_coords(gps$x, gps$y, crs_from = 'wgs84')
+
 }

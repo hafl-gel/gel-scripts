@@ -297,6 +297,156 @@ guess_coords <- function(obj, value = TRUE) {
 # ## ~~~ map x/y -> local
 # map_to_local:
 #     - obj_map, map, origin (in crs_local), crs_local != NULL
+parse_wkt <- function(crs) {
+    # crs <- st_crs('EPSG:2056')
+    wkt_a <- gsub('\\s*\\n\\s*', '', crs$wkt)
+    # replace ,[] inside string with {1}, {2}[ {3}]
+    wkt_a2 <- gsub('([,]|\\[|\\])(?=([^"]*["][^"]*["])*[^"]*$)', '{\\1}', wkt_a, perl = TRUE)
+    wkt_b <- unlist(strsplit(wkt_a2, split = '(?<=[{](\\[|,)[}])', perl = TRUE))
+    wkt_c <- sub('^([^0-9^"]+)\\{,}', 'as.name("\\1"),', wkt_b)
+    wkt_d <- sub('{[}', '=list(', wkt_c, fixed = TRUE)
+    wkt_e <- gsub('{]}', ')', wkt_d, fixed = TRUE)
+    wkt_f <- gsub('{,}', ',', wkt_e, fixed = TRUE)
+    eval(parse(text = paste0('list(', paste(wkt_f, collapse = ''), ')')))
+}
+deparse_wkt <- function(x) {
+    dep_crs <- deparse(x)
+    dep2 <- gsub('(\\))(?=([^"]*["][^"]*["])*[^"]*$)', '{\\1}', dep_crs, perl = TRUE)
+    paste(sub('(^list\\(|\\]$)', '', gsub('{)}', ']', gsub(' = list(', '[', dep2, fixed = TRUE),
+            fixed = TRUE)), collapse = '')
+}
+
+traverse_list <- function(x, i = numeric(0)) {
+    if (is.list(x)) {
+        out <- mapply(traverse_list, x, i = lapply(seq_along(x), function(a) c(i, a)), SIMPLIFY = FALSE)
+        # out <- mapply(traverse_list, x, i = paste(i, seq_along(x), sep = ','), SIMPLIFY = FALSE)
+        do.call(rbind, out)
+        # do.call(rbind, lapply(x, traverse_list, i = paste(i, seq_along(x), sep = ':')))
+    } else {
+        cbind(list(i), x)
+    }
+}
+
+# find EPSG code:
+get_index <- function(t_wkt, code) {
+    i_epsg <- which(t_wkt[, 2] %in% 'EPSG')
+    ind <- which(t_wkt[i_epsg + 1, 2] %in% code)
+    if (length(ind) > 1) {
+        stop('several codes ', paste(t_wkt[i_epsg[ind] + 1, 2], collapse = ' + '),
+            ' (n != 1) were found in wkt string')
+    }
+    index <- t_wkt[[i_epsg[ind] + 1]]
+    c(index[-length(index) + (0:1)], 2)
+    # y[[index]]
+}
+
+modify_crs <- function(base_crs, new_origin = NULL, new_angle = NULL) {
+    if (missing(base_crs)) {
+        stop('base crs is missing')
+    }
+    if (is.character(base_crs)) {
+        base_crs <- try(st_crs(base_crs), silent = TRUE)
+    }
+    if (!inherits(base_crs, 'crs')) {
+        stop('base crs argument is not a valid crs')
+    }
+    if (is.null(new_origin) && is.null(new_angle)) {
+        return(base_crs)
+    }
+    # parse wkt
+    p_wkt <- parse_wkt(base_crs)
+    # traverse wkt
+    i_wkt <- traverse_list(p_wkt)
+    # false easting/northing -> check epsg code in Table F.3 (https://docs.ogc.org/is/18-010r7/18-010r7.html#106)
+    tabf.3 <- list(
+        false_easting = c(8806, 8816, 8826),
+        false_northing = c(8807, 8817, 8827),
+        angle_northing = 8814
+        )
+    if (!is.null(new_origin)) {
+        if (!is.numeric(new_origin)) {
+            stop('argument new_origin must be numeric')
+        }
+        if (length(new_origin) != 2) {
+            stop('argument new_origin must be of length 2')
+        }
+        # get false easting (x-axis)
+        i_x <- get_index(i_wkt, tabf.3[['false_easting']])
+        # get false northing (y-axis)
+        i_y <- get_index(i_wkt, tabf.3[['false_northing']])
+        # replace values
+        p_wkt[[i_x]] <- new_origin[1]
+        p_wkt[[i_y]] <- new_origin[2]
+    }
+    if (!is.null(new_angle)) {
+        if (!is.numeric(new_angle)) {
+            stop('argument new_angle must be numeric')
+        }
+        if (length(new_angle) != 1) {
+            stop('argument new_angle must be of length 1')
+        }
+        # get angle northing
+        i_n <- get_index(i_wkt, tabf.3[['angle_northing']])
+        # replace value
+        p_wkt[[i_n]] <- new_angle
+    }
+    # replace name
+    p_wkt[[1]][[1]] <- "User"
+    st_crs(deparse_wkt(p_wkt))
+}
+get_origin <- function(base_crs) {
+    if (missing(base_crs)) {
+        stop('base crs is missing')
+    }
+    if (is.character(base_crs)) {
+        base_crs <- try(st_crs(base_crs), silent = TRUE)
+    }
+    if (!inherits(base_crs, 'crs')) {
+        stop('base crs argument is not a valid crs')
+    }
+    # parse wkt
+    p_wkt <- parse_wkt(base_crs)
+    # traverse wkt
+    i_wkt <- traverse_list(p_wkt)
+    # false easting/northing -> check epsg code in Table F.3 (https://docs.ogc.org/is/18-010r7/18-010r7.html#106)
+    tabf.3 <- list(
+        false_easting = c(8806, 8816, 8826),
+        false_northing = c(8807, 8817, 8827),
+        angle_northing = 8814
+        )
+    # get false easting (x-axis)
+    i_x <- get_index(i_wkt, tabf.3[['false_easting']])
+    # get false northing (y-axis)
+    i_y <- get_index(i_wkt, tabf.3[['false_northing']])
+    as.numeric(c(p_wkt[[i_x]], p_wkt[[i_y]]))
+}
+
+guess_ch <- function(x, y = NULL) {
+    if (is.null(y)) {
+        crs_gel <- attr(x, 'crs_gel')
+        if (!is.null(crs_gel)) {
+            return(crs_gel)
+        }
+        cnms <- guess_coords(x)
+        if (is.matrix(x)) {
+            y <- x[, cnms[2]]
+            x <- x[, cnms[1]]
+        } else {
+            y <- x[[cnms[2]]]
+            x <- x[[cnms[1]]]
+        }
+    }
+    if (y > x) {
+        stop('ch coordinates should be provided as x pointing',
+            ' towards east and y pointing towards north\n',
+            'This is contrary to the official axis naming of "CH1903 / LV03" and "CH1903 / LV95"')
+    }
+    if (x < 1e6) {
+        return('CH1903/LV03')
+    }
+    return('CH1903/LV95')
+}
+
 
 .change_coords <- function(x, y, crs_from = NULL, crs_to = NULL) {
     sf_project(crs_from, crs_to, cbind(x, y))
@@ -518,32 +668,6 @@ map_to_wgs <- function(MyMap, x, y = NULL, zoom,
     out
 }
 
-guess_ch <- function(x, y = NULL) {
-    if (is.null(y)) {
-        crs_gel <- attr(x, 'crs_gel')
-        if (!is.null(crs_gel)) {
-            return(crs_gel)
-        }
-        cnms <- guess_coords(x)
-        if (is.matrix(x)) {
-            y <- x[, cnms[2]]
-            x <- x[, cnms[1]]
-        } else {
-            y <- x[[cnms[2]]]
-            x <- x[[cnms[1]]]
-        }
-    }
-    if (y > x) {
-        stop('ch coordinates should be provided as x pointing',
-            ' towards east and y pointing towards north\n',
-            'This is contrary to the official axis naming of "CH1903 / LV03" and "CH1903 / LV95"')
-    }
-    if (x < 1e6) {
-        return('CH1903/LV03')
-    }
-    return('CH1903/LV95')
-}
-
 ## 
 ch_to_wgs <- function(x, y = NULL) {
     crs_ch <- guess_ch(x, y)
@@ -675,129 +799,6 @@ plot.staticMap <- function(x, y, ...) {
     PlotOnStaticMap(x, NEWMAP = FALSE, ...)
 }
 
-parse_wkt <- function(crs) {
-    # crs <- st_crs('EPSG:2056')
-    wkt_a <- gsub('\\s*\\n\\s*', '', crs$wkt)
-    # replace ,[] inside string with {1}, {2}[ {3}]
-    wkt_a2 <- gsub('([,]|\\[|\\])(?=([^"]*["][^"]*["])*[^"]*$)', '{\\1}', wkt_a, perl = TRUE)
-    wkt_b <- unlist(strsplit(wkt_a2, split = '(?<=[{](\\[|,)[}])', perl = TRUE))
-    wkt_c <- sub('^([^0-9^"]+)\\{,}', 'as.name("\\1"),', wkt_b)
-    wkt_d <- sub('{[}', '=list(', wkt_c, fixed = TRUE)
-    wkt_e <- gsub('{]}', ')', wkt_d, fixed = TRUE)
-    wkt_f <- gsub('{,}', ',', wkt_e, fixed = TRUE)
-    eval(parse(text = paste0('list(', paste(wkt_f, collapse = ''), ')')))
-}
-deparse_wkt <- function(x) {
-    dep_crs <- deparse(x)
-    dep2 <- gsub('(\\))(?=([^"]*["][^"]*["])*[^"]*$)', '{\\1}', dep_crs, perl = TRUE)
-    paste(sub('(^list\\(|\\]$)', '', gsub('{)}', ']', gsub(' = list(', '[', dep2, fixed = TRUE),
-            fixed = TRUE)), collapse = '')
-}
-
-traverse_list <- function(x, i = numeric(0)) {
-    if (is.list(x)) {
-        out <- mapply(traverse_list, x, i = lapply(seq_along(x), function(a) c(i, a)), SIMPLIFY = FALSE)
-        # out <- mapply(traverse_list, x, i = paste(i, seq_along(x), sep = ','), SIMPLIFY = FALSE)
-        do.call(rbind, out)
-        # do.call(rbind, lapply(x, traverse_list, i = paste(i, seq_along(x), sep = ':')))
-    } else {
-        cbind(list(i), x)
-    }
-}
-
-# find EPSG code:
-get_index <- function(t_wkt, code) {
-    i_epsg <- which(t_wkt[, 2] %in% 'EPSG')
-    ind <- which(t_wkt[i_epsg + 1, 2] %in% code)
-    if (length(ind) > 1) {
-        stop('several codes ', paste(t_wkt[i_epsg[ind] + 1, 2], collapse = ' + '),
-            ' (n != 1) were found in wkt string')
-    }
-    index <- t_wkt[[i_epsg[ind] + 1]]
-    c(index[-length(index) + (0:1)], 2)
-    # y[[index]]
-}
-
-modify_crs <- function(base_crs, new_origin = NULL, new_angle = NULL) {
-    if (missing(base_crs)) {
-        stop('base crs is missing')
-    }
-    if (is.character(base_crs)) {
-        base_crs <- try(st_crs(base_crs), silent = TRUE)
-    }
-    if (!inherits(base_crs, 'crs')) {
-        stop('base crs argument is not a valid crs')
-    }
-    if (is.null(new_origin) && is.null(new_angle)) {
-        return(base_crs)
-    }
-    # parse wkt
-    p_wkt <- parse_wkt(base_crs)
-    # traverse wkt
-    i_wkt <- traverse_list(p_wkt)
-    # false easting/northing -> check epsg code in Table F.3 (https://docs.ogc.org/is/18-010r7/18-010r7.html#106)
-    tabf.3 <- list(
-        false_easting = c(8806, 8816, 8826),
-        false_northing = c(8807, 8817, 8827),
-        angle_northing = 8814
-        )
-    if (!is.null(new_origin)) {
-        if (!is.numeric(new_origin)) {
-            stop('argument new_origin must be numeric')
-        }
-        if (length(new_origin) != 2) {
-            stop('argument new_origin must be of length 2')
-        }
-        # get false easting (x-axis)
-        i_x <- get_index(i_wkt, tabf.3[['false_easting']])
-        # get false northing (y-axis)
-        i_y <- get_index(i_wkt, tabf.3[['false_northing']])
-        # replace values
-        p_wkt[[i_x]] <- new_origin[1]
-        p_wkt[[i_y]] <- new_origin[2]
-    }
-    if (!is.null(new_angle)) {
-        if (!is.numeric(new_angle)) {
-            stop('argument new_angle must be numeric')
-        }
-        if (length(new_angle) != 1) {
-            stop('argument new_angle must be of length 1')
-        }
-        # get angle northing
-        i_n <- get_index(i_wkt, tabf.3[['angle_northing']])
-        # replace value
-        p_wkt[[i_n]] <- new_angle
-    }
-    # replace name
-    p_wkt[[1]][[1]] <- "User"
-    st_crs(deparse_wkt(p_wkt))
-}
-get_origin <- function(base_crs) {
-    if (missing(base_crs)) {
-        stop('base crs is missing')
-    }
-    if (is.character(base_crs)) {
-        base_crs <- try(st_crs(base_crs), silent = TRUE)
-    }
-    if (!inherits(base_crs, 'crs')) {
-        stop('base crs argument is not a valid crs')
-    }
-    # parse wkt
-    p_wkt <- parse_wkt(base_crs)
-    # traverse wkt
-    i_wkt <- traverse_list(p_wkt)
-    # false easting/northing -> check epsg code in Table F.3 (https://docs.ogc.org/is/18-010r7/18-010r7.html#106)
-    tabf.3 <- list(
-        false_easting = c(8806, 8816, 8826),
-        false_northing = c(8807, 8817, 8827),
-        angle_northing = 8814
-        )
-    # get false easting (x-axis)
-    i_x <- get_index(i_wkt, tabf.3[['false_easting']])
-    # get false northing (y-axis)
-    i_y <- get_index(i_wkt, tabf.3[['false_northing']])
-    as.numeric(c(p_wkt[[i_x]], p_wkt[[i_y]]))
-}
 
 ## ~~~~~~~~~~~~~ Tests
 

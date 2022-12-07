@@ -799,6 +799,9 @@ plot.staticMap <- function(x, y, ...) {
     PlotOnStaticMap(x, NEWMAP = FALSE, ...)
 }
 
+get_map_wgs <- function(loc, ...) get_map(loc, crs_from = 4326, ...)
+get_map_ch <- function(loc, ...) get_map(loc, crs_from = guess_ch(loc), ...)
+
 
 ## ~~~~~~~~~~~~~ Tests
 

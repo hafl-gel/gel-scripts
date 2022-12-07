@@ -427,7 +427,11 @@ wgs_to_map <- function(MyMap, lon, lat = NULL, zoom,
 		return(out)
 	} else {
 		if (is.null(lat)) {
-            out <- copy(lon)
+            if (inherits(lon, 'data.table')) {
+                out <- copy(lon)
+            } else {
+                out <- lon
+            }
             if (inherits(lon, 'area_sources')) {
                 out[, c('x', 'y') := {
                     LatLon2XY.centered(MyMap, y, x, zoom)
@@ -442,7 +446,10 @@ wgs_to_map <- function(MyMap, lon, lat = NULL, zoom,
             } else if (!is.matrix(lon) & !is.data.frame(lon)) {
                 stop('fix me in wgs_to_map()')
 			} else {
-                stop('fix me in wgs_to_map() data.frame/matrix')
+                coords <- LatLon2XY.centered(MyMap, 
+                    lon[, y_column], lon[, x_column], zoom)
+                out[, x_column] <- coords$newX
+                out[, y_column] <- coords$newY
 			}
 		}
         return(out)
@@ -774,6 +781,7 @@ if (FALSE) {
     # test Sources/Sensors/gral classes!
 
     ### ~~~~~~~~ change_coords
+    args(change_coords)
     # matrix
     gm_ch03 <- change_coords(gps_m, 'ch03', crs_from = 'wgs84')
     gm_ch95 <- change_coords(gm_ch03, 'ch95')
@@ -798,9 +806,10 @@ if (FALSE) {
     # ch_to_*
     ch_to_wgs(gm_ch03)
     ch_to_user(gm_ch95, c(2.6e6, 1.2e6))
-    ch_to_map
+    gm_map <- ch_to_map(rgmap, gm_ch03)
     # wgs_to_*
     # map_to_*
     # user_to_*
+    # -> add function check_crs to get attributes as list
 
 }

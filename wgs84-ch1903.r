@@ -727,18 +727,23 @@ get_origin <- function(base_crs) {
 
 if (FALSE) {
 
+    library(RgoogleMaps)
+
     ## read gps data
     gps <- read.table('~/repos/4_Projects/6_EVEMBI/01_Waedenswil/MK2/Point_2.csv', fill = TRUE, sep = '\t', header = TRUE)
-    library(RgoogleMaps)
     rgmap <- ReadMapTile("~/repos/4_Projects/6_EVEMBI/01_Waedenswil/MK1/RSaves/Christoph/Waedi.png")
-
     gps_m <- as.matrix(gps[77:100, c('x', 'y')])
     gps_l <- as.list(gps)
 
+    ### ~~~~~~~~ change_coords
     # matrix
     gm_ch03 <- change_coords(gps_m, 'ch03', crs_from = 'wgs84')
     gm_ch95 <- change_coords(gm_ch03, 'ch95')
-    gm_ch03_user <- change_coords(gm_ch95, 'ch03', new_origin_at = c(6e5, 2e5))
+    gm_ch03_user <- change_coords(gm_ch95, 'ch03', new_origin_at = colMeans(gm_ch03))
+    par(mfrow = c(2, 2))
+    plot(gm_ch03, type = 'b')
+    plot(gm_ch95, type = 'b')
+    plot(gm_ch03_user, type = 'b')
 
     # data.frame
     change_coords(gps, 'ch95', crs_from = 'wgs84')
@@ -748,5 +753,11 @@ if (FALSE) {
 
     # x + y
     change_coords(gps$x, gps$y, crs_from = 'wgs84')
+
+    # test 
+    # ch_to_*
+    # wgs_to_*
+    # map_to_*
+    # user_to_*
 
 }

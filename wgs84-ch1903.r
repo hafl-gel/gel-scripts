@@ -538,13 +538,13 @@ ch_to_user <- function(x, new_origin_at = NULL, y = NULL) {
         crs_to = crs_from, new_origin_at = new_origin_at)
 }
 
-user_to_ch <- function(x, crs_from, origin_at, y = NULL, 
-    x_column = 'x', y_column = 'y') {
+user_to_ch <- function(x, crs_from, origin_at, lv95 = TRUE,
+    y = NULL, x_column = 'x', y_column = 'y') {
     if (missing(origin_at) || missing(crs_from)) {
         stop('crs_from and origin_at are both required!')
     }
     change_coords(x, y, 
-        crs_from = crs_from, crs_to = 2056, 
+        crs_from = crs_from, crs_to = if (lv95) 2056 else 21781, 
         old_origin_at = origin_at, x_column = x_column, 
         y_column = y_column)
 }
@@ -569,9 +569,9 @@ wgs_to_user <- function(lon, crs_to, new_origin_at = NULL, lat = NULL) {
     change_coords(lon, crs_to = crs_to, new_origin_at = new_origin_at,
         crs_from = 'wgs84', y = lat)
 }
-wgs_to_ch <- function(lon, lat = NULL) {
+wgs_to_ch <- function(lon, lv95 = TRUE, lat = NULL) {
     change_coords(lon, lat, 
-        crs_from = 4326, crs_to = 2056)
+        crs_from = 4326, crs_to = if (lv95) 2056 else 21781)
 }
 # wgs_to_map -> see above
 
@@ -581,11 +581,11 @@ map_to_user <- function(MyMap, x, y = NULL, zoom,
     WGS84 <- map_to_wgs(MyMap, x, y, zoom, x_column, y_column)
     wgs_to_user(WGS84, crs_to, new_origin_at)
 }
-map_to_ch <- function(MyMap, x, y = NULL, zoom,
+map_to_ch <- function(MyMap, x, lv95 = TRUE, y = NULL, zoom,
     x_column = guess_coord_x(x),
     y_column = guess_coord_y(x)) {
     WGS84 <- map_to_wgs(MyMap, x, y, zoom, x_column, y_column)
-    wgs_to_ch(WGS84, crs_to, new_origin_at)
+    wgs_to_ch(WGS84, lv95, new_origin_at)
 }
 # map_to_wgs -> see above
 
@@ -807,7 +807,12 @@ if (FALSE) {
     ch_to_wgs(gm_ch03)
     ch_to_user(gm_ch95, c(2.6e6, 1.2e6))
     gm_map <- ch_to_map(rgmap, gm_ch03)
+    PlotOnStaticMap(rgmap)
+    points(gm_map, cex = 1.5, col = 'orange', lwd = 2)
     # wgs_to_*
+    wgs_to_ch(gps_m)
+    wgs_to_user
+    wgs_to_map
     # map_to_*
     # user_to_*
     # -> add function check_crs to get attributes as list

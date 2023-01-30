@@ -183,7 +183,7 @@ read_ida <- function(File) {
     setnames(Stats, c(coord_name, level), c('coords', 'level'))
     Stat2 <- unique(Stats, by = 'stn')[, .(stn, name = Name, 
         ch.x = as.numeric(sub('([0-9]{6})[/].*', '\\1', coords)),
-        ch.y = as.numeric(sub('[0-9]{6}[/]([0-9]{6})', '\\1', coords)),
+        ch.y = as.numeric(sub('[0-9]{6}[/]([0-9]{5,6})', '\\1', coords)),
         m.asl = level
         )]
     out <- merge(Data, Stat2, all = TRUE)[, time := NULL][]

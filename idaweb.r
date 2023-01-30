@@ -163,6 +163,12 @@ read_ida <- function(File) {
                     out[, granularity := '10mins']
                     out[, et := fast_strptime(time, '%Y%m%d%H%M', tz = 'UTC', lt = FALSE)][,
                         st := et - 600]
+                } else if (nc == 6L) {
+                    # monthly data
+                    out[, granularity := '1month']
+                    etime <- stime <- out[, fast_strptime(time, '%Y%m', tz = 'UTC', lt = FALSE)]
+                    month(etime) <- month(stime) + 1
+                    out[, c('st', 'et') := .(stime, etime)]
                 } else {
                     # other granularity
                     stop('granularity not yet implemented!')

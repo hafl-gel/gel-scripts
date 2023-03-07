@@ -122,8 +122,8 @@ read_ida <- function(File) {
 
     # get Stationen and Parameter
     iEmpty <- grep('^$', leg)
-    iSf <- grep('(Stationen|Stations)', leg) + 2
-    iPf <- grep('^Parameter$', leg) + 2
+    iSf <- grep('^\\s*(Stationen|Stations)\\s*$', leg) + 2
+    iPf <- grep('^\\s*Parameter\\s*$', leg) + 2
     iSt <- iEmpty[which(iEmpty > iSf)[1]] - 1
     iPt <- iEmpty[which(iEmpty > iPf)[1]] - 1
 

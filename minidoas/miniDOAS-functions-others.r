@@ -720,7 +720,8 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
                     ind[grep('dark', dir.spec)[1]] <- TRUE
                 }
                 if (all(!ind)) {
-                    stop('Calibration file for ', tracer, '/', type, ' is missing')
+                    stop('Calibration file for ', tracer, '/', type, ' is missing in provided path:\n',
+                    '    "', spec, '"')
                 }
             }
             info.spec <- read.table(dir.spec[which(ind)], sep="\t", stringsAsFactors=FALSE, fill=TRUE, colClasses="character",nrows=25)[,1]

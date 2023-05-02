@@ -309,14 +309,15 @@ guess_ch <- function(x, y = NULL) {
             x <- x[[cnms[1]]]
         }
     }
-    if (y > x) {
+    if (any(y > x)) {
         stop('ch coordinates should be provided as x pointing',
             ' towards east and y pointing towards north\n',
             'This is contrary to the official axis naming of "CH1903 / LV03" and "CH1903 / LV95"')
     }
-    if (x < 1e6) {
+    if (all(xbelow <- x < 1e6)) {
         return('CH1903/LV03')
     }
+    if (any(xbelow)) stop('ch coordinate systems "CH1903 / LV03" and "CH1903 / LV95" cannot be mixed!')
     return('CH1903/LV95')
 }
 

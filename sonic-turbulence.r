@@ -7,12 +7,12 @@ library(ibts)
 #### To Do:
 # - neue readWindMaster Routine
 # - Plotting & anderes Gheu aufräumen
-readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
+read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	### get Date
 	bn <- basename(FilePath)
 	if(!grepl("^data_", bn)){
 		# run old script
-		return(readWindMaster_old_ascii(FilePath, tz))
+		return(read_windmaster_old_ascii(FilePath, tz))
 	}
     if (grepl('[.]gz$', bn)) {
         require(R.utils)
@@ -28,7 +28,7 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
         silent = TRUE)
     # check if file is empty
 	if(inherits(out, 'try-error')){
-        if (grep('File is empty', out)) {
+        if (grepl('File is empty', out)) {
             cat('empty\n')
         } else {
             cat('error reading file\n')
@@ -119,10 +119,10 @@ readWindMaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     out
 }
 
-# readWindMaster_ascii("~/repos/3_Scripts/5_shellSonic/test_data/data_sonicb_20210120_170910")
+# read_windmaster_ascii("~/repos/3_Scripts/5_shellSonic/test_data/data_sonicb_20210120_170910")
 
 
-readWindMaster_old_ascii <- function(FilePath, tz = "Etc/GMT-1"){
+read_windmaster_old_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	### get Date
 	bn <- basename(FilePath)
 	Date <- gsub("^..._([0-9]{6})_.*","\\1",bn)
@@ -171,8 +171,8 @@ readWindMaster_old_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	out
 }
 
-# readWindMaster_old_ascii("~/LFE/01_Projekte/04_FerARA/Guerbetal/Daten/Sonic/Sonic1/HS1_190408_0000")
-# readWindMaster_ascii("~/LFE/01_Projekte/04_FerARA/Guerbetal/Daten/Sonic/Sonic1/HS1_190408_0000")
+# read_windmaster_old_ascii("~/LFE/01_Projekte/04_FerARA/Guerbetal/Daten/Sonic/Sonic1/HS1_190408_0000")
+# read_windmaster_ascii("~/LFE/01_Projekte/04_FerARA/Guerbetal/Daten/Sonic/Sonic1/HS1_190408_0000")
 
 readSonicEVS_csv <- function(FilePath, tz = "Etc/GMT-1"){
 	### read File
@@ -581,7 +581,7 @@ if(FALSE){
 	write_csv = FALSE
 	save_directory = paste0(dirname(file_directory),"/Output_evalSonic")
 	add_name = ""
-	rawdata_function = readWindMaster_ascii
+	rawdata_function = read_windmaster_ascii
 	as_ibts = TRUE
 	variables = c("u","v","w","T")
 	covariances = c("u'w'","w'T'")
@@ -619,7 +619,7 @@ evalSonic <- function(
 		,write_csv = FALSE
 		,save_directory = paste0(dirname(file_directory),"/Output_evalSonic")
 		,add_name = ""
-		,rawdata_function = readWindMaster_ascii
+		,rawdata_function = read_windmaster_ascii
 		,as_ibts = TRUE
 		,variables = c("u","v","w","T")
 		,covariances = c("u'w'","w'T'")
@@ -636,7 +636,7 @@ evalSonic <- function(
 		stop(paste0("Please provide following argument(s): ",paste(c("\n\t-> 'z_canopy'","\n\t-> 'z_sonic'","\n\t-> 'file_directory'")[which(c(is.null(z_canopy),is.null(z_sonic),is.null(file_directory)))],collapse="")))
 	}
 	########################### daily files:
-	if(deparse(substitute(rawdata_function)) %in% c("readWindMaster_ascii", "readWindMaster_old_ascii")){
+	if(deparse(substitute(rawdata_function)) %in% c("read_windmaster_ascii", "read_windmaster_old_ascii")){
 		dailyfiles <- dir(file_directory, pattern="(^...|^data_.*)_[0-9]{6,8}_[0-9]{4,6}([.]gz)?$")
 		if(length(dailyfiles) == 0){
 			stop("Directory '",file_directory,"' doesn't have any sonic files with correct name formatting!")

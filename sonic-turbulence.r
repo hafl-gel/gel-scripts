@@ -15,7 +15,9 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 		return(read_windmaster_old_ascii(FilePath, tz))
 	}
     if (grepl('[.]gz$', bn)) {
-        require(R.utils)
+        if (!any(grepl('R.utils', installed.packages()[, 'Package']))) {
+            stop('package "R.utils" must be installed to process gz files!')
+        }
     }
     # be verbose
     cat("File:", path.expand(FilePath), "- ")
@@ -28,7 +30,7 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
         silent = TRUE)
     # check if file is empty
 	if(inherits(out, 'try-error')){
-        if (grepl('File is empty', out)) {
+        if (any(grepl('File is empty', out))) {
             cat('empty\n')
         } else {
             cat('error reading file\n')

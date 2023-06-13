@@ -399,7 +399,7 @@ coord_transf <- function(x, crs_to,
                 if (is.numeric(x_column)) x_column <- names(out)[x_column]
                 if (is.numeric(y_column)) y_column <- names(out)[y_column]
                 out[, c(x_column, y_column) :=  coord_transf(
-                    x, y, crs_from = crs_from,
+                    get(x_column), get(y_column), crs_from = crs_from,
                     crs_to = crs_to, as_list = TRUE)]
             } else if (is.data.frame(x) || is.list(x)) {
                 out <- x

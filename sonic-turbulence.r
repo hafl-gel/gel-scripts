@@ -554,81 +554,46 @@ calcU <- function (ustar, Zo, L, z, kv = 0.4){
 }
 
 
-if(FALSE){	
-	file_directory = "U:/Documents/13_Campaigns/EVEMBI/Waedenswil/Daten/Sonic/Sonic1"
-	# start_time = "22.02.2018 10:00"
-	# end_time = "22.02.2018 20:00"
-	avg_period = "10mins"
-	start_time = c("22.02.2018 10:00","22.02.2018 12:00","22.02.2018 19:00")
-	end_time = c("22.02.2018 10:30","22.02.2018 13:00","22.02.2018 20:00")
-	# avg_period = NULL
-	tz_sonic = "Etc/GMT-1"
-	z_canopy = 0.06
-	detrending_method = c(u="linear",v="linear",w="linear",T="linear") # blockAVG/linear/linear_robust/ma_xx (xx = time in seconds)
-	n_stationarity_subint = 5
-	subint_detrending_method = c(u="blockAVG",v="blockAVG",w="blockAVG",T="blockAVG") # blockAVG/linear/linear_robust/ma_xx (xx = time in seconds)
-	hard_flag = list(
-		low = c(u=-30,v=-30,w=-10,T=243.15)
-		,high = c(u=30,v=30,w=10,T=323.15)
-		,window = "1mins" # data points
-		,method = "replace" # replace/no replace
-		)
-	z_sonic = 1.41
-	dev_north = 334
-	rotation_method = c("two axis","planar fit")
-	rotation_args = list(coord_system="WindMaster",phi = NULL,pf_avg_time="30mins",pf_FUN=MASS::rlm,pf_method=c("Wilczak2001","vanDik2004"),pf_N_thresh=10,pf_wd_sectors = c(90,270),pf_U_thresh = 0.5)
-	correct_rawdata=c("Gill","none","Nakai2012")
-	coord_system="WindMaster"
-	create_graphs = FALSE
-	write_csv = FALSE
-	save_directory = paste0(dirname(file_directory),"/Output_evalSonic")
-	add_name = ""
-	rawdata_function = read_windmaster_ascii
-	as_ibts = TRUE
-	variables = c("u","v","w","T")
-	covariances = c("u'w'","w'T'")
-	data_threshold = 0.9
-	lite=TRUE
-}
-
 ###################################################### Start Evaluation:
 
 evalSonic <- function(
-		# config_file = NULL
 		file_directory = NULL
-		,start_time = NULL
-		,end_time = NULL
-		,add_time = 0
-		,avg_period = NULL
-		,tz_sonic = "Etc/GMT-1"
-		,z_canopy = NULL
-		,detrending_method = c(u="linear",v="linear",w="linear",T="linear") # blockAVG/linear/linear_robust/ma_xx (xx = time in seconds)
-		,n_stationarity_subint = 5
-		,subint_detrending_method = c(u="blockAVG",v="blockAVG",w="blockAVG",T="blockAVG") # blockAVG/linear/linear_robust/ma_xx (xx = time in seconds)
-		,hard_flag = list(
-			low = c(u=-30,v=-30,w=-10,T=243.15)
-			,high = c(u=30,v=30,w=10,T=323.15)
-			,window = "1mins" # seconds OR time string
-			,method = "replace" # replace/no replace
+		, start_time = NULL
+		, end_time = NULL
+		, add_time = 0
+		, avg_period = NULL
+		, tz_sonic = "Etc/GMT-1"
+		, z_canopy = NULL
+		, z_sonic = NULL
+		, dev_north = 0
+		, detrending_method = c(u = "linear", v = "linear", w = "linear", T = "linear") # blockAVG/linear/linear_robust/ma_xx (xx = time in seconds)
+		, n_stationarity_subint = 5
+		, subint_detrending_method = c(u = "blockAVG", v = "blockAVG", w = "blockAVG", T = "blockAVG") # blockAVG/linear/linear_robust/ma_xx (xx = time in seconds)
+		, hard_flag = list(
+			low = c(u = -30, v = -30, w = -10, T = 243.15)
+			, high = c(u = 30, v = 30, w = 10, T = 323.15)
+			, window = "1mins" # seconds OR time string
+			, method = "replace" # replace/no replace
 			)
-		,z_sonic = NULL
-		,dev_north = 0
-		,rotation_method = c("two axis","planar fit")
-		,rotation_args = list(coord_system="WindMaster",phi = NULL,pf_avg_time=avg_period,pf_FUN=MASS::rlm,pf_method=c("Wilczak2001","vanDik2004"),pf_N_thresh=10,pf_wd_sectors = c(0,360),pf_U_thresh = 0)
-		,correct_rawdata = c("none", "Gill", "Nakai2012")
-		,data_threshold = 0.9
-		,create_graphs = FALSE
-		,write_csv = FALSE
-		,save_directory = paste0(dirname(file_directory),"/Output_evalSonic")
-		,add_name = ""
-		,rawdata_function = read_windmaster_ascii
-		,as_ibts = TRUE
-		,variables = c("u","v","w","T")
-		,covariances = c("u'w'","w'T'")
-		,lite = TRUE
-		,asDT = TRUE
-		,file_pattern_EVS = "([0-9]{4}-[0-9]{2}-[0-9]{2})_Anemometer_Wetterstation.csv"
-		# ,ogives_out = FALSE
+		, rotation_method = c("two axis", "planar fit")
+		, rotation_args = list(
+            coord_system = "WindMaster", 
+            phi = NULL, 
+            pf_avg_time = avg_period, 
+            pf_FUN = MASS::rlm, 
+            pf_method = c("Wilczak2001", "vanDik2004"), 
+            pf_N_thresh = 10, 
+            pf_wd_sectors = c(0, 360), 
+            pf_U_thresh = 0
+        )
+		, correct_rawdata = c("none", "Gill", "Nakai2012")
+		, data_threshold = 0.9
+		, create_graphs = FALSE
+		, save_directory = paste0(dirname(file_directory), "/output-evalSonic")
+		, rawdata_function = read_windmaster_ascii
+		, as_ibts = TRUE
+		, asDT = !as_ibts
+		, file_pattern_EVS = "([0-9]{4}-[0-9]{2}-[0-9]{2})_Anemometer_Wetterstation.csv"
 	){
 
 	script.start <- Sys.time()
@@ -1234,7 +1199,7 @@ evalSonic <- function(
 	# sub-int: detrend variables
 	# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
 	Data[,c("sub_up","sub_vp","sub_wp","sub_Tp","sub_um","sub_vm","sub_wm","sub_Tm") := {
-		detrend(sub_uprot,sub_vprot,sub_wprot,T,method=detrending_method[c("u","v","w","T")],Hz_ts=Hz)
+		detrend(sub_uprot,sub_vprot,sub_wprot,T,method=subint_detrending_method[c("u","v","w","T")],Hz_ts=Hz)
 	},by = BinSub][,c("sub_uprot","sub_vprot","sub_wprot","sub_vm","sub_wm") := NULL]
 
 	# browser()
@@ -1273,21 +1238,14 @@ evalSonic <- function(
 	rm(Data)
 	for(i in 1:20)gc()
 
-
-	if(write_csv){
-		if(!dir.exists(save_directory))dir.create(save_directory)
-		Out_csv <- Out[,c("st","et","tz") := .(format(start_interval),format(end_interval),tz_sonic)]
-		Out_csv[,c("start_interval","end_interval") := .(st,et)][,c("st","et") := NULL]
-		setcolorder(Out_csv,names(Out_csv)[c(1:2,length(Out_csv),3:(length(Out_csv)-1))])
-		fwrite(Out_csv,file=paste0(save_directory,"/EvalSonic_",format(start_time[1],format="%Y-%m-%d"),"_to_",format(end_time[length(end_time)],format="%Y-%m-%d"),format(Sys.time(),format="_%y%m%d%H%M"),add_name,".csv"))
-	}
-
 	# #################################### END VERSION HISTORY #################################### #
 	cat("************************************************************\n") 
 	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"),"time elapsed: ", difftime(Sys.time(), script.start, unit="mins"),"minutes\n")
 	cat("************************************************************\n")  
 
-	if(!asDT){
+    if (as_ibts) {
+        Out <- as.ibts(Out, st = 'start_interval', et = 'end_interval')
+    } else if (!asDT) {
 		setDF(Out)
 	}
 	

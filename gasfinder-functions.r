@@ -232,6 +232,56 @@ C_pT <- function(instrument,p_hPa,T_deg,p_hPa.inst=1013.25,T_deg.inst=20,units=c
 		)
 }
 
+# wrapper function for ppm
+gf2ppm <- function(data, 
+    single_path,
+    p_hPa = '(p|P)[_.-]?(air|Air|hpa|hPa)',
+    t_deg = '(t|T)[_.-]?(air|Air|deg|Deg)',
+    p_hPa.inst = 1013.25, 
+    T_deg.inst = 20, 
+    instrument = data[1, 'ser_number']
+    ) {
+    # check p_hPa
+    if (is.charcter(p_hPa)) {
+        p_name <- grep(p_hPa, names(data), value = TRUE)
+        p_hPa <- data[[p_name]]
+    }
+    # check t_dep
+    if (is.charcter(t_deg)) {
+        t_name <- grep(t_deg, names(data), value = TRUE)
+        t_deg <- data[[t_name]]
+    }
+    # convert
+    data[, 'CH4 (ppm-m)'] * 
+        C_pT(instrument, p_hPa, t_deg, p_hPa.inst, T_deg.inst, units = 'ppm') /
+        single_path
+}
+
+# wrapper function for mg/m3
+gf2mgm3 <- function(data, 
+    single_path,
+    p_hPa = '(p|P)[_.-]?(air|Air|hpa|hPa)',
+    t_deg = '(t|T)[_.-]?(air|Air|deg|Deg)',
+    p_hPa.inst = 1013.25, 
+    T_deg.inst = 20, 
+    instrument = data[1, 'ser_number']
+    ) {
+    # check p_hPa
+    if (is.charcter(p_hPa)) {
+        p_name <- grep(p_hPa, names(data), value = TRUE)
+        p_hPa <- data[[p_name]]
+    }
+    # check t_dep
+    if (is.charcter(t_deg)) {
+        t_name <- grep(t_deg, names(data), value = TRUE)
+        t_deg <- data[[t_name]]
+    }
+    # convert
+    data[, 'CH4 (ppm-m)'] * 
+        C_pT(instrument, p_hPa, t_deg, p_hPa.inst, T_deg.inst, units = 'mgm3') /
+        single_path
+}
+
 
 ### function for reading GasFinder2.0 data:
 read.GF2 <- function(Files,tz="Etc/GMT-1",asCharacter=FALSE,time_add=0,d_t=5){

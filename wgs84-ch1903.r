@@ -60,8 +60,13 @@ get_crs <- function(obj, fix = FALSE) {
 set_crs <- function(obj, crs = NULL,
     new_origin_at = NULL) {
     validate_crs <- fix_crs(crs, new_origin_at)
-    attr(obj, 'crs_gel') <- crs
-    attr(obj, 'origin') <- new_origin_at
+    if (inherits(obj, 'data.table')) {
+        setattr(obj, 'crs_gel', crs)
+        setattr(obj, 'origin', new_origin_at)
+    } else {
+        attr(obj, 'crs_gel') <- crs
+        attr(obj, 'origin') <- new_origin_at
+    }
     obj
 }
 

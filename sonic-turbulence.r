@@ -678,7 +678,7 @@ evalSonic <- function(
 		dfl[[i]] <- rawdata_function(paste(file_directory,read_Files[i],sep="/"))
 	}
 
-    gill_bug <- unique(sapply(dfl, attr, 'GillBug'))
+    gill_bug <- unique(unlist(lapply(dfl, attr, 'GillBug')))
     if (length(gill_bug) > 1) stop('inconsistent "GillBug" attribute in sonic data!')
 	Data <- rbindlist(dfl)
 

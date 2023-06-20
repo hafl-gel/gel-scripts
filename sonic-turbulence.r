@@ -66,11 +66,14 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     # remove NA lines that come from conversion
     out <- na.omit(out)
     # be verbose and print sonic names:
-    sonic <- out[, sub('[\x01-\x1A]', '', V2[1])]
-    cat(paste0("data recorded by sonic-", tolower(sonic), "\n"))
+    sonic_label <- out[, sub('[\x01-\x1A]', '', unique(V2))]
+    sonic_label <- sonic_label[!(sonic_label == '')]
+    if (length(sonic_label) == 0) stop('sonic label not available!')
+    if (length(sonic_label) > 1) stop('more than one unique sonic label!')
+    cat(paste0("data recorded by sonic-", tolower(sonic_label), "\n"))
     sonic_file <- sub("data_(.*)_[0-9]{8}_[0-9]{6}([.]gz)?$", "\\1", bn)
-    if(sonic != toupper(sub("sonic-", "", sonic_file))){
-        warning(paste0("Sonic name '", sonic, "', and hostname '", sonic_file, "' don't match!"), call. = FALSE)
+    if(sonic_label != toupper(sub("sonic-", "", sonic_file))){
+        warning(paste0("Sonic label '", sonic_label, "', and hostname '", sonic_file, "' don't match!"), call. = FALSE)
     }
     # check units
     if(out[, V6[1]] != "M"){
@@ -103,7 +106,7 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
             # remove columns
             NULL, NULL, NULL, NULL, NULL,
             # sonic
-            sonic,
+            sonic_label,
             # Time
             st.dec,
             # Hz
@@ -116,9 +119,7 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     setnames(out, c("u", "v", "w", "T", "sonic", "Time","Hz"))
     setcolorder(out,c("Time","Hz","u","v","w","T", "sonic"))
     # check if GillBug affected sonic
-    sonic_name <- out[, unique(sonic)]
-    if (length(sonic_name) != 1) stop('read_windmaster: data contains more than one entry in sonic name column!')
-    setattr(out, 'GillBug', sonic_name %in% c('C', 'D'))
+    setattr(out, 'GillBug', sonic_label %in% c('C', 'D'))
     # return
     out
 }

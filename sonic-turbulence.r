@@ -115,8 +115,10 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     ### set Output names and order
     setnames(out, c("u", "v", "w", "T", "sonic", "Time","Hz"))
     setcolorder(out,c("Time","Hz","u","v","w","T", "sonic"))
-    # check if old sonic
-    if (out[, sonic[1] %in% c('C', 'D')]) setattr(out, 'OldDevice', TRUE)
+    # check if GillBug affected sonic
+    sonic_name <- out[, unique(sonic)]
+    if (length(sonic_name) != 1) stop('read_windmaster: data contains more than one entry in sonic name column!')
+    setattr(out, 'GillBug', sonic_name %in% c('C', 'D'))
     # return
     out
 }
@@ -169,7 +171,7 @@ read_windmaster_old_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	out <- out[!(u%in%999.99|v%in%999.99|w%in%999.99|T%in%999.99),]
 	### change units from °C to K
 	out[, T := T + 273.15]
-    setattr(out, "OldDevice", TRUE)
+    setattr(out, "GillBug", TRUE)
 	out
 }
 
@@ -675,7 +677,8 @@ evalSonic <- function(
 		dfl[[i]] <- rawdata_function(paste(file_directory,read_Files[i],sep="/"))
 	}
 
-    OldDevice <- isTRUE(attr(dfl[[1]], "OldDevice"))
+    gill_bug <- unique(sapply(dfl, attr, 'GillBug'))
+    if (length(gill_bug) > 1) stop('inconsistent "GillBug" attribute in sonic data!')
 	Data <- rbindlist(dfl)
 
 	### free memory
@@ -714,7 +717,7 @@ evalSonic <- function(
 
 	########################### correct wind speed for angle of attack:
 	# Data[,c("u0","v0","w0") := .(u,v,w)]
-    if(missing(correct_rawdata) && OldDevice){
+    if(missing(correct_rawdata) && gill_bug){
         correct_rawdata <- "Gill"
     }
 	switch(pmatch(correct_rawdata[1],c("Gill","Nakai2012","none")),
@@ -1248,6 +1251,8 @@ evalSonic <- function(
     } else if (!asDT) {
 		setDF(Out)
 	}
+
+    setattr(Out, 'rawdata_correction', correct_rawdata)
 	
 	Out
 

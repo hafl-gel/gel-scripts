@@ -242,13 +242,13 @@ gf2ppm <- function(data,
     instrument = data[1, 'ser_number']
     ) {
     # check p_hPa
-    if (is.charcter(p_hPa)) {
-        p_name <- grep(p_hPa, names(data), value = TRUE)
+    if (is.character(p_hPa)) {
+        p_name <- grep(p_hPa, names(data), value = TRUE)[1]
         p_hPa <- data[[p_name]]
     }
     # check t_dep
-    if (is.charcter(t_deg)) {
-        t_name <- grep(t_deg, names(data), value = TRUE)
+    if (is.character(t_deg)) {
+        t_name <- grep(t_deg, names(data), value = TRUE)[1]
         t_deg <- data[[t_name]]
     }
     # convert
@@ -267,13 +267,13 @@ gf2mgm3 <- function(data,
     instrument = data[1, 'ser_number']
     ) {
     # check p_hPa
-    if (is.charcter(p_hPa)) {
-        p_name <- grep(p_hPa, names(data), value = TRUE)
+    if (is.character(p_hPa)) {
+        p_name <- grep(p_hPa, names(data), value = TRUE)[1]
         p_hPa <- data[[p_name]]
     }
     # check t_dep
-    if (is.charcter(t_deg)) {
-        t_name <- grep(t_deg, names(data), value = TRUE)
+    if (is.character(t_deg)) {
+        t_name <- grep(t_deg, names(data), value = TRUE)[1]
         t_deg <- data[[t_name]]
     }
     # convert

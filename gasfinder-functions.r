@@ -33,9 +33,9 @@ read.GF3 <- function(Folder="",From=NULL,To=NULL,tz="Etc/GMT-1",DTA_only=TRUE,as
 			stop("Please specify either both arguments 'From' and 'To' or none.")
 		}
 		From <- parse_timerange(From,tz=tz)
-		From_date <- date(From + time_add)
+		From_date <- trunc(From + time_add, 'days')
 		To <- parse_timerange(To,tz=tz)
-		To_date <- date(To + time_add)
+		To_date <- trunc(To + time_add, 'days')
 		Year_From <- year(From + time_add)
 		Year_To <- year(To + time_add)
 		Years <- as.character(unique(c(Year_From,Year_To)))

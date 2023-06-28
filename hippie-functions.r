@@ -9,7 +9,11 @@ dat <- fread(cmd = paste('grep -v Date', test_file))
 
 setnames(dat, sub('\\s+.*$', '', hdr))
 
-# TODO: switch HIPPIE to UTC+1
+# TODO: 
+#   - switch HIPPIE to UTC+1
+#   - capture: 
+#       a) no data (tair, pair) 
+#       b) different values tair (-> always take minimum)
 dat[, c('st', 'et') := {
     Time <- fast_strptime(Date_Time, format = '%Y%m%dT%H%M%SZ', lt = FALSE)
     dT <- median(diff(Time), na.rm = TRUE)
@@ -59,4 +63,6 @@ legend('topleft', legend = c('inside', 'outside left', 'outside right'),
     col = c('orange', '#BBA529', '#BB5B29'), lty = 1, bty = 'n')
 # dev.off()
 
+x11(width = 10)
+plot(hippie[, 'Air_pressure'], col = 'orange')
 

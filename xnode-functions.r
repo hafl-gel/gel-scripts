@@ -1,7 +1,7 @@
 
 # functions
 
-read_zip <- function(zip_dir, .from = NULL, .to = NULL) {
+read_zip <- function(zip_dir, .from = NULL, .to = NULL, use_jq = FALSE) {
     list_all <- unzip(zip_dir, list = TRUE)
     files <- list_all[['Name']][list_all[['Length']] > 0]
     times <- fast_strptime(sub('.*(\\d{14})[.]json$', '\\1', files),
@@ -12,13 +12,35 @@ read_zip <- function(zip_dir, .from = NULL, .to = NULL) {
         , 'TRUE FALSE' = times >= .to
         , 'TRUE TRUE' = seq_along(files)
     )
-    rbindlist(lapply(files[ind_files], function(f) {
-        con <- unz(zip_dir, f)
-        out <- parse_json(readLines(con))
-        close(con)
-        as.data.frame(out[lengths(out) > 0])
-    }), fill = TRUE)
+    if (use_jq) {
+        out <- as.data.table(
+            fromJSON(
+                system(
+                    paste0("unzip -p ", zip_dir, ' | jq -s "."'), 
+                    intern = TRUE
+                ), 
+                flatten = TRUE
+            )
+        )
+        out[ind_files, ]
+    } else {
+        # rbindlist(lapply(files[ind_files], function(f) {
+        #     con <- unz(zip_dir, f)
+        #     out <- parse_json(readLines(con))
+        #     close(con)
+        #     as.data.frame(out[lengths(out) > 0])
+        # }), fill = TRUE)
+        rbindlist(lapply(files[ind_files], function(f) {
+            on.exit(close(con))
+            con <- unz(zip_dir, f)
+            out <- fromJSON(readLines(con), flatten = TRUE)
+            as.data.frame(out)
+        }), fill = TRUE)
+    }
 }
+
+# check availability of jq
+jq_available <- !inherits(system('jq --help', intern = TRUE), 'try-error')
 
 # json format
 # 1 file per minute
@@ -28,6 +50,7 @@ read_zip <- function(zip_dir, .from = NULL, .to = NULL) {
 library(ibts)
 library(jsonlite)
 library(data.table)
+
 
 time_zone <- 'UTC'
 
@@ -83,17 +106,26 @@ is_zip <- grepl('[.]zip$', dirs[in_range])
 # read first directory
 first_dir <- file.path(path_data, dirs[1])
 if (is_zip[1]) {
-    xnode_data[[1]] <- read_zip(first_dir, from, to)
+    xnode_data[[1]] <- read_zip(first_dir, from, to, jq_available)
 } else {
     browser()
     # TODO:
     first_files <- dir(first_dir, pattern = '^xnode', full.names = TRUE)
     # first_entries <- rbindlist(lapply(
 }
-setnames(first_entries, sub('[.]', '_', sub('^[^.]*[.]', '', names(first_entries))))
 
 # read in-between
 if (n_dir > 2) {
+    # loop over directories
+    for (i in seq.int(2, n_dir - 1, 1)) {
+        if (is_zip[i]) {
+            xnode_data[[i]] <- read_zip(file.path(path_data, dirs[i]), 
+                use_jq = jq_available)
+        } else {
+            # TODO:
+            browser()
+        }
+    }
 }
 
 # check last directory
@@ -106,9 +138,10 @@ if (n_dir > 1) {
 # check files in timerange
 files_list <- lapply(unzip(
 
-# read files
-
 # reshape data
+
+# rename
+setnames(first_entries, sub('[.]', '_', sub('^[^.]*[.]', '', names(first_entries))))
 
 # convert to ibts?
 

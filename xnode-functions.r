@@ -159,6 +159,9 @@ setnames(xnode_data, c('value', 'name'), c('ppm', 'gas'))
 # parse time
 xnode_data[, et := fast_strptime(time, format = '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE,
     tz = time_zone)]
+# sort by et
+setorder(xnode_data, et)
+# get st
 xnode_data[, st := {
     dtime <- pmin(diff(et), 60)
     et - c(60, dtime)

@@ -178,6 +178,20 @@ xnode_data[, mgm3 := {
 }]
 
 # simplify?
+if (simplify) {
+    atts <- xnode_data[!is.na(gas), I(list(
+        device_id = unique(device_id),
+        dev_eui = unique(dev_eui),
+        join_eui = unique(join_eui),
+        dev_addr = unique(dev_addr),
+        application_id = unique(application_id),
+        gas = unique(gas),
+        unit = unique(unit)
+        ))]
+    xnode_data <- xnode_data[, .(st, et, humidity, pressure, supplyVoltage, 
+        temperature, ppm, mgm3)]
+    setattr(xnode_data, 'xnode', atts)
+}
 
 # convert to ibts?
 

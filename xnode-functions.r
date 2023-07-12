@@ -153,7 +153,8 @@ if (n_dir > 1) {
 xnode_data <- rbindlist(xnode_list, fill = TRUE, use.names = TRUE)
 
 # rename
-setnames(xnode_data, sub('[.]', '_', sub('^[^.]*[.]', '', names(xnode_data))))
+setnames(xnode_data, sub('^.*[.]', '', names(xnode_data)))
+setnames(xnode_data, c('value', 'name'), c('ppm', 'gas'))
 
 # parse time
 xnode_data[, et := fast_strptime(time, format = '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE,

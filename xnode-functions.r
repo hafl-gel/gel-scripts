@@ -194,4 +194,7 @@ if (simplify) {
 }
 
 # convert to ibts?
+if (as_ibts) {
+    xnode_data <- as.ibts(xnode_data)
+}
 

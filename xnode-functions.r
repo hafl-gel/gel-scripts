@@ -168,6 +168,14 @@ xnode_data[, st := {
 }]
 
 # add mg/m3?
+xnode_data[, mgm3 := {
+    # n_G / n_L * 10^6 = ppm
+    # n_G = m_G / M_G
+    # n_L = p_L * V_L / R / T_L (<- pV=nRT)
+    # m_G / V_L = n_G / n_L * p_L / (R * T_L) * M_G -> M_G in mg/mol...
+    pressure * ppm * 1e-1 / (8.314 * (273.15 + temperature)) * 
+        c('nh3' = 17, 'co2' = 44)[tolower(gas)]
+}]
 
 # simplify?
 

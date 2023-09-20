@@ -76,6 +76,8 @@ jq_available <- !inherits(system('jq --help', intern = TRUE), 'try-error')
 # data structure of folders: year/mont/day
 # file name contains date_time of recording
 
+## 1. test with data ----------------------------------------
+
 library(ibts)
 library(jsonlite)
 library(data.table)

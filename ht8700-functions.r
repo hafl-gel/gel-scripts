@@ -322,3 +322,23 @@ cbind(x[xy[[1]]], y[xy[[2]]])
 
 xy2 <- match_times(t2, t1, 0.05)
 cbind(x[xy2[[2]]], y[xy2[[1]]])
+
+merge_data <- function(basis, draw) {
+    # times
+    t_basis <- basis[, as.numeric(Time)]
+    t_draw <- draw[, as.numeric(Time)]
+    t0 <- t_basis[1]
+    # ~ 1/Hz
+    d_t <- median(diff(t_basis))
+    # get matching indices
+    indices <- match_times(t_basis - t0, t_draw - t0, d_t)
+    # bind together
+    out <- cbind(basis[indices[[1]]], draw[indices[[2]]][, Time := NULL])
+    # add Hz
+    out[, Hz := round(1 / d_t, -1)]
+    out
+}
+
+m1 <- merge_data(x, y)
+m2 <- merge_data(y, x)
+

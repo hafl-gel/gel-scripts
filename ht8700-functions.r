@@ -62,6 +62,10 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     }
     # remove NA lines that come from conversion
     out <- na.omit(out)
+    if (out[, .N == 0]) {
+        cat('no valid data\n')
+        return(NULL)
+    }
     # be verbose and print sonic names:
     sonic_label <- out[, sub('[\x01-\x1A]', '', unique(V2))]
     sonic_label <- sonic_label[!(sonic_label == '')]
@@ -236,22 +240,10 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
     ### set Output names and order
     # setnames(out, c("u", "v", "w", "T", "sonic", "Time","Hz"))
     # setcolorder(out,c("Time","Hz","u","v","w","T", "sonic"))
+    cat('done\n')
     # return
     out
 }
-
-# file_path <- '~/repos/3_Scripts/5_shellSonic/test_data/ht8700_sonic-a_20231016_155256.gz'
-file_path <- '~/repos/3_Scripts/5_shellSonic/test_data/ht8700_sonic-a_20231017_000000.gz'
-x <- read_ht8700(file_path)
-sonic_path <- '~/repos/3_Scripts/5_shellSonic/test_data/data_sonic-a_20231017_000000.gz'
-y <- read_windmaster_ascii(sonic_path)
-
-par(mfrow = c(3, 2))
-x[, plot(Time, V3, ylim = c(300, 400))]
-x[, plot(Time, V4)]
-x[, plot(Time, V6)]
-x[, plot(Time, V7)]
-y[, plot(Time, T - 273.15, ylim = c(14, 17) + 0.5)]
 
 # merge sonic & ht8700
 library(Rcpp)
@@ -302,27 +294,6 @@ List match_times(NumericVector time1, NumericVector time2, double deltat)
 }
 ')
 
-t1 <- x[, as.numeric(Time)]
-t2 <- y[, as.numeric(Time)]
-
-t1s <- t1[1:10]
-t2s <- t2[1:10]
-
-xys <- match_times(t1s, t2s, 0.1)
-match_times(t2s, t1s, 0.1)
-
-T0 <- x[, Time[1]]
-t1s - as.numeric(T0)
-t2s - as.numeric(T0)
-x[xys[[1]], Time - T0]
-y[xys[[2]], Time - T0]
-
-xy <- match_times(t1, t2, 0.1)
-cbind(x[xy[[1]]], y[xy[[2]]])
-
-xy2 <- match_times(t2, t1, 0.05)
-cbind(x[xy2[[2]]], y[xy2[[1]]])
-
 merge_data <- function(basis, draw) {
     # times
     t_basis <- basis[, as.numeric(Time)]
@@ -339,6 +310,34 @@ merge_data <- function(basis, draw) {
     out
 }
 
-m1 <- merge_data(x, y)
-m2 <- merge_data(y, x)
+# # file_path <- '~/repos/3_Scripts/5_shellSonic/test_data/ht8700_sonic-a_20231016_155256.gz'
+# file_path <- '~/repos/3_Scripts/5_shellSonic/test_data/ht8700_sonic-a_20231017_000000.gz'
+# x <- read_ht8700(file_path)
+# sonic_path <- '~/repos/3_Scripts/5_shellSonic/test_data/data_sonic-a_20231017_000000.gz'
+# y <- read_windmaster_ascii(sonic_path)
+# par(mfrow = c(3, 2))
+# x[, plot(Time, V3, ylim = c(300, 400))]
+# x[, plot(Time, V4)]
+# x[, plot(Time, V6)]
+# x[, plot(Time, V7)]
+# y[, plot(Time, T - 273.15, ylim = c(14, 17) + 0.5)]
 
+# m1 <- merge_data(x, y)
+# m2 <- merge_data(y, x)
+
+files_ht <- dir('~/repos/3_Scripts/5_shellSonic/test_data', pattern = '^ht8700', full.names = TRUE)
+files_sonic <- dir('~/repos/3_Scripts/5_shellSonic/test_data', pattern = '^data_sonic-a', full.names = TRUE)
+
+ht_data <- rbindlist(lapply(files_ht, read_ht8700))
+sonic_data <- rbindlist(lapply(files_sonic, read_windmaster_ascii))
+
+
+m1 <- merge_data(ht_data, sonic_data)
+
+par(mfrow = c(3, 2))
+m1[, plot(Time, V3, ylim = c(300, 400))]
+m1[, plot(Time, V4)]
+m1[, plot(Time, V6)]
+m1[, plot(Time, V7)]
+m1[, plot(Time, T - 273, ylim = c(14, 22))]
+# m1[, plot(Time, sqrt(u^2 + v^2 + w^2))]

@@ -241,9 +241,9 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
 }
 
 # file_path <- '~/repos/3_Scripts/5_shellSonic/test_data/ht8700_sonic-a_20231016_155256.gz'
-# file_path <- '~/repos/3_Scripts/5_shellSonic/test_data/ht8700_sonic-a_20231017_000000.gz'
+file_path <- '~/repos/3_Scripts/5_shellSonic/test_data/ht8700_sonic-a_20231017_000000.gz'
 x <- read_ht8700(file_path)
-# sonic_path <- '~/repos/3_Scripts/5_shellSonic/test_data/data_sonic-a_20231017_000000.gz'
+sonic_path <- '~/repos/3_Scripts/5_shellSonic/test_data/data_sonic-a_20231017_000000.gz'
 y <- read_windmaster_ascii(sonic_path)
 
 par(mfrow = c(3, 2))
@@ -253,3 +253,72 @@ x[, plot(Time, V6)]
 x[, plot(Time, V7)]
 y[, plot(Time, T - 273.15, ylim = c(14, 17) + 0.5)]
 
+# merge sonic & ht8700
+library(Rcpp)
+
+sourceCpp(code = '
+#include <Rcpp.h>
+using namespace Rcpp;
+// [[Rcpp::export]]
+List match_times(NumericVector time1, NumericVector time2, double deltat)
+{
+    int len1 = time1.size();
+    int len2 = time2.size();
+    // iterator for time2
+    int j = 0;
+    // time diffs
+    double dj;
+    double dj_1;
+    // loop over time1 only
+	IntegerVector index1 = seq_len(len1);
+    IntegerVector index2(len1);
+    // loop over time1
+    for (int i = 0; i < len1; i++) {
+        // advance time2 index until time2[j] > time1[i] or j == len2 - 1
+        while (time2[j] < time1[i] && j < len2 - 1) {
+            j++;
+        }
+        // check j
+        dj = time2[j] - time1[i];
+        if (j == 0) {
+            if (dj <= deltat) {
+                index2[i] = j + 1;
+            }
+        } else {
+            // check j and j-1
+            dj_1 = time1[i] - time2[j - 1];
+            if (dj_1 <= dj && std::abs(dj_1) <= deltat) {
+                index2[i] = j;
+            } else if (std::abs(dj) <= deltat) {
+                index2[i] = j + 1;
+            }
+        }
+        // check if index2[i] is 0
+        if (index2[i] == 0) {
+            index1[i] = 0;
+        }
+    }
+    return List::create(index1, index2);
+}
+')
+
+t1 <- x[, as.numeric(Time)]
+t2 <- y[, as.numeric(Time)]
+
+t1s <- t1[1:10]
+t2s <- t2[1:10]
+
+xys <- match_times(t1s, t2s, 0.1)
+match_times(t2s, t1s, 0.1)
+
+T0 <- x[, Time[1]]
+t1s - as.numeric(T0)
+t2s - as.numeric(T0)
+x[xys[[1]], Time - T0]
+y[xys[[2]], Time - T0]
+
+xy <- match_times(t1, t2, 0.1)
+cbind(x[xy[[1]]], y[xy[[2]]])
+
+xy2 <- match_times(t2, t1, 0.05)
+cbind(x[xy2[[2]]], y[xy2[[1]]])

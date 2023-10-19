@@ -200,6 +200,14 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
     # if(out[, V6[1]] != "M"){
     #     stop("Units of recorded data not compatible with evaluation script! Column 6 should contain 'M' for m/s!")
     # }
+    if (ncol(out) != 20) {
+        cat('file contains invalid data!\n')
+        return(NULL)
+    }
+    if (out[, .N == 0]) {
+        cat('file empty\n')
+        return(NULL)
+    }
     # fix time etc.
     out[, Time := fast_strptime(paste(Date, V1), lt = FALSE, format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")]
     # out[, c(
@@ -328,6 +336,11 @@ decode_alarm <- function(char, upper = FALSE) {
 
 upper.alarms <- x[, unique(V18)]
 lapply(upper.alarms, decode_alarm, upper = TRUE)
+
+file_path <- dir('~/repos/3_Scripts/5_shellSonic/test_data', pattern = 'ht8700_sonic-a_20231018', full.names = TRUE)
+x <- rbindlist(lapply(file_path, read_ht8700))
+
+lapply(x[, unique(V18)], decode_alarm, upper = TRUE)
 
 # # file_path <- '~/repos/3_Scripts/5_shellSonic/test_data/ht8700_sonic-a_20231016_155256.gz'
 # file_path <- '~/repos/3_Scripts/5_shellSonic/test_data/ht8700_sonic-a_20231017_000000.gz'

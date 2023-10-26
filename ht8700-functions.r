@@ -318,11 +318,6 @@ merge_data <- function(basis, draw) {
     out
 }
 
-file_path <- dir('~/repos/3_Scripts/5_shellSonic/test_data', pattern = 'ht8700_sonic-b_20231018', full.names = TRUE)
-x <- rbindlist(lapply(file_path, read_ht8700))
-
-char <- 'C00C'
-
 decode_alarm <- function(char, upper = FALSE) {
     num <- as.integer(as.hexmode(char))
     if (num == 0) return(0)
@@ -334,42 +329,4 @@ decode_alarm <- function(char, upper = FALSE) {
     which(out == 1L) + as.integer(upper) * 16
 }
 
-upper.alarms <- x[, unique(V18)]
-lapply(upper.alarms, decode_alarm, upper = TRUE)
 
-file_path <- dir('~/repos/3_Scripts/5_shellSonic/test_data', pattern = 'ht8700_sonic-a_20231018', full.names = TRUE)
-x <- rbindlist(lapply(file_path, read_ht8700))
-
-lapply(x[, unique(V18)], decode_alarm, upper = TRUE)
-
-# # file_path <- '~/repos/3_Scripts/5_shellSonic/test_data/ht8700_sonic-a_20231016_155256.gz'
-# file_path <- '~/repos/3_Scripts/5_shellSonic/test_data/ht8700_sonic-a_20231017_000000.gz'
-# x <- read_ht8700(file_path)
-# sonic_path <- '~/repos/3_Scripts/5_shellSonic/test_data/data_sonic-a_20231017_000000.gz'
-# y <- read_windmaster_ascii(sonic_path)
-# par(mfrow = c(3, 2))
-# x[, plot(Time, V3, ylim = c(300, 400))]
-# x[, plot(Time, V4)]
-# x[, plot(Time, V6)]
-# x[, plot(Time, V7)]
-# y[, plot(Time, T - 273.15, ylim = c(14, 17) + 0.5)]
-
-# m1 <- merge_data(x, y)
-# m2 <- merge_data(y, x)
-
-# files_ht <- dir('~/repos/3_Scripts/5_shellSonic/test_data', pattern = '^ht8700', full.names = TRUE)
-# files_sonic <- dir('~/repos/3_Scripts/5_shellSonic/test_data', pattern = '^data_sonic-a', full.names = TRUE)
-
-# ht_data <- rbindlist(lapply(files_ht, read_ht8700))
-# sonic_data <- rbindlist(lapply(files_sonic, read_windmaster_ascii))
-
-
-# m1 <- merge_data(ht_data, sonic_data)
-
-# par(mfrow = c(3, 2))
-# m1[, plot(Time, V3, ylim = c(300, 400))]
-# m1[, plot(Time, V4)]
-# m1[, plot(Time, V6)]
-# m1[, plot(Time, V7)]
-# m1[, plot(Time, T - 273, ylim = c(14, 22))]
-# # m1[, plot(Time, sqrt(u^2 + v^2 + w^2))]

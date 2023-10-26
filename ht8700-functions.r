@@ -315,6 +315,7 @@ List decal(IntegerVector x, IntegerVector y)
     int len1 = x.size();
     IntegerVector index2(len1);
     List out = List(len1);
+    LogicalMatrix mat(len1, 32);
     // loop over x
     for (int i = 0; i < len1; i++) {
         if (x[i] == 0) {
@@ -326,11 +327,13 @@ List decal(IntegerVector x, IntegerVector y)
             int a = x[i];
             for (int j = 15; j >= 0; j--) {
                 int p = std::pow(2, j);
-                if (p >= a) {
+                if (a >= p) {
                     // add value of j + 1
                     l.push_front(j + 1);
+                    // update mat
+                    mat(i, j) = TRUE;
                     // update a
-                    int a = a % p;
+                    a = a % p;
                 }
             }
             // assign vector to list entry
@@ -346,17 +349,21 @@ List decal(IntegerVector x, IntegerVector y)
             int a = y[i];
             for (int j = 15; j >= 0; j--) {
                 int p = std::pow(2, j);
-                if (p >= a) {
+                if (a >= p) {
                     // add value of j + 1 + 16
                     l.push_front(j + 17);
+                    // update mat
+                    mat(i, j + 16) = TRUE;
                     // update a
-                    int a = a % p;
+                    a = a % p;
                 }
             }
             // assign vector to list entry
             out[i] = l;
         }
     }
+    // add matrix attribute
+    out.attr("mat") = mat;
     return out;
 }
 ')
@@ -369,7 +376,9 @@ decode_alarm <- function(lower, upper) {
     }
     out <- decal(lo, up)
     if (length(lo) == 1) {
+        att <- attr(out, 'mat')
         out <- unlist(out)
+        attr(out, 'mat') <- att
     }
     out
 }

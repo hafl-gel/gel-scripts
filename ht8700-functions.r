@@ -310,13 +310,11 @@ sourceCpp(code = '
 #include <Rcpp.h>
 using namespace Rcpp;
 // [[Rcpp::export]]
-List decal(IntegerVector x, bool upper)
+List decal(IntegerVector x, IntegerVector y)
 {
     int len1 = x.size();
     IntegerVector index2(len1);
     List out = List(len1);
-    // upper or lower bit?
-    int add = upper ? 17 : 1;
     // loop over x
     for (int i = 0; i < len1; i++) {
         if (x[i] == 0) {
@@ -330,7 +328,27 @@ List decal(IntegerVector x, bool upper)
                 int p = std::pow(2, j);
                 if (p >= a) {
                     // add value of j + 1
-                    l.push_front(j + add);
+                    l.push_front(j + 1);
+                    // update a
+                    int a = a % p;
+                }
+            }
+            // assign vector to list entry
+            out[i] = l;
+        }
+    }
+    // loop over y
+    for (int i = 0; i < len1; i++) {
+        if (y[i] != 0) {
+            // create empty vector
+            IntegerVector l;
+            // loop
+            int a = y[i];
+            for (int j = 15; j >= 0; j--) {
+                int p = std::pow(2, j);
+                if (p >= a) {
+                    // add value of j + 1 + 16
+                    l.push_front(j + 17);
                     // update a
                     int a = a % p;
                 }
@@ -343,10 +361,14 @@ List decal(IntegerVector x, bool upper)
 }
 ')
 
-decode_alarm <- function(char, upper = FALSE) {
-    num <- as.integer(as.hexmode(char))
-    out <- decal(num, as.logical(upper))
-    if (length(num) == 1) {
+decode_alarm <- function(lower, upper) {
+    lo <- as.integer(as.hexmode(lower))
+    up <- as.integer(as.hexmode(upper))
+    if (length(lo) != length(up)) {
+        stop('arguments "lower" and "upper" must be of equal lengths!')
+    }
+    out <- decal(lo, up)
+    if (length(lo) == 1) {
         out <- unlist(out)
     }
     out

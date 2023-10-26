@@ -210,44 +210,32 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
     }
     # fix time etc.
     out[, Time := fast_strptime(paste(Date, V1), lt = FALSE, format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")]
-    # out[, c(
-    #     # remove columns
-    #     'V1', 'V2', 'V6', 'V8', 'V9',
-    #     # add columns
-    #     'sonic', 'Time', 'Hz',
-    #     # replace °C by K
-    #     'V7'
-    #     ) := {
-    #     # set times correctly
-    #     st.dec <- fast_strptime(paste(Date, V1), lt = FALSE, format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")
-    #     # get Hz (faster than as.factor(sub('[.].*', '', V1)) !
-    #     Hz <- round(median(tabulate(trunc(as.numeric(st.dec) - as.numeric(st.dec[1])))), -1)
-    #     if (
-    #         hour(st.dec[.N]) == 0 && 
-    #         (hour(st.dec[1]) != 0 || .N > (3 * Hz))
-    #     ) {
-    #         ## fix last 3 * Hz entries, where hour == 0
-    #         sub.st <- st.dec[.N - seq_len(3 * Hz) + 1]
-    #         hr <- hour(sub.st)
-    #         st.dec[.N - seq_len(3 * Hz) + 1] <- fifelse(hr == 0, sub.st + 24 * 3600, sub.st)
-    #     }
-    #     # return list
-    #     list(
-    #         # remove columns
-    #         NULL, NULL, NULL, NULL, NULL,
-    #         # sonic
-    #         sonic_label,
-    #         # Time
-    #         st.dec,
-    #         # Hz
-    #         Hz,
-    #         # T
-    #         V7 + 273.15
-    #         )
-    # }]
-    ### set Output names and order
-    # setnames(out, c("u", "v", "w", "T", "sonic", "Time","Hz"))
-    # setcolorder(out,c("Time","Hz","u","v","w","T", "sonic"))
+    # fix column names
+    setnames(out,
+        c(
+            'tstring', # column 1
+            'sn', # column 2
+            'nh3_ppb', # column 3
+            'nh3_ugm3', # column 4
+            'rh_int', # column 5
+            'temp_int', # column 6
+            'temp_amb', # column 7
+            'press_amb', # column 8
+            'oss', # column 9
+            'peak_pos', # column 10
+            'temp_leaser_chip', # column 11
+            'temp_leaser_housing', # column 12
+            'temp_mct', # column 13
+            'temp_mct_housing', # column 14
+            'laser_current', # column 15
+            'Ref_Road_2F', # column 16
+            'alarm_lower_bit', # column 17
+            'alarm_upper_bit', # column 18
+            'cleaning_flag', # column 19
+            'notused', # column 20
+            'Time' # column 21
+        )
+    )
     cat('done\n')
     # return
     out

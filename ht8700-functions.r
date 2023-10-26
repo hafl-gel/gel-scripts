@@ -306,15 +306,49 @@ merge_data <- function(basis, draw) {
     out
 }
 
+sourceCpp(code = '
+#include <Rcpp.h>
+using namespace Rcpp;
+// [[Rcpp::export]]
+List decal(IntegerVector x, bool upper)
+{
+    int len1 = x.size();
+    IntegerVector index2(len1);
+    List out = List(len1);
+    // upper or lower bit?
+    int add = upper ? 17 : 1;
+    // loop over x
+    for (int i = 0; i < len1; i++) {
+        if (x[i] == 0) {
+            out[i] = 0;
+        } else {
+            // create empty vector
+            IntegerVector l;
+            // loop
+            int a = x[i];
+            for (int j = 15; j >= 0; j--) {
+                int p = std::pow(2, j);
+                if (p >= a) {
+                    // add value of j + 1
+                    l.push_front(j + add);
+                    // update a
+                    int a = a % p;
+                }
+            }
+            // assign vector to list entry
+            out[i] = l;
+        }
+    }
+    return out;
+}
+')
+
 decode_alarm <- function(char, upper = FALSE) {
     num <- as.integer(as.hexmode(char))
-    if (num == 0) return(0)
-    out <- rep(0, 16)
-    for (i in 15:0) {
-        out[i + 1] <- floor(num / (2 ^ i))
-        num <- num - out[i + 1] * (2 ^ i)
+    out <- decal(num, as.logical(upper))
+    if (length(num) == 1) {
+        out <- unlist(out)
     }
-    which(out == 1L) + as.integer(upper) * 16
+    out
 }
-
 

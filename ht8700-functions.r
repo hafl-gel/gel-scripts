@@ -383,3 +383,33 @@ decode_alarm <- function(lower, upper) {
     out
 }
 
+get_alarms <- function(x, add = FALSE, simple = !add) {
+    out <- copy(x)
+    add_alarms(out, simple = simple)
+    if (!add) {
+        if (simple) {
+            out <- out[, alarm_codes]
+        } else {
+            out <- out[, alarm_codes:ac_32]
+        }
+    }
+    out
+}
+
+add_alarms <- function(x, simple = FALSE) {
+    if (simple) {
+        x[, alarm_codes := {
+            alarms <- decode_alarm(alarm_lower_bit, alarm_upper_bit)
+            sapply(alarms, paste, collapse = ',')
+        }]
+    } else {
+        x[, c('alarm_codes', paste0('ac_', 1:32)) := {
+            alarms <- decode_alarm(alarm_lower_bit, alarm_upper_bit)
+            data.table(
+                sapply(alarms, paste, collapse = ','),
+                attr(alarms, 'mat')
+            )
+        }]
+    }
+    invisible(x)
+}

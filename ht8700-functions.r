@@ -374,7 +374,11 @@ decode_alarm <- function(lower, upper) {
     if (length(lo) != length(up)) {
         stop('arguments "lower" and "upper" must be of equal lengths!')
     }
-    decal(lo, up)
+    nms <- paste(lower, upper, sep = '-')
+    out <- decal(lo, up)
+    names(out) <- nms
+    rownames(attr(out, 'mat')) <- nms
+    out
 }
 
 get_alarms <- function(x, add = FALSE, simple = !add) {

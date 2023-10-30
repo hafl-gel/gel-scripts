@@ -374,13 +374,7 @@ decode_alarm <- function(lower, upper) {
     if (length(lo) != length(up)) {
         stop('arguments "lower" and "upper" must be of equal lengths!')
     }
-    out <- decal(lo, up)
-    if (length(lo) == 1) {
-        att <- attr(out, 'mat')
-        out <- unlist(out)
-        attr(out, 'mat') <- att
-    }
-    out
+    decal(lo, up)
 }
 
 get_alarms <- function(x, add = FALSE, simple = !add) {
@@ -397,19 +391,21 @@ get_alarms <- function(x, add = FALSE, simple = !add) {
 }
 
 add_alarms <- function(x, simple = FALSE) {
+    x[, alarm_codes := '']
     if (simple) {
         x[, alarm_codes := {
-            alarms <- decode_alarm(alarm_lower_bit, alarm_upper_bit)
+            alarms <- decode_alarm(.BY[['alarm_lower_bit']], .BY[['alarm_upper_bit']])
             sapply(alarms, paste, collapse = ',')
-        }]
+        }, by = .(alarm_lower_bit, alarm_upper_bit)]
     } else {
+        x[, paste0('ac_', 1:32) := FALSE]
         x[, c('alarm_codes', paste0('ac_', 1:32)) := {
-            alarms <- decode_alarm(alarm_lower_bit, alarm_upper_bit)
-            data.table(
+            alarms <- decode_alarm(.BY[['alarm_lower_bit']], .BY[['alarm_upper_bit']])
+            c(
                 sapply(alarms, paste, collapse = ','),
-                attr(alarms, 'mat')
+                as.list(attr(alarms, 'mat'))
             )
-        }]
+        }, by = .(alarm_lower_bit, alarm_upper_bit)]
     }
     invisible(x)
 }

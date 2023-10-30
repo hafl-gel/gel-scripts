@@ -145,9 +145,7 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
 	### read File
     out <- try(
         fread(FilePath, encoding = 'UTF-8', header = FALSE, fill = TRUE, 
-            blank.lines.skip = TRUE, na.strings = '999.99', 
-            # select = 1:9,
-            showProgress = FALSE), 
+            blank.lines.skip = TRUE, showProgress = FALSE), 
         silent = TRUE)
     # check if file is empty
 	if(inherits(out, 'try-error')){
@@ -159,47 +157,9 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
         }
 		return(NULL)
 	}
-    # select valid V9 only
-    # out <- out[grepl('^[\x01-\x1A]', V9)]
-    # check which columns to convert columns if necessary
-    # vnums <- paste0('V', c(3, 4, 5, 7))
-    # is.char <- out[, sapply(.SD, is.character), .SDcols = vnums]
-    # convert to numeric
-    # if (any(is.char)) {
-    #     op <- getOption('show.error.messages')
-    #     options(show.error.messages = FALSE)
-    #     on.exit(options(show.error.messages = op))
-    #     check <- try(out[, vnums[is.char] := {
-    #         lapply(.SD, as.numeric)
-    #     }, .SDcols = vnums[is.char]])
-    #     if (inherits(check, 'try-error')) {
-    #         # remove multibyte string
-    #         ind <- out[, Reduce('&', lapply(.SD, grepl, pattern = '^[-+]?[0-9]+[.][0-9]+$')), .SDcols = vnums[is.char]]
-    #         out <- out[ind, ]
-    #         # try to convert again
-    #         out[, vnums[is.char] := {
-    #             lapply(.SD, as.numeric)
-    #         }, .SDcols = vnums[is.char]]
-    #     }
-    #     options(show.error.messages = op)
-    #     on.exit()
-    # }
     # remove NA lines that come from conversion
     out <- na.omit(out)
-    # be verbose and print sonic names:
-    # sonic_label <- out[, sub('[\x01-\x1A]', '', unique(V2))]
-    # sonic_label <- sonic_label[!(sonic_label == '')]
-    # if (length(sonic_label) == 0) stop('sonic label not available!')
-    # if (length(sonic_label) > 1) stop('more than one unique sonic label!')
-    # cat(paste0("data recorded by sonic-", tolower(sonic_label), "\n"))
-    # sonic_file <- sub("data_(.*)_[0-9]{8}_[0-9]{6}([.]gz)?$", "\\1", bn)
-    # if(sonic_label != toupper(sub("sonic-", "", sonic_file))){
-    #     warning(paste0("Sonic label '", sonic_label, "', and hostname '", sonic_file, "' don't match!"), call. = FALSE)
-    # }
-    # check units
-    # if(out[, V6[1]] != "M"){
-    #     stop("Units of recorded data not compatible with evaluation script! Column 6 should contain 'M' for m/s!")
-    # }
+    # check column number
     if (ncol(out) != 20) {
         cat('file contains invalid data!\n')
         return(NULL)
@@ -208,6 +168,12 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
         cat('file empty\n')
         return(NULL)
     }
+    # convert column types
+    char_cols <- paste0('V', c(1, 2, 17, 18, 20))
+    num_cols <- paste0('V', 3:16)
+    suppressWarnings(out[, (char_cols) := lapply(.SD, as.character), .SDcols = char_cols])
+    suppressWarnings(out[, (num_cols) := lapply(.SD, as.numeric), .SDcols = num_cols])
+    suppressWarnings(out[, V19 := as.integer(V19)])
     # fix time etc.
     out[, Time := fast_strptime(paste(Date, V1), lt = FALSE, format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")]
     # fix column names

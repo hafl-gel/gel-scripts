@@ -320,6 +320,9 @@ List decal(IntegerVector x, IntegerVector y)
             }
         }
         // assign vector to list entry
+        if (l.size() == 0) {
+            l = 0;
+        }
         out[i] = l;
     }
     // add matrix attribute

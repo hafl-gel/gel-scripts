@@ -125,9 +125,7 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     out
 }
 
-# read_windmaster_ascii("~/repos/3_Scripts/5_shellSonic/test_data/data_sonicb_20210120_170910")
-
-# TODO: read HT8700 data
+# read HT8700 data
 read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
 	### get Date
 	bn <- basename(FilePath)
@@ -256,6 +254,9 @@ List match_times(NumericVector time1, NumericVector time2, double deltat)
 }
 ')
 
+# merge sonic & ht8700 data based on time
+#   -> output contains the same times as 'basis'
+#   -> values from 'draw' will be repeated or dropped to match 'basis' times
 merge_data <- function(basis, draw) {
     # times
     t_basis <- basis[, as.numeric(Time)]
@@ -334,6 +335,7 @@ List decal(IntegerVector x, IntegerVector y)
 }
 ')
 
+# helper function to decode alarm codes
 decode_alarm <- function(lower, upper) {
     lo <- as.integer(as.hexmode(lower))
     up <- as.integer(as.hexmode(upper))
@@ -347,6 +349,9 @@ decode_alarm <- function(lower, upper) {
     out
 }
 
+# x: raw ht8700 data
+# add: FALSE returns alarm codes only, TRUE returns all ht data
+# simple: TRUE only provide 1 column with codes, FALSE 1 column per code containing TRUE/FALSE values
 get_alarms <- function(x, add = FALSE, simple = !add) {
     out <- copy(x)
     add_alarms(out, simple = simple)
@@ -360,6 +365,7 @@ get_alarms <- function(x, add = FALSE, simple = !add) {
     out
 }
 
+# same as `get_alarms()` but modifies data.table (ht data) in-place
 add_alarms <- function(x, simple = FALSE) {
     x[, alarm_codes := '']
     if (simple) {
@@ -379,3 +385,4 @@ add_alarms <- function(x, simple = FALSE) {
     }
     invisible(x)
 }
+

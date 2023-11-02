@@ -285,33 +285,9 @@ List decal(IntegerVector x, IntegerVector y)
     LogicalMatrix mat(len1, 32);
     // loop over x
     for (int i = 0; i < len1; i++) {
-        if (x[i] == 0) {
-            out[i] = 0;
-        } else {
-            // create empty vector
-            IntegerVector l;
-            // loop
-            int a = x[i];
-            for (int j = 15; j >= 0; j--) {
-                int p = std::pow(2, j);
-                if (a >= p) {
-                    // add value of j + 1
-                    l.push_front(j + 1);
-                    // update mat
-                    mat(i, j) = TRUE;
-                    // update a
-                    a = a % p;
-                }
-            }
-            // assign vector to list entry
-            out[i] = l;
-        }
-    }
-    // loop over y
-    for (int i = 0; i < len1; i++) {
+        // create empty vector
+        IntegerVector l;
         if (y[i] != 0) {
-            // create empty vector
-            IntegerVector l;
             // loop
             int a = y[i];
             for (int j = 15; j >= 0; j--) {
@@ -325,9 +301,26 @@ List decal(IntegerVector x, IntegerVector y)
                     a = a % p;
                 }
             }
-            // assign vector to list entry
-            out[i] = l;
         }
+        if (x[i] == 0) {
+            out[i] = 0;
+        } else {
+            // loop
+            int a = x[i];
+            for (int j = 15; j >= 0; j--) {
+                int p = std::pow(2, j);
+                if (a >= p) {
+                    // add value of j + 1
+                    l.push_front(j + 1);
+                    // update mat
+                    mat(i, j) = TRUE;
+                    // update a
+                    a = a % p;
+                }
+            }
+        }
+        // assign vector to list entry
+        out[i] = l;
     }
     // add matrix attribute
     out.attr("mat") = mat;

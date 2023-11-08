@@ -141,10 +141,11 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
     cat("File:", path.expand(FilePath), "- ")
 	Date <- gsub("^ht8700_.*_([0-9]{8})_.*", "\\1", bn)
 	### read File
-    out <- try(
+    suppressWarnings(out <- try(
         fread(FilePath, encoding = 'UTF-8', header = FALSE, fill = TRUE, 
+            sep = ',', 
             blank.lines.skip = TRUE, showProgress = FALSE), 
-        silent = TRUE)
+        silent = TRUE))
     # check if file is empty
 	if(inherits(out, 'try-error')){
         if (any(grepl('File is empty', out))) {
@@ -155,15 +156,25 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
         }
 		return(NULL)
 	}
-    # remove NA lines that come from conversion
-    out <- na.omit(out)
     # check column number
-    if (ncol(out) != 20) {
-        cat('file contains invalid data!\n')
-        return(NULL)
-    }
-    if (out[, .N == 0]) {
+    if (ncol(out) > 20) {
+        # remove extra columns
+        suppressWarnings(out <- out[, V1:V20])
+        # check for id in second column
+        suppressWarnings(out <- out[grepl('\\d{4}', V2)])
+        # check for 0 in V20
+        suppressWarnings(out <- out[as.integer(V20) == 0L])
+        # check for 0 or 1 in V19
+        suppressWarnings(out <- out[as.integer(V19) %in% c(0L, 1L)])
+        if (out[, .N] == 0) {
+            cat('file contains no valid data!\n')
+            return(NULL)
+        }
+    } else if (out[, .N == 0]) {
         cat('file empty\n')
+        return(NULL)
+    } else if (ncol(out) < 20) {
+        cat('file contains no valid data!\n')
         return(NULL)
     }
     # convert column types
@@ -172,6 +183,17 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
     suppressWarnings(out[, (char_cols) := lapply(.SD, as.character), .SDcols = char_cols])
     suppressWarnings(out[, (num_cols) := lapply(.SD, as.numeric), .SDcols = num_cols])
     suppressWarnings(out[, V19 := as.integer(V19)])
+    # check hexmode ok lower bit
+    suppressWarnings(out <- out[!is.na(strtoi(V17, 16L))])
+    # check hexmode ok upper bit
+    suppressWarnings(out <- out[!is.na(strtoi(V18, 16L))])
+    # remove NA lines that come from conversion
+    out <- na.omit(out, cols = 1:20)
+    # check if empty again
+    if (out[, .N == 0]) {
+        cat('file empty\n')
+        return(NULL)
+    }
     # fix time etc.
     out[, Time := fast_strptime(paste(Date, V1), lt = FALSE, format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")]
     # fix column names

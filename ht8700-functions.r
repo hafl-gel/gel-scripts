@@ -446,3 +446,134 @@ add_alarms <- function(x, simple = FALSE) {
     invisible(x)
 }
 
+
+# issue with git due to large files => store only latest version locally,
+# other versions are stored on a remote file system
+# save file locally with correct name
+# save with hash as name on "remote" drive
+# add 2 functions to read (incl. check) and write
+# add sha1 as attribute to object
+# library to serialize R data to files
+library(qs)
+# library to hash R object
+library(digest)
+
+# main function to write "hashed" files
+write_hashed <- function(x, file_path, remote_path = getOption('remote_path'), ...) {
+    # get file name
+    file_name <- basename(file_path)
+    # add .hashed to filename
+    file_name <- sub('([.]hashed)?$', '.hashed', file_name)
+    # get local path
+    local_path <- dirname(file_path)
+    # check directories
+    local_path <- check_path(local_path)
+    if (is.null(remote_path)) {
+        stop('argument "remote_path" is missing!')
+    }
+    remote_path <- check_path(remote_path)
+    # add hash directory to local
+    dir.create(file.path(local_path, '.hash'), showWarnings = FALSE)
+    # add file hash
+    add_hash(x)
+    # save file on remote
+    qs::qsave(x, file.path(remote_path, get_hash(x)), preset = 'fast')
+    # save hash locally
+    writeLines(get_hash(x), file.path(local_path, '.hash', file_name))
+    # save file locally
+    write_local(x, file.path(local_path, file_name), ...)
+    invisible(TRUE)
+}
+# main function to read "hashed" files
+read_hashed <- function(file_path, remote_path = getOption('remote_path')) {
+    # add .hashed to filename
+    file_path <- sub('([.]hashed)?$', '.hashed', file_path)
+    # check if file exists
+    if (!file.exists(file_path)) stop('No file available under "', file_path, '"')
+    # get local path
+    local_path <- dirname(file_path)
+    # check local directory
+    local_path <- check_path(local_path)
+    # get file name
+    file_name <- basename(file_path)
+    # check if .hash folder exists
+    if (dir.exists(file.path(local_path, '.hash'))) {
+        # get repo hash
+        hash_repo <- readLines(file.path(local_path, '.hash', file_name), n = 1L)
+        # get hash from local file: NULL -> file is missing
+        hash_file <- read_local(file_path, hash_only = TRUE)
+        # check file status
+        update_file <- !is.null(hash_file) && hash_repo != hash_file
+    } else {
+        warning('.hash folder is missing cannot check local file status')
+        update_file <- FALSE
+    }
+    # update local file
+    if (update_file) {
+        if (is.null(remote_path)) {
+            stop('argument "remote_path" is missing!')
+        }
+        remote_path <- check_path(remote_path)
+        cat('updating local file from remote\n')
+        # TODO:
+        # read with qread from remote
+        out <- alloc.col(qread(file.path(remote_path, hash_repo)))
+        # save to local system
+        write_local(out)
+        # return remote
+        out
+    } else {
+        # return local
+        read_local(file_path)
+    }
+}
+
+## helper functions
+# sha1 from list of first time, last time, .N, names
+hash <- function(x) {
+    x[, digest::sha1(
+        list(
+            # start
+            Time[1],
+            # end
+            Time[.N],
+            # .N
+            .N,
+            # names
+            names(x)
+        )
+    )]
+}
+add_hash <- function(x) setattr(x, 'hash', hash(x))
+get_hash <- function(x) attr(x, 'hash')
+check_path <- function(path) {
+    path <- normalizePath(path, mustWork = FALSE)
+    if (!dir.exists(path)) {
+        stop("Can't access directory \"", path, '"')
+    }
+    path
+}
+write_local <- function(dat, path, ...) {
+    dat_ser <- qs::qserialize(dat, ...)
+    con <- file(path, open = 'wb')
+    on.exit(close(con))
+    # write hash
+    writeBin(get_hash(dat), con)
+    # write number of bytes
+    writeBin(length(dat_ser), con)
+    # write serialized dat
+    writeBin(dat_ser, con)
+}
+read_local <- function(path, hash_only = FALSE) {
+    # read local file
+    con <- file(path, open = 'rb')
+    on.exit(close(con))
+    # read hash
+    hash_file <- readBin(con, 'character')
+    if (hash_only) return(hash_file)
+    # read number of bytes
+    n_bytes <- readBin(con, 'integer')
+    # read serialized data
+    out_ser <- readBin(con, 'raw', n = n_bytes)
+    alloc.col(qs::qdeserialize(out_ser))
+}

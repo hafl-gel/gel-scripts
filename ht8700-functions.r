@@ -460,7 +460,7 @@ library(digest)
 
 # main function to write "hashed" files
 write_hashed <- function(x, file_path, remote_path = getOption('remote_path'), 
-    save_local = TRUE ...) {
+    save_local = TRUE, ...) {
     # get file name
     file_name <- basename(file_path)
     # add .hashed to filename
@@ -489,7 +489,7 @@ write_hashed <- function(x, file_path, remote_path = getOption('remote_path'),
 }
 # main function to read "hashed" files
 read_hashed <- function(file_path, remote_path = getOption('remote_path'), 
-    from_remote = FALSE) {
+    update_local = TRUE) {
     # add .hashed to filename
     file_path <- sub('([.]hashed)?$', '.hashed', file_path)
     # get local path
@@ -505,17 +505,17 @@ read_hashed <- function(file_path, remote_path = getOption('remote_path'),
         # get hash from local file: NULL -> file is missing
         hash_file <- read_local(file_path, hash_only = TRUE)
         # check file status
-        update_file <- from_remote || is.null(hash_file) || hash_repo != hash_file
+        read_remote <- !update_local || is.null(hash_file) || hash_repo != hash_file
     } else {
-        if (from_remote) {
-            stop('.hash folder is missing. Cannot read remote file.')
-        } else {
+        if (update_local) {
             warning('.hash folder is missing. Cannot check local file status.')
+        } else {
+            stop('.hash folder is missing. Cannot read remote file.')
         }
-        update_file <- FALSE
+        read_remote <- FALSE
     }
     # update local file
-    if (update_file) {
+    if (read_remote) {
         if (is.null(remote_path)) {
             stop('argument "remote_path" is missing!')
         }
@@ -523,7 +523,7 @@ read_hashed <- function(file_path, remote_path = getOption('remote_path'),
         # read with qread from remote
         out <- alloc.col(qread(file.path(remote_path, hash_repo)))
         # save to local system
-        if (!from_remote) {
+        if (update_local) {
             cat('updating local file from remote\n')
             write_local(out, file_path)
         }

@@ -459,7 +459,8 @@ library(qs)
 library(digest)
 
 # main function to write "hashed" files
-write_hashed <- function(x, file_path, remote_path = getOption('remote_path'), ...) {
+write_hashed <- function(x, file_path, remote_path = getOption('remote_path'), 
+    save_local = TRUE ...) {
     # get file name
     file_name <- basename(file_path)
     # add .hashed to filename
@@ -481,15 +482,16 @@ write_hashed <- function(x, file_path, remote_path = getOption('remote_path'), .
     # save hash locally
     writeLines(get_hash(x), file.path(local_path, '.hash', file_name))
     # save file locally
-    write_local(x, file.path(local_path, file_name), ...)
+    if (save_local) {
+        write_local(x, file.path(local_path, file_name), ...)
+    }
     invisible(TRUE)
 }
 # main function to read "hashed" files
-read_hashed <- function(file_path, remote_path = getOption('remote_path')) {
+read_hashed <- function(file_path, remote_path = getOption('remote_path'), 
+    from_remote = FALSE) {
     # add .hashed to filename
     file_path <- sub('([.]hashed)?$', '.hashed', file_path)
-    # check if file exists
-    if (!file.exists(file_path)) stop('No file available under "', file_path, '"')
     # get local path
     local_path <- dirname(file_path)
     # check local directory
@@ -503,9 +505,13 @@ read_hashed <- function(file_path, remote_path = getOption('remote_path')) {
         # get hash from local file: NULL -> file is missing
         hash_file <- read_local(file_path, hash_only = TRUE)
         # check file status
-        update_file <- !is.null(hash_file) && hash_repo != hash_file
+        update_file <- from_remote || is.null(hash_file) || hash_repo != hash_file
     } else {
-        warning('.hash folder is missing cannot check local file status')
+        if (from_remote) {
+            stop('.hash folder is missing. Cannot read remote file.')
+        } else {
+            warning('.hash folder is missing. Cannot check local file status.')
+        }
         update_file <- FALSE
     }
     # update local file
@@ -514,12 +520,13 @@ read_hashed <- function(file_path, remote_path = getOption('remote_path')) {
             stop('argument "remote_path" is missing!')
         }
         remote_path <- check_path(remote_path)
-        cat('updating local file from remote\n')
-        # TODO:
         # read with qread from remote
         out <- alloc.col(qread(file.path(remote_path, hash_repo)))
         # save to local system
-        write_local(out)
+        if (!from_remote) {
+            cat('updating local file from remote\n')
+            write_local(out, file_path)
+        }
         # return remote
         out
     } else {
@@ -565,6 +572,8 @@ write_local <- function(dat, path, ...) {
     writeBin(dat_ser, con)
 }
 read_local <- function(path, hash_only = FALSE) {
+    # check if file exists
+    if (!file.exists(path)) return(NULL)
     # read local file
     con <- file(path, open = 'rb')
     on.exit(close(con))

@@ -478,11 +478,14 @@ write_hashed <- function(x, file_path, remote_path = getOption('remote_path'),
     # add file hash
     add_hash(x)
     # save file on remote
+    cat('writing remote file...\n')
     qs::qsave(x, file.path(remote_path, get_hash(x)), preset = 'fast')
     # save hash locally
+    cat('updating hash file...\n')
     writeLines(get_hash(x), file.path(local_path, '.hash', file_name))
     # save file locally
     if (save_local) {
+        cat('writing local file...\n')
         write_local(x, file.path(local_path, file_name), ...)
     }
     invisible(TRUE)
@@ -500,10 +503,18 @@ read_hashed <- function(file_path, remote_path = getOption('remote_path'),
     file_name <- basename(file_path)
     # check if .hash folder exists
     if (dir.exists(file.path(local_path, '.hash'))) {
+        cat('checking hash...\n')
         # get repo hash
         hash_repo <- readLines(file.path(local_path, '.hash', file_name), n = 1L)
         # get hash from local file: NULL -> file is missing
         hash_file <- read_local(file_path, hash_only = TRUE)
+        if (is.null(hash_file)) {
+            cat('-> local file does not exist\n')
+        } else if (hash_repo == hash_file) {
+            cat('-> local file is up-to-date\n')
+        } else {
+            cat('-> local file needs to be updated\n')
+        }
         # check file status
         read_remote <- !update_local || is.null(hash_file) || hash_repo != hash_file
     } else {
@@ -521,16 +532,18 @@ read_hashed <- function(file_path, remote_path = getOption('remote_path'),
         }
         remote_path <- check_path(remote_path)
         # read with qread from remote
+        cat('reading from remote...\n')
         out <- alloc.col(qread(file.path(remote_path, hash_repo)))
         # save to local system
         if (update_local) {
-            cat('updating local file from remote\n')
+            cat('updating local file from remote...\n')
             write_local(out, file_path)
         }
         # return remote
         out
     } else {
         # return local
+        cat('reading local file...\n')
         read_local(file_path)
     }
 }

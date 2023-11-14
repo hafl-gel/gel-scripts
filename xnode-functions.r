@@ -69,7 +69,7 @@ read_raw <- function(raw_dir, .from = NULL, .to = NULL, use_jq = FALSE) {
 }
 
 # check availability of jq
-jq_available <- !inherits(system('jq --help', intern = TRUE), 'try-error')
+jq_available <- !inherits(try(system('type jq', intern = TRUE)), 'try-error')
 
 # json format
 # 1 file per minute

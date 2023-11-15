@@ -100,14 +100,25 @@ read_raw <- function(raw_dir, .from = NULL, .to = NULL, use_jq = FALSE) {
 }
 
 # read xnode data
-read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1') {
-    # TODO: check if path is pointing to top directory or data directories or single files
-    browser()
-    # check available dates
-    all_dirs <- dir(path_data, pattern = '^\\d{4}_\\d{2}_\\d{2}([.]zip)?$')
-    if (length(all_dirs) == 0) {
-        # TODO: cat no files in path
-        return(invisible())
+read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1',
+    simplify = TRUE, as_ibts = TRUE) {
+    # check if path is pointing to top directory or data directories or single files
+    dir_regex <- '^\\d{4}_\\d{2}_\\d{2}([.]zip)?$'
+    nozip_regex <- sub('\\(.*', '$', dir_regex)
+    if (length(path) == 1L && file.info(path)$isdir && !grepl(dir_regex, path)) {
+        # check available dates
+        all_dirs <- dir(path_data, pattern = dir_regex)
+        if (length(all_dirs) == 0) {
+            # TODO: cat no files in path
+            return(invisible())
+        }
+    } else if (all(grepl(dir_regex, path))) {
+        # directories & zips
+        all_dirs <- path
+    } else if (all(!file.info(path)$isdir)) {
+        stop('providing individual files is not yet supported!')
+    } else {
+        stop('argument "path" is not valid')
     }
     # dates as integers (easier to select range)
     dates <- as.integer(gsub('(_|[.]zip)', '', all_dirs))
@@ -127,7 +138,7 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1') {
             } else {
                 # add entry without extension
                 all_dirs <- c(all_dirs, 
-                    dup_entries[grep('^\\d{4}_\\d{2}_\\d{2}$', dup_entries)])
+                    dup_entries[grep(nozip_regex, dup_entries)])
             }
         }
         # remove previous duplicates
@@ -215,13 +226,14 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1') {
             gas = unique(gas),
             unit = unique(unit)
             ))]
-        xnode_data <- xnode_data[, .(st, et, humidity, pressure, supplyVoltage, 
-            temperature, ppm, mgm3)]
+        xnode_data <- xnode_data[, .(st, et, mgm3, ppm, temperature, pressure,
+            humidity, supplyVoltage)]
         setattr(xnode_data, 'xnode', atts)
     }
     # convert to ibts?
     if (as_ibts) {
         xnode_data <- as.ibts(xnode_data)
+        if (simplify) attr(xnode_data, 'xnode') <- atts
     }
     # return
     xnode_data
@@ -230,17 +242,18 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1') {
 
 ## 2. test with data ----------------------------------------
 
-# path
-base_path <- '~/LFE/02_Daten/5-draeger'
-gas <- 'nh3'
-sensor <- 'sensor-03'
-path_data <- file.path(base_path, gas, sensor)
+# # path
+# base_path <- '~/LFE/02_Daten/5-draeger'
+# gas <- 'nh3'
+# sensor <- 'sensor-03'
+# path_data <- file.path(base_path, gas, sensor)
 
-# select time range -> get relevant files
-# from <- NULL
-# to <- NULL
-from <- '12.11.2023'
-to <- '14.11.2023 20:00'
+# # select time range -> get relevant files
+# # from <- NULL
+# # to <- NULL
+# from <- '12.11.2023'
+# to <- '14.11.2023 20:00'
 
-xx <- read_xnode(path_data, from, to)
+# xx <- read_xnode(path_data, from, to)
+# yy <- read_xnode(path_data, from, to, as_ibts = TRUE)
 

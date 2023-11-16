@@ -107,7 +107,7 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1',
     nozip_regex <- sub('\\(.*', '$', dir_regex)
     if (length(path) == 1L && file.info(path)$isdir && !grepl(dir_regex, path)) {
         # check available dates
-        all_dirs <- dir(path_data, pattern = dir_regex)
+        all_dirs <- dir(path, pattern = dir_regex)
         if (length(all_dirs) == 0) {
             # TODO: cat no files in path
             return(invisible())
@@ -172,7 +172,7 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1',
         # TODO: cat no data in specified time range
         return(invisible())
     }
-    dirs <- file.path(path_data, all_dirs[in_range])
+    dirs <- file.path(path, all_dirs[in_range])
     n_dir <- length(dirs)
     xnode_list <- vector('list', n_dir)
     # check zip archives @ start & end

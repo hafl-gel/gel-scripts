@@ -101,7 +101,7 @@ read_raw <- function(raw_dir, .from = NULL, .to = NULL, use_jq = FALSE) {
 
 # read xnode data
 read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1',
-    simplify = TRUE, as_ibts = TRUE) {
+    simplify = TRUE, as_ibts = TRUE, max_interval_secs = 80) {
     # check if path is pointing to top directory or data directories or single files
     dir_regex <- '^\\d{4}_\\d{2}_\\d{2}([.]zip)?$'
     nozip_regex <- sub('\\(.*', '$', dir_regex)
@@ -196,14 +196,18 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1',
     # rename
     setnames(xnode_data, sub('^.*[.]', '', names(xnode_data)))
     setnames(xnode_data, c('value', 'name'), c('ppm', 'gas'))
-    # parse time
-    xnode_data[, et := fast_strptime(time, format = '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE,
-        tz = time_zone)]
+    # parse time and round to seconds
+    xnode_data[, et := as.POSIXct(
+        round(
+            fast_strptime(time, format = '%Y-%m-%dT%H:%M:%OSZ', tz = time_zone)
+        )
+    )]
     # sort by et
     setorder(xnode_data, et)
-    # get st
+    # get st (reset too long intervals to 60secs)
     xnode_data[, st := {
-        dtime <- pmin(diff(et), 60)
+        dtime <- diff(et)
+        dtime[dtime > max_interval_secs] <- 60
         et - c(60, dtime)
     }]
     # add mg/m3?

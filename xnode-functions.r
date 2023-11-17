@@ -4,6 +4,8 @@
 # 1 file per minute
 # data structure of folders: year/mont/day
 # file name contains date_time of recording
+# all file times in UTC
+# from/to => time_zone = '' => CET or CEST == local time
 
 # TODO:
 # add docu
@@ -100,7 +102,7 @@ read_raw <- function(raw_dir, .from = NULL, .to = NULL, use_jq = FALSE) {
 }
 
 # read xnode data
-read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1',
+read_xnode <- function(path, from = NULL, to = NULL, time_zone = '',
     simplify = TRUE, as_ibts = TRUE, max_interval_secs = 80) {
     # check if path is pointing to top directory or data directories or single files
     dir_regex <- '^\\d{4}_\\d{2}_\\d{2}([.]zip)?$'
@@ -155,7 +157,7 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1',
     } else {
         from <- parse_date_time3(from, tz = time_zone)
         # dates as integers (easier to select range)
-        from_int <- as.integer(format(from, '%Y%m%d'))
+        from_int <- as.integer(format(from, '%Y%m%d', tz = 'UTC'))
     }
     # to
     if (is.null(to)) {
@@ -163,7 +165,7 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1',
     } else {
         to <- parse_date_time3(to, tz = time_zone)
         # dates as integers (easier to select range)
-        to_int <- as.integer(format(to, '%Y%m%d'))
+        to_int <- as.integer(format(to, '%Y%m%d', tz = 'UTC'))
     }
     # convert to integer
     from <- as.integer(from)
@@ -171,7 +173,7 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1',
     # index
     in_range <- from_int <= dates & to_int >= dates
     if (!any(in_range)) {
-        # TODO: cat no data in specified time range
+        cat('no data available in specified time range!\n')
         return(invisible())
     }
     dirs <- sort(file.path(path, all_dirs[in_range]))

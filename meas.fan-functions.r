@@ -14,13 +14,10 @@ library(ibts)
 
 ## 1. functions ----------------------------------------
 
-path_data <- '~/LFE/02_Daten/9-Messventilator'
-fan_id <- '1'
-path_calibration <- '~/repos/5_GitHub/gel-scripts/meas.fan/fan-calibration.rds'
-
 #
 read_frequi <- function(path_data, from = NULL, to = NULL, 
-    path_calibration = NULL, fan_id = NULL, time_zone = '') {
+    path_calibration = NULL, fan_id = NULL, time_zone = '', 
+    as_ibts = TRUE) {
     # check path_data
     if (!file.exists(path_data)) stop('path_data: ', path_data, ' is not accessible')
     # get fan_id
@@ -99,6 +96,9 @@ read_frequi <- function(path_data, from = NULL, to = NULL,
     }]
     # column order
     setcolorder(fan_data, c('st', 'et', 'flow_m3_s', 'extrapol', 'Hz', 'speed_m_s', 'V'))
+    if (as_ibts) {
+        fan_data <- as.ibts(fan_data)
+    }
     # return
     fan_data
 }
@@ -139,4 +139,10 @@ if (FALSE) {
 }
     
 ## 3. testing ----------------------------------------
+
+# path_lfe <- '~/LFE/02_Daten/9-Messventilator'
+# id <- '1'
+# file_calib <- '~/repos/5_GitHub/gel-scripts/meas.fan/fan-calibration.rds'
+
+# xx <- read_frequi(path_lfe, '14.11.2023 12:00', '16.11.2023 20:00', file_calib, id)
 

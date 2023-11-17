@@ -105,6 +105,8 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'Etc/GMT-1',
     # check if path is pointing to top directory or data directories or single files
     dir_regex <- '^\\d{4}_\\d{2}_\\d{2}([.]zip)?$'
     nozip_regex <- sub('\\(.*', '$', dir_regex)
+    # check if path exists
+    if (!file.exists(path)) stop('path: ', path, ' is not accessible')
     if (length(path) == 1L && file.info(path)$isdir && !grepl(dir_regex, path)) {
         # check available dates
         all_dirs <- dir(path, pattern = dir_regex)

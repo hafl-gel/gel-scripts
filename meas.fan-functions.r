@@ -56,6 +56,7 @@ if (FALSE) {
         abline(m)
         cfs <- coef(m)
         names(cfs)[2] <- 'Hz'
+        attr(cfs, 'limits') <- range(tab[, 2])
         cfs
     }, simplify = FALSE)
     fan_cfs <- setNames(fan_cfs, sub('0', '', tabs_mat[1, ]))

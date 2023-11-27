@@ -12,14 +12,25 @@
 library(data.table)
 library(ibts)
 
+switch(Sys.info()['user']
+    , christoph = 
+    , hac5 = {
+        options(gel.scripts.path = '~/repos/5_GitHub/gel-scripts')
+    }
+)
+
 ## 1. functions ----------------------------------------
 
 #
-read_frequi <- function(path_data, from = NULL, to = NULL, 
-    path_calibration = NULL, fan_id = NULL, time_zone = '', 
+read_frequi <- function(path_data, rds_fan_calib,
+    from = NULL, to = NULL, fan_id = NULL, time_zone = '', 
     as_ibts = TRUE) {
     # check path_data
     if (!file.exists(path_data)) stop('path_data: ', path_data, ' is not accessible')
+    if (missing(rds_fan_calib)) {
+        rds_fan_calib <- file.path(getOption('gel.scripts.path', ''), 'meas.fan/fan-calibration.rds')
+    }
+    if (!file.exists(rds_fan_calib)) stop('rds_fan_calib: ', rds_fan_calib, ' is not accessible')
     # get fan_id
     if (grepl('mm-\\d$', path_data)) {
         fan_id <- sub('.*(\\d)$', '\\1', path_data)
@@ -39,7 +50,7 @@ read_frequi <- function(path_data, from = NULL, to = NULL,
     path_prep <- file.path(path_data, 'messventilator-%s0mm-%s')
     path_fan <- sprintf(path_prep, fan_dia, fan_id)
     # get coefficients
-    fan_cfs <- readRDS(path_calibration)[[as.character(fan_dia)]]
+    fan_cfs <- readRDS(rds_fan_calib)[[as.character(fan_dia)]]
     # get files
     files_fan <- dir(path_fan, full.names = TRUE)
     # get dates

@@ -24,7 +24,7 @@ switch(Sys.info()['user']
 #
 read_frequi <- function(path_data, rds_fan_calib,
     from = NULL, to = NULL, fan_id = NULL, time_zone = '', 
-    as_ibts = TRUE) {
+    max_interval_secs = 90, as_ibts = TRUE) {
     # check path_data
     if (!file.exists(path_data)) stop('path_data: ', path_data, ' is not accessible')
     if (missing(rds_fan_calib)) {
@@ -85,12 +85,11 @@ read_frequi <- function(path_data, rds_fan_calib,
     fan_data <- rbindlist(lapply(files_fan, fread))
     setnames(fan_data, c('Time', 'Hz', 'V'))
     # fix time
-    max_interval_secs <- 40
     fan_data[, c('st', 'et', 'Time') := {
         et <- as.POSIXct(round(Time))
         diff_et <- as.numeric(diff(et), units = 'secs')
-        diff_et[diff_et > max_interval_secs] <- 30
-        st <- et - c(30, diff_et)
+        diff_et[diff_et > max_interval_secs] <- 60
+        st <- et - c(60, diff_et)
         list(st, et, NULL)
     }]
     # select from/to range

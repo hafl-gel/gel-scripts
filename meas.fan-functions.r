@@ -88,7 +88,7 @@ read_frequi <- function(path_data, rds_fan_calib,
     max_interval_secs <- 40
     fan_data[, c('st', 'et', 'Time') := {
         et <- as.POSIXct(round(Time))
-        diff_et <- diff(et)
+        diff_et <- as.numeric(diff(et), units = 'secs')
         diff_et[diff_et > max_interval_secs] <- 30
         st <- et - c(30, diff_et)
         list(st, et, NULL)

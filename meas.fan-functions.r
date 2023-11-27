@@ -24,7 +24,7 @@ switch(Sys.info()['user']
 #
 read_frequi <- function(path_data, rds_fan_calib,
     from = NULL, to = NULL, fan_id = NULL, time_zone = '', 
-    max_interval_secs = 90, as_ibts = TRUE) {
+    V_crit = 3, max_interval_secs = 90, as_ibts = TRUE) {
     # check path_data
     if (!file.exists(path_data)) stop('path_data: ', path_data, ' is not accessible')
     if (missing(rds_fan_calib)) {
@@ -104,6 +104,8 @@ read_frequi <- function(path_data, rds_fan_calib,
             Hz < attr(fan_cfs, 'limits')[1] | Hz > attr(fan_cfs, 'limits')[2]
         )
     }]
+    # set flow values below critical V to NA
+    fan_data[V <= V_crit, flow_m3_s := NA_real_]
     # column order
     setcolorder(fan_data, c('st', 'et', 'flow_m3_s', 'extrapol', 'Hz', 'speed_m_s', 'V'))
     if (as_ibts) {

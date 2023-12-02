@@ -82,7 +82,23 @@ read_frequi <- function(path_data, rds_fan_calib,
     }
     files_fan <- files_fan[in_range]
     # read data
-    fan_data <- rbindlist(lapply(files_fan, fread))
+    fan_data <- rbindlist(lapply(files_fan, fread, 
+                fill = TRUE, blank.lines.skip = TRUE))
+    # check columns 2 & 3
+    if (fan_data[, !is.numeric(V2)]) {
+        # filter bad entries
+        fan_data <- fan_data[grep('^\\d+([.]\\d+)?$', V2)]
+        # convert to numeric
+        fan_data[, V2 := as.numeric(V2)]
+    }
+    if (fan_data[, !is.numeric(V3)]) {
+        # filter bad entries
+        fan_data <- fan_data[grep('^\\d+([.]\\d+)?$', V3)]
+        # convert to numeric
+        fan_data[, V3 := as.numeric(V3)]
+    }
+    # omit any NA values
+    fan_data <- na.omit(fan_data)
     setnames(fan_data, c('Time', 'Hz', 'V'))
     # fix time
     fan_data[, c('st', 'et', 'Time') := {

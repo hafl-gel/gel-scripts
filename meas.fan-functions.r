@@ -17,6 +17,9 @@ switch(Sys.info()['user']
     , hac5 = {
         options(gel.scripts.path = '~/repos/5_GitHub/gel-scripts')
     }
+    , stefan = {
+      options(gel.scripts.path = '~/git/gel-scripts')
+    }
 )
 
 ## 1. functions ----------------------------------------

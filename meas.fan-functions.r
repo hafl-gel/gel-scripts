@@ -26,7 +26,7 @@ switch(Sys.info()['user']
 
 #
 read_frequi <- function(path_data, rds_fan_calib,
-    from = NULL, to = NULL, fan_id = NULL, time_zone = '', 
+    from = NULL, to = NULL, fan_id = NULL, time_zone = 'UTC', 
     V_crit = 3, max_interval_secs = 90, as_ibts = TRUE) {
     # check path_data
     if (!file.exists(path_data)) stop('path_data: ', path_data, ' is not accessible')

@@ -102,7 +102,7 @@ read_raw <- function(raw_dir, .from = NULL, .to = NULL, use_jq = FALSE) {
 }
 
 # read xnode data
-read_xnode <- function(path, from = NULL, to = NULL, time_zone = '',
+read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'UTC',
     simplify = TRUE, as_ibts = TRUE, max_interval_secs = 80) {
     # check if path is pointing to top directory or data directories or single files
     dir_regex <- '^\\d{4}_\\d{2}_\\d{2}([.]zip)?$'

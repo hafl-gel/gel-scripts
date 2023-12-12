@@ -191,14 +191,16 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = '',
     if (n_dir > 2) {
         # loop over directories
         for (i in seq.int(2, n_dir - 1, 1)) {
-            cat('\r\r', sn, ' (', gas, '): reading "', bn[i],'" (', i, '/', length(dirs), ' directories)... ', sep = '')
+            cat('\r', rep(' ', 50))
+            cat('\r', sn, ' (', gas, '): reading "', bn[i],'" (', i, '/', length(dirs), ' directories)... ', sep = '')
             xnode_list[[i]] <- read_fun[[i]](dirs[i],
                 use_jq = jq_available)
         }
     }
     # read last directory (if more than 1 directory)
     if (n_dir > 1) {
-        cat('\r\r', sn, ' (', gas, '): reading "', bn[n_dir],'" (', n_dir, '/', length(dirs), ' directories)... ', sep = '')
+        cat('\r', rep(' ', 50))
+        cat('\r', sn, ' (', gas, '): reading "', bn[n_dir],'" (', n_dir, '/', length(dirs), ' directories)... ', sep = '')
         xnode_list[[n_dir]] <- read_fun[[n_dir]](dirs[n_dir], .to = to, use_jq = jq_available)
     }
     cat('done\n')

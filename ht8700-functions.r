@@ -3,6 +3,99 @@
 library(data.table)
 library(ibts)
 
+process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
+    match_dates = NULL, save_file = FALSE) {
+    # read sonic folder
+    sonic_files <- dir(path_sonic, pattern = '^data_sonic-.')
+    if (length(sonic_files) == 0) {
+        stop('No sonic data in directory "', path_sonic, '"')
+    }
+    sonic <- unique(sub('^data_(sonic-.)_.*', '\\1', sonic_files))
+    if (length(sonic) > 1) {
+        stop('Folder "', path_sonic, '" contains files from different sonic computers')
+    }
+    #     -> add option to check only current date => online evaluation
+    sonic_dates <- as.integer(sub('.*_(\\d{8})_.*', '\\1', sonic_files))
+    if (!is.null(match_dates)) {
+        browser()
+    }
+    # read ht folder
+    ht_files <- dir(path_ht, pattern = '^ht8700_sonic-.')
+    # find matches
+    #     -> check sonic
+    ht_sonic <- grep(sonic, ht_files, fixed = TRUE, value = TRUE)
+    ht_dates <- as.integer(sub('.*_(\\d{8})_.*', '\\1', ht_sonic))
+    #     -> check date
+    dates_ok <- ht_dates %in% sonic_dates
+    unique_dates <- as.character(unique(ht_dates[dates_ok]))
+    # select sonic files
+    sonic_ok <- lapply(unique_dates, grep, 
+        x = sonic_files, fixed = TRUE, value = TRUE)
+    names(sonic_ok) <- unique_dates
+    # select ht files
+    ht_ok <- lapply(unique_dates, grep, 
+        x = ht_files, fixed = TRUE, value = TRUE)
+    names(ht_ok) <- unique_dates
+    # check if merged file exists
+    merged_files <- character(0)
+    if (!is.null(path_merged)) {
+        merged_files <- dir(path_merged, pattern = '^ht_merged_')
+    }
+    merged_dates <- sub('^ht_merged_sonic-._(\\d{8})_.*', '\\1', merged_files)
+    out <- lapply(unique_dates, \(u_date) {
+        cat('merging data from', sub('(\\d{4})(\\d{2})(\\d{2})', '\\3.\\2.\\1', u_date), '- ')
+        u_sonic_files <- sonic_ok[[u_date]]
+        u_ht_files <- ht_ok[[u_date]]
+        # gen hash all sonic and ht files
+        u_sha_full <- sha1(list(
+            # names
+            u_sonic_files,
+            u_ht_files,
+            # sizes
+            file.size(file.path(path_sonic, sonic_ok[[u_date]])),
+            file.size(file.path(path_ht, ht_ok[[u_date]]))
+        ))
+        u_sha <- substr(u_sha_full, 1, 14)
+        m_file <- m_sha <- ''
+        # check if existing file hash matches
+        if (u_date %in% merged_dates) {
+            m_file <- merged_files[merged_dates %in% u_date]
+            # -> hash in filename?
+            m_sha <- sub('.*_([^_]*)$', '\\1', m_file)
+        }
+        # identical?
+        if (u_sha == m_sha) {
+            cat('merged file is up-to-date...\n')
+            ht_based <- fread(file.path(path_merged, m_file))
+        } else {
+            if (m_sha != '') {
+                cat('updating merged file:\n')
+            } else {
+                cat('creating merged file:\n')
+            }
+            # create new merged file
+            # read sonic
+            sonic_data <- rbindlist(lapply(file.path(path_sonic, u_sonic_files), read_windmaster_ascii))
+            # read ht
+            ht_data <- rbindlist(lapply(file.path(path_ht, u_ht_files), read_ht8700))
+            # merge data
+            # sonic_based <- merge_data(sonic_data, ht_data)
+            ht_based <- merge_data(ht_data, sonic_data)
+            # save to disk
+            if (save_file) {
+                fwrite(ht_based[, 
+                    .(Time, nh3_ppb, nh3_ugm3, temp_amb, press_amb, oss, u, v, w, T, sonic)
+                    ], file = paste0(path_merged, '/ht_merged_', sonic, '_',
+                        u_date, '_', u_sha)
+                )
+            }
+        }
+        ht_based
+    })
+    names(out) <- unique_dates
+    out
+}
+
 
 # read windmaster data
 read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
@@ -65,10 +158,12 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
         return(NULL)
     }
     # be verbose and print sonic names:
-    sonic_label <- out[, sub('[\x01-\x1A]', '', unique(V2))]
-    sonic_label <- sonic_label[!(sonic_label == '')]
+    sonic_label <- out[, sub('^[^A-Z]*', '', unique(V2))]
+    sonic_label <- unique(sonic_label[!(sonic_label == '')])
     if (length(sonic_label) == 0) stop('sonic label not available!')
-    if (length(sonic_label) > 1) stop('more than one unique sonic label!')
+    if (length(sonic_label) > 1) {
+        stop('more than one unique sonic label!')
+    }
     cat(paste0("data recorded by sonic-", tolower(sonic_label), "\n"))
     sonic_file <- sub("data_(.*)_[0-9]{8}_[0-9]{6}([.]gz)?$", "\\1", bn)
     if(sonic_label != toupper(sub("sonic-", "", sonic_file))){

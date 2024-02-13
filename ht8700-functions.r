@@ -157,65 +157,72 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
     cat("File:", path.expand(FilePath), "- ")
 	Date <- gsub("^ht8700_.*_([0-9]{8})_.*", "\\1", bn)
 	### read File
-    if (has_awk && (!is_zipped || (is_zipped && has_zcat))) {
-        # awk solution
-        if (is_zipped) {
-            cat_cmd <- 'zcat'
-        } else {
-            cat_cmd <- 'cat'
-        }
-        # awk command incl. filtering for
-        # 20 columns, field 20 must be 0, field 19 either 0 or 1,
-        # field 2 should be 4 digits
-        # add more checks
-        awk_cmd <- 'NF == 20 && $2 ~ /^\\s*[0-9]{4}\\s*$/ && $19 ~ /^[01]$/ && $20 == 0'
-        # read file
-        suppressWarnings(out <- try(fread(
-            cmd = paste(cat_cmd, FilePath, '| awk -F, \'', awk_cmd, '\' -'),
-            header = FALSE, encoding = 'UTF-8', showProgress = FALSE
-        ), silent = TRUE))
-        # check if file is empty (is this necessary with fread/zcat/awk?)
-        if(inherits(out, 'try-error')){
-            if (any(grepl('File is empty', out))) {
-                cat('empty\n')
-            } else {
-                cat('error reading file\n')
-                cat(out)
-            }
-            return(NULL)
-        }
-        if (out[, .N] == 0) {
-            cat('file contains no valid data!\n')
-            return(NULL)
-        }
-    } else {
-        # no awk
-        suppressWarnings(out <- try(
-            fread(FilePath, encoding = 'UTF-8', header = FALSE, fill = TRUE, 
-                sep = '\n', 
-                blank.lines.skip = TRUE, showProgress = FALSE), 
-            silent = TRUE))
-        # check if file is empty
-        if(inherits(out, 'try-error')){
-            if (any(grepl('File is empty', out))) {
-                cat('empty\n')
-            } else {
-                cat('error reading file\n')
-                cat(out)
-            }
-            return(NULL)
-        }
-        # filter for exactly 19 commas and check for id in second column
-        out <- out[grepl('^[^,]*,\\s*\\d{4}\\s*,([^,]*,){17}[^,]*$', V1)]
-        # fread again
-        out[, paste0('V', 1:20) := fread(text = V1)]
-        # suppressWarnings(out <- out[grepl('\\d{4}', V2)])
-        # check for 0 in V20 and 0/1 in V19
-        suppressWarnings(out <- out[as.integer(V20) == 0L & as.integer(V19) %in% c(0L, 1L)])
-        if (out[, .N] == 0) {
-            cat('file contains no valid data!\n')
-            return(NULL)
-        }
+    raw <- readLines(FilePath, warn = FALSE)
+    out <- fread(text = raw[grepl('^\\d{2}([^,]*,){19}[^,]*$', raw, useBytes = TRUE)],
+        header = FALSE, na.strings = '999.99', showProgress = FALSE)
+    # if (has_awk && (!is_zipped || (is_zipped && has_zcat))) {
+    #     # awk solution
+    #     if (is_zipped) {
+    #         cat_cmd <- 'zcat'
+    #     } else {
+    #         cat_cmd <- 'cat'
+    #     }
+    #     # awk command incl. filtering for
+    #     # 20 columns, field 20 must be 0, field 19 either 0 or 1,
+    #     # field 2 should be 4 digits
+    #     # add more checks
+    #     awk_cmd <- 'NF == 20 && $2 ~ /^\\s*[0-9]{4}\\s*$/ && $19 ~ /^[01]$/ && $20 == 0'
+    #     # read file
+    #     suppressWarnings(out <- try(fread(
+    #         cmd = paste(cat_cmd, FilePath, '| awk -F, \'', awk_cmd, '\' -'),
+    #         header = FALSE, encoding = 'UTF-8', showProgress = FALSE
+    #     ), silent = TRUE))
+    #     # check if file is empty (is this necessary with fread/zcat/awk?)
+    #     if(inherits(out, 'try-error')){
+    #         if (any(grepl('File is empty', out))) {
+    #             cat('empty\n')
+    #         } else {
+    #             cat('error reading file\n')
+    #             cat(out)
+    #         }
+    #         return(NULL)
+    #     }
+    #     if (out[, .N] == 0) {
+    #         cat('file contains no valid data!\n')
+    #         return(NULL)
+    #     }
+    # } else {
+    #     # no awk
+    #     suppressWarnings(out <- try(
+    #         fread(FilePath, encoding = 'UTF-8', header = FALSE, fill = TRUE, 
+    #             sep = '\n', 
+    #             blank.lines.skip = TRUE, showProgress = FALSE), 
+    #         silent = TRUE))
+    #     # check if file is empty
+    #     if(inherits(out, 'try-error')){
+    #         if (any(grepl('File is empty', out))) {
+    #             cat('empty\n')
+    #         } else {
+    #             cat('error reading file\n')
+    #             cat(out)
+    #         }
+    #         return(NULL)
+    #     }
+    #     # filter for exactly 19 commas and check for id in second column
+    #     out <- out[grepl('^[^,]*,\\s*\\d{4}\\s*,([^,]*,){17}[^,]*$', V1)]
+    #     # fread again
+    #     out[, paste0('V', 1:20) := fread(text = V1)]
+    #     # suppressWarnings(out <- out[grepl('\\d{4}', V2)])
+    #     # check for 0 in V20 and 0/1 in V19
+    #     suppressWarnings(out <- out[as.integer(V20) == 0L & as.integer(V19) %in% c(0L, 1L)])
+    #     if (out[, .N] == 0) {
+    #         cat('file contains no valid data!\n')
+    #         return(NULL)
+    #     }
+    # }
+    if (nrow(out) == 0) {
+        cat('no valid data!\n')
+        return(NULL)
     }
     # convert column types
     char_cols <- paste0('V', c(1, 2, 17, 18, 20))

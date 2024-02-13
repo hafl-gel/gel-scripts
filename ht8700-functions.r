@@ -17,7 +17,13 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
     #     -> add option to check only current date => online evaluation
     sonic_dates <- as.integer(sub('.*_(\\d{8})_.*', '\\1', sonic_files))
     if (!is.null(match_dates)) {
-        browser()
+        m_times <- parse_timerange(match_dates)
+        m_int <- as.integer(format(m_times, format = '%Y%m%d'))
+        sonic_dates <- sonic_dates[sonic_dates >= m_int[1] & sonic_dates <= m_int[length(m_int)]]
+        if (length(sonic_dates) == 0) {
+            cat('No data for specified date range...\n')
+            return(list())
+        }
     }
     # read ht folder
     ht_files <- dir(path_ht, pattern = '^ht8700_sonic-.')
@@ -34,7 +40,7 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
     names(sonic_ok) <- unique_dates
     # select ht files
     ht_ok <- lapply(unique_dates, grep, 
-        x = ht_files, fixed = TRUE, value = TRUE)
+        x = ht_sonic, fixed = TRUE, value = TRUE)
     names(ht_ok) <- unique_dates
     # check if merged file exists
     merged_files <- character(0)
@@ -82,7 +88,7 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
             # sonic_based <- merge_data(sonic_data, ht_data)
             ht_based <- merge_data(ht_data, sonic_data)
             # save to disk
-            if (save_file) {
+            if (save_file && !is.null(path_merged)) {
                 fwrite(ht_based[, 
                     .(Time, nh3_ppb, nh3_ugm3, temp_amb, press_amb, oss, u, v, w, T, sonic)
                     ], file = paste0(path_merged, '/ht_merged_', sonic, '_',
@@ -422,6 +428,23 @@ List match_times(NumericVector time1, NumericVector time2, double deltat)
 #   -> output contains the same times as 'basis'
 #   -> values from 'draw' will be repeated or dropped to match 'basis' times
 merge_data <- function(basis, draw) {
+    if (nrow(basis) == 0 || nrow(draw) == 0) {
+        return(
+            data.table(
+                Time = character(0), 
+                nh3_ppb = character(0),
+                nh3_ugm3 = character(0), 
+                temp_amb = character(0), 
+                press_amb = character(0), 
+                oss = character(0), 
+                u = character(0), 
+                v = character(0), 
+                w = character(0), 
+                T = character(0), 
+                sonic = character(0)
+            )
+        )
+    }
     # times
     t_basis <- basis[, as.numeric(Time)]
     t_draw <- draw[, as.numeric(Time)]

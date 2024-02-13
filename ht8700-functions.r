@@ -20,23 +20,21 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     cat("File:", path.expand(FilePath), "- ")
 	Date <- gsub("^data_.*_([0-9]{8})_.*", "\\1", bn)
 	### read File
-    out <- try(
-        fread(FilePath, encoding = 'UTF-8', header = FALSE, fill = TRUE, 
-            blank.lines.skip = TRUE, na.strings = '999.99', select = 1:9,
-            showProgress = FALSE), 
-        silent = TRUE)
+    # out <- try(
+    #     fread(FilePath, encoding = 'UTF-8', header = FALSE, fill = TRUE, 
+    #         blank.lines.skip = TRUE, na.strings = '999.99', select = 1:9,
+    #         showProgress = FALSE), 
+    #     silent = TRUE)
+    # raw <- fread(FilePath, sep = '\n', header = FALSE)
+    # out <- raw[grepl('^\\d{2}([^,]*,){8}[^,]*$', V1)]
+    raw <- readLines(FilePath, warn = FALSE)
+    out <- fread(text = raw[grepl('^\\d{2}([^,]*,){5}M,([^,]*,){2}[^,]*$', raw, useBytes = TRUE)],
+        header = FALSE, na.strings = '999.99', showProgress = FALSE)
     # check if file is empty
-	if(inherits(out, 'try-error')){
-        if (any(grepl('File is empty', out))) {
-            cat('empty\n')
-        } else {
-            cat('error reading file\n')
-            cat(out)
-        }
+	if(nrow(out) == 0){
+        cat('no valid data\n')
 		return(NULL)
 	}
-    # select valid V9 only
-    out <- out[grepl('^[\x01-\x1A]', V9)]
     # check which columns to convert columns if necessary
     vnums <- paste0('V', c(3, 4, 5, 7))
     is.char <- out[, sapply(.SD, is.character), .SDcols = vnums]

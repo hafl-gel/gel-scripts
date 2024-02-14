@@ -23,23 +23,14 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     cat("File:", path.expand(FilePath), "- ")
 	Date <- gsub("^data_.*_([0-9]{8})_.*", "\\1", bn)
 	### read File
-    out <- try(
-        fread(FilePath, encoding = 'UTF-8', header = FALSE, fill = TRUE, 
-            blank.lines.skip = TRUE, na.strings = '999.99', select = 1:9,
-            showProgress = FALSE), 
-        silent = TRUE)
+    raw <- readLines(FilePath, warn = FALSE)
+    out <- fread(text = raw[grepl('^\\d{2}([^,]*,){5}M,([^,]*,){2}[^,]*$', raw, useBytes = TRUE)],
+        header = FALSE, na.strings = '999.99', showProgress = FALSE)
     # check if file is empty
-	if(inherits(out, 'try-error')){
-        if (any(grepl('File is empty', out))) {
-            cat('empty\n')
-        } else {
-            cat('error reading file\n')
-            cat(out)
-        }
+	if(nrow(out) == 0){
+        cat('no valid data\n')
 		return(NULL)
 	}
-    # select valid V9 only
-    out <- out[grepl('^[\x01-\x1A]', V9)]
     # check which columns to convert columns if necessary
     vnums <- paste0('V', c(3, 4, 5, 7))
     is.char <- out[, sapply(.SD, is.character), .SDcols = vnums]
@@ -66,8 +57,8 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     # remove NA lines that come from conversion
     out <- na.omit(out)
     # be verbose and print sonic names:
-    sonic_label <- out[, sub('[\x01-\x1A]', '', unique(V2))]
-    sonic_label <- sonic_label[!(sonic_label == '')]
+    sonic_label <- out[, sub('^[^A-Z]*', '', unique(V2))]
+    sonic_label <- unique(sonic_label[!(sonic_label == '')])
     if (length(sonic_label) == 0) stop('sonic label not available!')
     if (length(sonic_label) > 1) stop('more than one unique sonic label!')
     cat(paste0("data recorded by sonic-", tolower(sonic_label), "\n"))

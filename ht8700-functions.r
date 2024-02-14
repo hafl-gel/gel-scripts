@@ -119,13 +119,6 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     cat("File:", path.expand(FilePath), "- ")
 	Date <- gsub("^data_.*_([0-9]{8})_.*", "\\1", bn)
 	### read File
-    # out <- try(
-    #     fread(FilePath, encoding = 'UTF-8', header = FALSE, fill = TRUE, 
-    #         blank.lines.skip = TRUE, na.strings = '999.99', select = 1:9,
-    #         showProgress = FALSE), 
-    #     silent = TRUE)
-    # raw <- fread(FilePath, sep = '\n', header = FALSE)
-    # out <- raw[grepl('^\\d{2}([^,]*,){8}[^,]*$', V1)]
     raw <- readLines(FilePath, warn = FALSE)
     out <- fread(text = raw[grepl('^\\d{2}([^,]*,){5}M,([^,]*,){2}[^,]*$', raw, useBytes = TRUE)],
         header = FALSE, na.strings = '999.99', showProgress = FALSE)

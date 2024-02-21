@@ -9,12 +9,12 @@
 REddy.version <- "v20220218"
 library(tcltk)
 library(xlsx)
-library(lubridate)
 library(Rcpp)
 library(reshape2)
 library(lattice)
 library(caTools)
 library(data.table)
+library(ibts)
 
 # library(latticeExtra)
 # library(gridExtra)
@@ -141,8 +141,19 @@ readWindMaster_ascii <- function(FilePath,skip=","){
 	out <- out[!(u%in%999.99|v%in%999.99|w%in%999.99|T%in%999.99),]
 	### change units from °C to K
 	out[,T := T + 273.15]
-
 	as.data.frame(out)
+}
+
+read_ht_merged <- function(FilePath) {
+    out <- fread(file = FilePath, showProgress = FALSE)
+	### check delta-t
+	out[,dt := c(round(as.numeric(diff(Time))*1000),100)]
+    dt_med <- out[, median(dt)]
+ 	out[dt > dt_med * 1.5, dt := dt_med]
+    as.data.frame(out[dt > dt_med / 2, 
+        .(st = with_tz(Time, 'Etc/GMT-1'), dt, u, v, w, T, 
+            nh3_ugm3, nh3_ppb, temp_amb, press_amb, oss)
+        ])
 }
 
 
@@ -291,7 +302,7 @@ H.flags <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){
 	},x=input,lo=limits["lower",],hi=limits["top",],SIMPLIFY = FALSE)
 
 	hflgs <- unlist(lapply(dat,anyNA))
-	if(any(hflgs))cat("Hard Flag: NA flagged values in columns ",paste(names(hflgs)[hflgs],sep=", "),"\n")
+	if(any(hflgs))cat("Hard Flag: flagged values in columns ",paste(names(hflgs)[hflgs],sep=", "),"\n")
 	
 	if(pmatch(hflg.met, "replace", nomatch = 0) && any(hflgs)){
 
@@ -727,6 +738,7 @@ evalREddy <- function(
 		,tz_sonic = NULL
 		,z_canopy = NULL
 		,create_graphs=TRUE
+        ,as_ibts = TRUE
 	){
 	script.start <- Sys.time()
 	################################################################################
@@ -880,6 +892,11 @@ evalREddy <- function(
 			cat("Reading raw data...\n")
 			# browser() 
 			Data <- read_rawdata(dfname)
+            # check if empty
+            if (nrow(Data) == 0) {
+                cat('Empty file...\n')
+                return(NULL)
+            }
 			if(!all(cn_check <- variables %in% names(Data))){
 				stop("cannot find variable(s): ",paste(variables[!cn_check],collapse=" ,"),"\nAvailable column names are: ",paste(names(Data),collapse=" ,"))
 			}
@@ -889,7 +906,7 @@ evalREddy <- function(
 				Data <- cbind(Data[,1],delta_t=c(median(delta_t),delta_t),Data[,-1])
 			}
 			Data <- Data[,c(1:2,which(names(Data) %in% variables))]
-			
+            
 			# correct time zone:                                      
 			# ------------------------------------------------------------------------------ 
 			if(!identical(tz_sonic,tz(Data[,1]))){
@@ -955,7 +972,7 @@ evalREddy <- function(
 					stop("invalid argument type: 'end_time'")
 				}
 			}
-			
+
 			if(length(Start)==1){
 				if(End-avg_period*60 < Start){
 					warning(paste0("File '",filename,"' (",format(Data_Day),"): Too few data to evaluate! Returning 'NULL'"))
@@ -972,14 +989,12 @@ evalREddy <- function(
 
 			# prepare results:                                      
 			# ------------------------------------------------------------------------------ 
-			POSIxct_dummy <- rep(now(),length(st_interval))
-			POSIxct_dummy[] <- NA
 			results <- cbind(
 				data.frame(
-					Interval_Start=st_interval
-					,Interval_End=et_interval
-					,Data_Start = POSIxct_dummy
-					,Data_End = POSIxct_dummy
+					st=st_interval
+					,et=et_interval
+					,Data_Start = with_tz(NA_POSIXct_, tz_sonic)
+					,Data_End = with_tz(NA_POSIXct_, tz_sonic)
 					,tzone = tz_sonic
 					,"Int_Length (min)" = avg_period
 					,stringsAsFactors=FALSE,check.names=FALSE
@@ -1265,6 +1280,7 @@ evalREddy <- function(
 					
 					# write results:
 					# -------------------------------------------------------------------------- 
+                    # browser()
 					if(checkNames){
 						# browser()
 						res_temp <- cbind(data.frame(
@@ -1372,6 +1388,10 @@ evalREddy <- function(
 		} # end inner doCalc
 		# setwd(former_wd)	
 	} # end outer doCalc
+
+    if (as_ibts) {
+        results <- as.ibts(results)
+    }
 
 
 	# #################################### END VERSION HISTORY #################################### #

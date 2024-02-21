@@ -256,7 +256,11 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
 	Date <- gsub("^ht8700_.*_([0-9]{8})_.*", "\\1", bn)
 	### read File
     raw <- readLines(FilePath, warn = FALSE)
-    out <- fread(text = raw[grepl('^\\d{2}([^,]*,){19}[^,]*$', raw, useBytes = TRUE)],
+    raw <- raw[grepl('^\\d{2}([^,]*,){19}[^,]*$', raw, useBytes = TRUE)]
+    if (length(raw) == 1) {
+        raw <- c(raw, '')
+    }
+    out <- fread(text = raw, blank.lines.skip = TRUE,
         header = FALSE, na.strings = '999.99', showProgress = FALSE)
     # if (has_awk && (!is_zipped || (is_zipped && has_zcat))) {
     #     # awk solution

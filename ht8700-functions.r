@@ -4,7 +4,7 @@ library(data.table)
 library(ibts)
 
 process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
-    match_dates = NULL, save_file = FALSE) {
+    match_dates = NULL, save_file = FALSE, sonic_basis = TRUE) {
     # read sonic folder
     sonic_files <- dir(path_sonic, pattern = '^data_sonic-.')
     if (length(sonic_files) == 0) {
@@ -85,18 +85,22 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
             # read ht
             ht_data <- rbindlist(lapply(file.path(path_ht, u_ht_files), read_ht8700))
             # merge data
-            # sonic_based <- merge_data(sonic_data, ht_data)
-            ht_based <- merge_data(ht_data, sonic_data)
+            if (sonic_basis) {
+                m_data <- merge_data(sonic_data, ht_data)
+            } else {
+                m_data <- merge_data(ht_data, sonic_data)
+            }
+            Hz <- m_data[, round(1 / median(diff(as.numeric(Time, units = 'secs'))), -1)]
             # save to disk
             if (save_file && !is.null(path_merged)) {
-                fwrite(ht_based[, 
+                fwrite(m_data[, 
                     .(Time, nh3_ppb, nh3_ugm3, temp_amb, press_amb, oss, u, v, w, T, sonic)
-                    ], file = paste0(path_merged, '/ht_merged_', sonic, '_',
+                    ], file = paste0(path_merged, '/ht_merged_', Hz, 'Hz_', sonic, '_',
                         u_date, '_', u_sha)
                 )
             }
         }
-        ht_based
+        m_data
     })
     names(out) <- unique_dates
     out

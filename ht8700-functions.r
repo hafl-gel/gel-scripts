@@ -47,7 +47,7 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
     if (!is.null(path_merged)) {
         merged_files <- dir(path_merged, pattern = '^ht_merged_')
     }
-    merged_dates <- sub('^ht_merged_sonic-._(\\d{8})_.*', '\\1', merged_files)
+    merged_dates <- sub('^ht_merged_.*Hz_sonic-._(\\d{8})_.*', '\\1', merged_files)
     out <- lapply(unique_dates, \(u_date) {
         cat('merging data from', sub('(\\d{4})(\\d{2})(\\d{2})', '\\3.\\2.\\1', u_date), '- ')
         u_sonic_files <- sonic_ok[[u_date]]
@@ -72,7 +72,7 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
         # identical?
         if (u_sha == m_sha) {
             cat('merged file is up-to-date...\n')
-            ht_based <- fread(file.path(path_merged, m_file))
+            m_data <- fread(file.path(path_merged, m_file))
         } else {
             if (m_sha != '') {
                 cat('updating merged file:\n')

@@ -889,7 +889,10 @@ evalREddy <- function(
 
 			# reading data file:                                      
 			# ------------------------------------------------------------------------------
-			cat("Reading raw data...\n")
+			cat("\n************************************************************\n")
+            cat("REddy EC evaluation\n")
+			cat("************************************************************\n")
+            cat('\nReading raw data from file "', dfname, '"\n', sep = '')
 			# browser() 
 			Data <- read_rawdata(dfname)
             # check if empty
@@ -980,11 +983,11 @@ evalREddy <- function(
 				}
 				st_interval <- seq(Start,End-avg_period*60,avg_period*60)
 				et_interval <- st_interval + avg_period*60
-				cat("Calculation will include all intervals between",format(st_interval[1],format="%Y-%m-%d %H:%M"),"and",format(et_interval[length(et_interval)],format="%Y-%m-%d %H:%M",usetz=TRUE),"on a",avg_period,"min basis\n")
+				cat("\n~~~\nCalculation will include all intervals between",format(st_interval[1],format="%Y-%m-%d %H:%M"),"and",format(et_interval[length(et_interval)],format="%Y-%m-%d %H:%M",usetz=TRUE),"on a",avg_period,"min basis\n~~~\n\n")
 			} else {
 				st_interval <- Start
 				et_interval <- End
-				cat("Calculation will include the following intervals:\n",paste(format(st_interval,format="   %Y-%m-%d %H:%M"),"to",format(et_interval,format="%Y-%m-%d %H:%M",usetz=TRUE)))
+				cat("\n~~~\nCalculation will include the following intervals:\n",paste(format(st_interval,format="   %Y-%m-%d %H:%M"),"to",format(et_interval,format="%Y-%m-%d %H:%M",usetz=TRUE)), '\n~~~\n)
 			}
 
 			# prepare results:                                      
@@ -1083,6 +1086,10 @@ evalREddy <- function(
 					Int_Time <- as.numeric(Int_End - Int_Start,units="secs")
 					d_t <- diff(as.numeric(Time))
 					Hz <- round(1/summary(d_t)[['Median']])
+                    if (Hz < 10) {
+                        cat('Frequency is lower than 10 Hz! Skipping interval.\n')
+                        next
+                    }
 					# freq <- seq(floor(Int_length/2))*2/Int_Time
 					freq <- Hz * seq(floor(Int_length / 2)) / floor(Int_length / 2)
 					# for later: include NA where d_t>2*mean, remove entries where d_t < 0.5*mean

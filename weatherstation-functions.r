@@ -84,7 +84,8 @@ ws_e4 <- function(dat, tz_ws700 = 'Etc/GMT-1') {
 }
 
 ws_10minute <- function(file_names) {
-    rbindlist(lapply(file_names, function(file_name) {
+    ind <- order(as.integer(sub('.*(\\d{8})$', '\\1', file_names)))
+    rbindlist(lapply(file_names[ind], function(file_name) {
         dat <- ws_read(file_name, Ex = 'E4')
         ws_e4(dat)
             }))

@@ -157,7 +157,8 @@ get_ws700 <- function(folder, from = NULL, to = NULL,
         if (!is.POSIXct(to)) {
             stop('Cannot parse argument "to"')
         }
-        to_index <- which(datetimes <= trunc(to, units = 'days'))[1]
+        to_index <- which(datetimes <= trunc(to, units = 'days'))
+        to_index <- to_index[length(to_index)]
         if (is.na(to_index)) {
             first_time <- ws_1minute(files[1])[, Time[1]]
             warning('No data available! (No data before "', to, '" - first entry at "', first_time, '")', call. = FALSE)

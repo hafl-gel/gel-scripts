@@ -13,7 +13,21 @@ ws_read <- function(file_name, Ex = c('E0', 'E2', 'E4')) {
             E4 = c('V3', 'V7')
             )[Ex]))
     # read only valid starting rows
-    fread(file = file_name, sep = ';', fill = TRUE, key = 'V2')[(Ex),
+    suppressWarnings(raw_lines <- readLines(file_name))
+    reg_Ex <- if (length(Ex) > 1) {
+        paste0('(',
+            paste(Ex, collapse = '|'),
+            ')')
+    } else {
+        Ex
+    }
+    suppressWarnings(ind <- grep(paste0('^\\d{2}(:\\d{2}){2}; ', reg_Ex, '(;[^;]+){9}(;[^;]+)?;$'), raw_lines))
+    text_in <- if (length(ind) == 1) {
+        c(raw_lines[ind], ' ')
+    } else {
+        raw_lines[ind]
+    }
+    fread(text = text_in, sep = ';', fill = TRUE, key = 'V2')[(Ex),
             c(list(paste(sub('.*_', '', file_name), V1), V2), mget(cols))]
 }
 

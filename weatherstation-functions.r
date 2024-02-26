@@ -32,7 +32,7 @@ ws_e0 <- function(dat, tz_ws700 = 'Etc/GMT-1') {
         )
     }, .SDcols = V3:V12]
     setnames(e0, c('Time', 'recorded.e0', 'T_air', 'RH', 'P_air', 'Prec_sum', 'Prec_type', 'Prec_int'))
-    e0
+    na.omit(e0, cols = 'Time')
 }
 
 ws_e2 <- function(dat, tz_ws700 = 'Etc/GMT-1') {
@@ -51,7 +51,7 @@ ws_e2 <- function(dat, tz_ws700 = 'Etc/GMT-1') {
         )
     }, .SDcols = c('V7', 'V11')]
     setnames(e2, c('Time', 'recorded.e2', 'U', 'WD'))
-    e2
+    na.omit(e2, cols = 'Time')
 }
 
 ws_1minute <- function(file_names) {
@@ -80,7 +80,7 @@ ws_e4 <- function(dat, tz_ws700 = 'Etc/GMT-1') {
         )
     }, .SDcols = c('V3', 'V7')]
     setnames(e4, c('Time', 'recorded.e4', 'Compass', 'gRAD'))
-    e4
+    na.omit(e4, cols = 'Time')
 }
 
 ws_10minute <- function(file_names) {

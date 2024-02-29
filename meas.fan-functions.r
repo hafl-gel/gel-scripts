@@ -36,18 +36,24 @@ read_frequi <- function(path_data, rds_fan_calib,
     if (!file.exists(rds_fan_calib)) stop('rds_fan_calib: ', rds_fan_calib, ' is not accessible')
     # get fan_id
     if (grepl('mm-\\d$', path_data)) {
-        fan_id <- sub('.*(\\d)$', '\\1', path_data)
+        if (is.null(fan_id)) {
+            fan_id <- sub('.*(\\d)$', '\\1', path_data)
+        }
         # don't know how to do it in a better way
         path_data <- dirname(path_data)
     }
     # get diameter
-    fan_dia <- switch(as.character(fan_id)
-        , '1' = 63
-        , '2' = 
-        , '3' = 
-        , '4' = 
-        , '5' = 82
-        , 92
+    fan_dia <- switch(paste0('fan-', as.character(fan_id))
+        , 'fan-1' = 63
+        , 'fan-2' = 
+        , 'fan-3' = 
+        , 'fan-4' = 
+        , 'fan-5' = 82
+        , 'fan-6' =
+        , 'fan-7' =
+        , 'fan-8' =
+        , 'fan-9' = 92
+        , stop('diameter is unknown, please provide fan_id')
     )
     # create path
     path_prep <- file.path(path_data, 'messventilator-%s0mm-%s')

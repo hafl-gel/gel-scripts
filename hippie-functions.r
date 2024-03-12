@@ -52,8 +52,8 @@ read_hippie <- function(file, as_ibts = TRUE) {
         # mt = st[1] + (et[.N] - st[1]) / 2,
         duration_secs = as.numeric(et[.N] - st[1], units = 'secs'),
         N_int = .N,
-        flow1_lmin = mean(Flow_1, na.rm = TRUE),
-        flow2_lmin = mean(Flow_2, na.rm = TRUE)
+        flow1_lmin = mean(Flow_1, na.rm = TRUE) / 1e3,
+        flow2_lmin = mean(Flow_2, na.rm = TRUE) / 1e3
         ), by = .(Valve_Is, Cycle_Set)
     ]
 

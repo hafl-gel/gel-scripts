@@ -987,7 +987,7 @@ evalREddy <- function(
 			} else {
 				st_interval <- Start
 				et_interval <- End
-				cat("\n~~~\nCalculation will include the following intervals:\n",paste(format(st_interval,format="   %Y-%m-%d %H:%M"),"to",format(et_interval,format="%Y-%m-%d %H:%M",usetz=TRUE)), '\n~~~\n)
+				cat("\n~~~\nCalculation will include the following intervals:\n",paste(format(st_interval,format="   %Y-%m-%d %H:%M"),"to",format(et_interval,format="%Y-%m-%d %H:%M",usetz=TRUE)), '\n~~~\n')
 			}
 
 			# prepare results:                                      

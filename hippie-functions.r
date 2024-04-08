@@ -98,8 +98,8 @@ read_vials <- function(file) {
     # fix names
     names(out) <- make.names(tolower(names(out)))
 }
-file <- '~/LFE/02_Daten/6-hippie/lab/Vials_blau_41-80_20240221.xlsx'
-read_vials(file)
+# file <- '~/LFE/02_Daten/6-hippie/lab/Vials_blau_41-80_20240221.xlsx'
+# read_vials(file)
 
 # test_file <- '~/LFE/02_Daten/6-hippie/20240215.TXT'
 # read_hippie(test_file)

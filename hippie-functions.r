@@ -5,14 +5,27 @@ library(ibts)
 
 
 read_hippie <- function(file, as_ibts = TRUE) {
-    dat_raw <- readLines(file)
+    if (length(file) > 1) {
+        if (all(file.exists(file))) {
+            cat('Fix providing multiple files!\n')
+            browser()
+        } else {
+            dat_raw <- file
+        }
+    } else {
+        dat_raw <- readLines(file)
+    }
     hdr_lines <- grep('^Date', dat_raw)
 
-    # if (length(hdr_lines) > 1 || hdr_lines != 1) {
-    #     cat('check header lines\n')
-    #     browser()
-    #     # -> instrument restart
-    # }
+    if (length(hdr_lines) > 1 || hdr_lines != 1) {
+        # -> instrument restarts
+        # break into several results
+        out <- mapply(\(from, to) {
+            read_hippie(dat_raw[from:to], as_ibts = as_ibts)
+        }, from = hdr_lines, to = c(hdr_lines[-1] - 1, length(dat_raw)),
+        SIMPLIFY = FALSE)
+        return(out)
+    }
 
     hdr <- unlist(read.table(text = dat_raw[1], nrows = 1, sep = ';'))
     dat <- fread(text = dat_raw[-hdr_lines], header = FALSE)

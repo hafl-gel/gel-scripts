@@ -212,7 +212,7 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'UTC',
     # parse time and round to seconds
     xnode_data[, et := as.POSIXct(
         round(
-            fast_strptime(time, format = '%Y-%m-%dT%H:%M:%OSZ', tz = time_zone)
+            with_tz(fast_strptime(time, format = '%Y-%m-%dT%H:%M:%OSZ', tz = 'UTC'), tzone = time_zone)
         )
     )]
     # sort by et

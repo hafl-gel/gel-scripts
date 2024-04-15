@@ -4,7 +4,7 @@ library(ibts)
 
 
 
-read_hippie <- function(file, as_ibts = TRUE) {
+read_hippie <- function(file, as_ibts = TRUE, time_zone = 'CET') {
     if (length(file) > 1) {
         if (all(file.exists(file))) {
             cat('Fix providing multiple files!\n')
@@ -38,7 +38,7 @@ read_hippie <- function(file, as_ibts = TRUE) {
     #       a) no data (tair, pair) 
     #       b) different values tair (-> always take minimum?)
     dat[, c('st', 'et', 'Date_Time') := {
-        Time <- fast_strptime(Date_Time, format = '%Y%m%dT%H%M%SZ', lt = FALSE, tz = 'Etc/GMT-1')
+        Time <- fast_strptime(Date_Time, format = '%Y%m%dT%H%M%SZ', lt = FALSE, tz = time_zone)
         dT <- median(diff(Time), na.rm = TRUE)
         list(
             Time - dT,

@@ -4,7 +4,7 @@ library(ibts)
 
 
 
-read_hippie <- function(file, as_ibts = TRUE, time_zone = 'Etc/GMT-1') {
+read_hippie <- function(file, as_ibts = TRUE, time_zone = 'Etc/GMT-1', flatten = FALSE) {
     if (length(file) > 1) {
         if (all(file.exists(file))) {
             cat('Fix providing multiple files!\n')
@@ -24,6 +24,9 @@ read_hippie <- function(file, as_ibts = TRUE, time_zone = 'Etc/GMT-1') {
             read_hippie(dat_raw[from:to], as_ibts = as_ibts)
         }, from = hdr_lines, to = c(hdr_lines[-1] - 1, length(dat_raw)),
         SIMPLIFY = FALSE)
+        if (flatten) {
+            out <- do.call(rbind, out)
+        }
         return(out)
     }
 
@@ -46,11 +49,12 @@ read_hippie <- function(file, as_ibts = TRUE, time_zone = 'Etc/GMT-1') {
             NULL
             )
     }]
-    dat[, c('nFlow_1', 'nFlow_2', 'Flow_1', 'Flow_2') := {
+    dat[, c('Tair', 'nFlow_1', 'nFlow_2', 'Flow_1', 'Flow_2') := {
         Tair <- rowMeans(
             cbind(Temperature_outside_left, Temperature_outside_right), 
             na.rm = TRUE)
         list(
+            Tair,
             Flow_1,
             Flow_2,
             Flow_1 * 101325 / 273.15 * (Tair + 273.15) / Air_pressure,
@@ -63,10 +67,16 @@ read_hippie <- function(file, as_ibts = TRUE, time_zone = 'Etc/GMT-1') {
         st = st[1],
         et = et[.N],
         # mt = st[1] + (et[.N] - st[1]) / 2,
-        duration_secs = as.numeric(et[.N] - st[1], units = 'secs'),
+        duration_mins = as.numeric(et[.N] - st[1], units = 'mins'),
         N_int = .N,
         flow1_lmin = mean(Flow_1, na.rm = TRUE) / 1e3,
-        flow2_lmin = mean(Flow_2, na.rm = TRUE) / 1e3
+        flow2_lmin = mean(Flow_2, na.rm = TRUE) / 1e3,
+        flow1_Ln_min = mean(nFlow_1, na.rm = TRUE) / 1e3,
+        flow2_Ln_min = mean(nFlow_2, na.rm = TRUE) / 1e3,
+        flow1_mol_min = mean(nFlow_1, na.rm = TRUE) * 101325 / 8.3144598 / 273.14 / 1e6,
+        flow2_mol_min = mean(nFlow_2, na.rm = TRUE) * 101325 / 8.3144598 / 273.14 / 1e6,
+        t_outside = mean(Tair) + 273.14,
+        p_outside = mean(Air_pressure)
         ), by = .(Valve_Is, Cycle_Set)
     ]
 
@@ -80,7 +90,7 @@ read_hippie <- function(file, as_ibts = TRUE, time_zone = 'Etc/GMT-1') {
 }
 
 
-read_vials <- function(file, sheet = 1, filter_na = TRUE, as_data_table = TRUE) {
+read_vials <- function(file, sheet = 1, filter_na = TRUE, as_data_table = TRUE, return_all = FALSE) {
     require(openxlsx)
     dat <- read.xlsx(file, sheet = sheet, sep.names = ' ')
     # get column names
@@ -102,7 +112,13 @@ read_vials <- function(file, sheet = 1, filter_na = TRUE, as_data_table = TRUE) 
     # find measurement date
     date_col <- grep('meas.*(D|d)ate', nms, value = TRUE)
     # build output
-    out <- dat[, c(date_col, vial_col, cycle_cols, net_col, conc_cols, start_col, time_cols)]
+    if (return_all) {
+        cols <- c(date_col, vial_col, cycle_cols, net_col, conc_cols, start_col, time_cols)
+        resid_cols <- nms[!(nms %in% cols)]
+        out <- dat[, c(cols, resid_cols)]
+    } else {
+        out <- dat[, c(date_col, vial_col, cycle_cols, net_col, conc_cols, start_col, time_cols)]
+    }
     # fix numeric values
     suppressWarnings(out[, c(net_col, conc_cols)] <- lapply(out[, c(net_col, conc_cols)], as.numeric))
     # add mg in Solution and time difference

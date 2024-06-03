@@ -123,8 +123,8 @@ read_frequi <- function(path_data, rds_fan_calib,
     if (as_ibts) {
         fan_data <- as.ibts(fan_data)
     }
-    # return
-    fan_data
+    # return & attach fan dia
+    structure(fan_data, 'fan_dia' = fan_dia)
 }
 
 

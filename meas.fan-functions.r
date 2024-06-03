@@ -26,44 +26,16 @@ switch(Sys.info()['user']
 
 #
 read_frequi <- function(path_data, rds_fan_calib,
-    from = NULL, to = NULL, fan_id = NULL, time_zone = 'UTC', 
-    V_crit = 3, max_interval_secs = 90, as_ibts = TRUE) {
+    from = NULL, to = NULL, time_zone = 'UTC', V_crit = 3, 
+    max_interval_secs = 90, as_ibts = TRUE, fan_dia = NULL) {
     # check path_data
     if (!file.exists(path_data)) stop('path_data: ', path_data, ' is not accessible')
     if (missing(rds_fan_calib)) {
         rds_fan_calib <- file.path(getOption('gel.scripts.path', ''), 'meas.fan/fan-calibration.rds')
     }
     if (!file.exists(rds_fan_calib)) stop('rds_fan_calib: ', rds_fan_calib, ' is not accessible')
-    # get fan_id
-    if (is.null(fan_id)) {
-        fan_id <- sub('.*(\\d)$', '\\1', path_data)
-    }
-    # fix path
-    if (grepl('mm-\\d$', path_data)) {
-        # don't know how to do it in a better way
-        path_fan <- path_data
-    } else {
-        # create path
-        path_prep <- file.path(path_data, 'messventilator-%s0mm-%s')
-        path_fan <- sprintf(path_prep, fan_dia, fan_id)
-    }
-    # get diameter
-    fan_dia <- switch(paste0('fan-', as.character(fan_id))
-        , 'fan-1' = 63
-        , 'fan-2' = 
-        , 'fan-3' = 
-        , 'fan-4' = 
-        , 'fan-5' = 82
-        , 'fan-6' =
-        , 'fan-7' =
-        , 'fan-8' =
-        , 'fan-9' = 92
-        , stop('diameter is unknown, please provide fan_id')
-    )
-    # get coefficients
-    fan_cfs <- readRDS(rds_fan_calib)[[as.character(fan_dia)]]
     # get files
-    files_fan <- dir(path_fan, full.names = TRUE)
+    files_fan <- dir(path_data, full.names = TRUE)
     # get dates
     dates <- as.integer(sub('.*(\\d{4})_(\\d{2})_(\\d{2})[.]csv$', '\\1\\2\\3', files_fan))
     ### get folders in timerange
@@ -91,10 +63,21 @@ read_frequi <- function(path_data, rds_fan_calib,
         cat('no data available in specified time range!\n')
         return(invisible())
     }
+    # get files within time range
     files_fan <- files_fan[in_range]
     # read data
     fan_data <- rbindlist(lapply(files_fan, fread, 
                 fill = TRUE, blank.lines.skip = TRUE))
+    # new path structure, check unique diameter
+    if (is.null(fan_dia)) {
+        dias <- as.integer(sub('.*_(\\d{3})mm-.*', '\\1', files_fan)) / 10
+        if (length(fan_dia <- unique(dias)) != 1) {
+            stop('fan diameter is not unique for provided time range (', paste(fan_dia, collapse = ' and '), ')')
+        }
+    } else {
+        # sort by date/time since sorting is not guaranteed from filenames
+        fan_data <- fan_data[order(V1)]
+    }
     # check columns 2 & 3
     if (fan_data[, !is.numeric(V2)]) {
         # filter bad entries
@@ -121,6 +104,8 @@ read_frequi <- function(path_data, rds_fan_calib,
     }]
     # select from/to range
     fan_data <- fan_data[st >= from & et <= to]
+    # get coefficients
+    fan_cfs <- readRDS(rds_fan_calib)[[as.character(fan_dia)]]
     # add speed (m/s) & air flow (m3/s)
     fan_data[, c('speed_m_s', 'flow_m3_s', 'extrapol') := {
         speed <- Hz * fan_cfs[2] + fan_cfs[1]

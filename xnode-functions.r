@@ -86,10 +86,8 @@ read_raw <- function(raw_dir, .from = NULL, .to = NULL, use_jq = FALSE) {
         out <- as.data.table(
             fromJSON(
                 system(
-                    # paste0("find ", raw_dir, 
-                    #     " -name '*.json' -type f -exec cat {} + | jq -s '.'"),
-                    paste0("cat ", raw_dir, "/xnode*.json | jq -s '.'"),
-                    intern = TRUE
+                    paste0("jq -s '.' ", raw_dir, "/xnode*.json")
+                    , intern = TRUE
                 ), 
                 flatten = TRUE
             )

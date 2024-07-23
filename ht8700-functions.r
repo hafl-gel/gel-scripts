@@ -5,7 +5,7 @@ library(ibts)
 
 process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
     from = NULL, to = NULL, save_file = FALSE, sonic_basis = TRUE, tzone = 'Etc/GMT-1',
-    tzone_from = tzone, tzone_to = tzone, tzone_out = 'Etc/GMT-1') {
+    tzone_from = tzone, tzone_to = tzone, tzone_out = 'Etc/GMT-1', verbose = 1) {
     # read ht folder
     ht_files <- dir(path_ht, pattern = '^ht8700_sonic-.')
     if (length(ht_files) == 0) {
@@ -40,7 +40,7 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
     takeme <- sonic_dates >= dfrom & sonic_dates <= dto
     # no data within time range
     if (!any(takeme)) {
-        cat('No data for specified date range...\n')
+        if (verbose > 0) cat('No data for specified date range...\n')
         return(list())
     }
     # get sonic label
@@ -71,7 +71,7 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
     }
     merged_dates <- sub('^ht_merged_.*Hz_sonic-._(\\d{8})_.*', '\\1', merged_files)
     out <- lapply(unique_dates, \(u_date) {
-        cat('merging data from', sub('(\\d{4})(\\d{2})(\\d{2})', '\\3.\\2.\\1', u_date), '- ')
+        if (verbose > 0) cat('merging data from', sub('(\\d{4})(\\d{2})(\\d{2})', '\\3.\\2.\\1', u_date), '')
         u_sonic_files <- sonic_ok[[u_date]]
         u_ht_files <- ht_ok[[u_date]]
         # gen hash all sonic and ht files
@@ -93,19 +93,31 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
         }
         # identical?
         if (u_sha == m_sha) {
-            cat('merged file is up-to-date...\n')
+            if (verbose > 0) cat('- merged file is up-to-date...\n')
             m_data <- fread(file.path(path_merged, m_file))
         } else {
-            if (m_sha != '') {
-                cat('updating merged file:\n')
-            } else {
-                cat('creating merged file:\n')
-            }
             # create new merged file
-            # read sonic
-            sonic_data <- rbindlist(lapply(file.path(path_sonic, u_sonic_files), read_windmaster_ascii))
-            # read ht
-            ht_data <- rbindlist(lapply(file.path(path_ht, u_ht_files), read_ht8700))
+            if (verbose > 1) {
+                cat(':\n')
+                vfoo <- eval
+            } else {
+                if (verbose > 0) {
+                    if (m_sha != '') {
+                        cat('- updating merged file - ')
+                    } else if(!is.null(path_merged)) {
+                        cat('- creating merged file - ')
+                    } else {
+                        cat('- ')
+                    }
+                }
+                vfoo <- capture.output
+            }
+            vfoo({
+                # read sonic
+                sonic_data <- rbindlist(lapply(file.path(path_sonic, u_sonic_files), read_windmaster_ascii))
+                # read ht
+                ht_data <- rbindlist(lapply(file.path(path_ht, u_ht_files), read_ht8700))
+            })
             # merge data
             if (sonic_basis) {
                 m_data <- merge_data(sonic_data, ht_data)
@@ -121,6 +133,7 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
                         u_date, '_', u_sha)
                 )
             }
+            if (verbose == 1) cat('done\n')
         }
         m_data
     })

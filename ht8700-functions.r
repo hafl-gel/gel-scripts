@@ -3,40 +3,50 @@
 library(data.table)
 library(ibts)
 
-process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
-    from = NULL, to = NULL, save_file = FALSE, sonic_basis = TRUE, tzone = 'Etc/GMT-1',
-    tzone_from = tzone, tzone_to = tzone, tzone_out = 'Etc/GMT-1', verbose = 1) {
+select_files <- function(ht_path, sonic_path, from, to) {
     # read ht folder
-    ht_files <- dir(path_ht, pattern = '^ht8700_sonic-.')
+    if (length(ht_path) == 1 && file.info(ht_path)$isdir) {
+        ht_files <- dir(ht_path, pattern = '^ht8700_sonic-.')
+    } else {
+        ht_files <- ht_path
+    }
     if (length(ht_files) == 0) {
-        stop('No HT8700 data in directory "', path_ht, '"')
+        stop('No HT8700 data in directory "', ht_path, '"')
     }
     # read sonic folder
-    sonic_files <- dir(path_sonic, pattern = '^data_sonic-.')
+    if (length(sonic_path) == 1 && file.info(sonic_path)$isdir) {
+        sonic_files <- dir(sonic_path, pattern = '^data_sonic-.')
+    } else {
+        sonic_files <- sonic_path
+    }
     if (length(sonic_files) == 0) {
-        stop('No sonic data in directory "', path_sonic, '"')
+        stop('No sonic data in directory "', sonic_path, '"')
     }
     # get dates
     sonic_dates <- as.integer(sub('.*_(\\d{8})_.*', '\\1', sonic_files))
     # check from
-    if (is.null(from)) {
+    if (is.null(from) || from[1] == 'first') {
         dfrom <- sonic_dates[1]
     } else {
         # fix to/from to Etc/GMT-1 (data time zone)
-        from <- with_tz(parse_date_time3(from, tz = tzone), 'Etc/GMT-1')
+        from <- parse_date_time3(from, tz = 'Etc/GMT-1')
         # create date int
-        dfrom <- as.integer(format(from, '%Y%m%d'))
+        dfrom <- as.integer(unique(format(from, '%Y%m%d')))
     }
     # check to
-    if (is.null(to)) {
+    if (is.null(to) || to[1] == 'last') {
         dto <- tail(sonic_dates, 1L)
     } else {
         # fix to to Etc/GMT-1 (data time zone)
-        to <- with_tz(parse_date_time3(to, tz = tzone), 'Etc/GMT-1')
+        to <- parse_date_time3(to, tz = 'Etc/GMT-1')
         # create date int
-        dto <- as.integer(format(to, '%Y%m%d'))
+        dto <- as.integer(unique(format(to, '%Y%m%d')))
     }
     # get subset index based on time range
+    if (length(dfrom) > 1 || length(dto) > 1) {
+        cat('Fix me @ line 47 in ht8700-functions.r\n')
+        browser()
+    }
     takeme <- sonic_dates >= dfrom & sonic_dates <= dto
     # no data within time range
     if (!any(takeme)) {
@@ -64,6 +74,19 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
     ht_ok <- lapply(unique_dates, grep, 
         x = ht_sonic, fixed = TRUE, value = TRUE)
     names(ht_ok) <- unique_dates
+    # return list of files
+    list(
+        dates = unique_dates,
+        sonic = sonic_ok,
+        ht8700 = ht_ok
+    )
+}
+
+process_daily_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
+    from_date = NULL, to_date = NULL, save_file = FALSE, sonic_basis = TRUE,
+    tzone_out = 'Etc/GMT-1', verbose = 1) {
+    # get files & dates
+    files <- select_files(path_ht, path_sonic, from = from_date, to = to_date)
     # check merged file
     merged_files <- character(0)
     if (!is.null(path_merged)) {
@@ -138,7 +161,9 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
         m_data
     })
     names(out) <- unique_dates
-    out
+    cat('Fix tzone out!\n')
+    browser()
+    rbindlist(out)
 }
 
 

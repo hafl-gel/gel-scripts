@@ -106,8 +106,6 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     out
 }
 
-read_windmaster_ascii('/home/christoph/LFE/02_Daten/3-sonic/sonic-a/data_sonic-a_20240616_121503.gz')
-
 read_windmaster_old_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	### get Date
 	bn <- basename(FilePath)

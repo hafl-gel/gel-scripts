@@ -24,8 +24,11 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	Date <- gsub("^data_.*_([0-9]{8})_.*", "\\1", bn)
 	### read File
     raw <- readLines(FilePath, warn = FALSE)
-    out <- fread(text = raw[grepl('^\\d{2}([^,]*,){5}M,([^,]*,){2}[^,]*$', raw, useBytes = TRUE)],
-        header = FALSE, na.strings = '999.99', showProgress = FALSE)
+    # filter out erroneous multibyte strings
+    raw <- raw[grepl('^\\d{2}[0-9.:]+,[^,]+,([0-9.+-]+,){3}M,([0-9.+-]+,){2}[^,]+$', raw, 
+        useBytes = TRUE)]
+    out <- fread(text = raw, header = FALSE, na.strings = '999.99', showProgress = FALSE, 
+        blank.lines.skip = TRUE)
     # check if file is empty
 	if(nrow(out) == 0){
         cat('no valid data\n')
@@ -35,25 +38,9 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     vnums <- paste0('V', c(3, 4, 5, 7))
     is.char <- out[, sapply(.SD, is.character), .SDcols = vnums]
     # convert to numeric
-    if (any(is.char)) {
-        op <- getOption('show.error.messages')
-        options(show.error.messages = FALSE)
-        on.exit(options(show.error.messages = op))
-        check <- try(out[, vnums[is.char] := {
-            lapply(.SD, as.numeric)
-        }, .SDcols = vnums[is.char]])
-        if (inherits(check, 'try-error')) {
-            # remove multibyte string
-            ind <- out[, Reduce('&', lapply(.SD, grepl, pattern = '^[-+]?[0-9]+[.][0-9]+$')), .SDcols = vnums[is.char]]
-            out <- out[ind, ]
-            # try to convert again
-            out[, vnums[is.char] := {
-                lapply(.SD, as.numeric)
-            }, .SDcols = vnums[is.char]]
-        }
-        options(show.error.messages = op)
-        on.exit()
-    }
+    out[, vnums[is.char] := {
+        lapply(.SD, as.numeric)
+    }, .SDcols = vnums[is.char]]
     # remove NA lines that come from conversion
     out <- na.omit(out)
     if (out[, .N == 0]) {
@@ -118,6 +105,8 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     # return
     out
 }
+
+read_windmaster_ascii('/home/christoph/LFE/02_Daten/3-sonic/sonic-a/data_sonic-a_20240616_121503.gz')
 
 read_windmaster_old_ascii <- function(FilePath, tz = "Etc/GMT-1"){
 	### get Date

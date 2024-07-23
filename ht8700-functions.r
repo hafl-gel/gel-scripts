@@ -4,35 +4,57 @@ library(data.table)
 library(ibts)
 
 process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
-    match_dates = NULL, save_file = FALSE, sonic_basis = TRUE) {
+    from = NULL, to = NULL, save_file = FALSE, sonic_basis = TRUE, tzone = 'Etc/GMT-1',
+    tzone_from = tzone, tzone_to = tzone, tzone_out = 'Etc/GMT-1') {
+    # read ht folder
+    ht_files <- dir(path_ht, pattern = '^ht8700_sonic-.')
+    if (length(ht_files) == 0) {
+        stop('No HT8700 data in directory "', path_ht, '"')
+    }
     # read sonic folder
     sonic_files <- dir(path_sonic, pattern = '^data_sonic-.')
     if (length(sonic_files) == 0) {
         stop('No sonic data in directory "', path_sonic, '"')
     }
-    sonic <- unique(sub('^data_(sonic-.)_.*', '\\1', sonic_files))
-    if (length(sonic) > 1) {
-        stop('Folder "', path_sonic, '" contains files from different sonic computers')
-    }
-    #     -> add option to check only current date => online evaluation
+    # get dates
     sonic_dates <- as.integer(sub('.*_(\\d{8})_.*', '\\1', sonic_files))
-    if (!is.null(match_dates)) {
-        m_times <- parse_timerange(match_dates)
-        m_int <- as.integer(format(m_times, format = '%Y%m%d'))
-        sonic_dates <- sonic_dates[sonic_dates >= m_int[1] & sonic_dates <= m_int[length(m_int)]]
-        if (length(sonic_dates) == 0) {
-            cat('No data for specified date range...\n')
-            return(list())
-        }
+    # check from
+    if (is.null(from)) {
+        dfrom <- sonic_dates[1]
+    } else {
+        # fix to/from to Etc/GMT-1 (data time zone)
+        from <- with_tz(parse_date_time3(from, tz = tzone), 'Etc/GMT-1')
+        # create date int
+        dfrom <- as.integer(format(from, '%Y%m%d'))
     }
-    # read ht folder
-    ht_files <- dir(path_ht, pattern = '^ht8700_sonic-.')
+    # check to
+    if (is.null(to)) {
+        dto <- tail(sonic_dates, 1L)
+    } else {
+        # fix to to Etc/GMT-1 (data time zone)
+        to <- with_tz(parse_date_time3(to, tz = tzone), 'Etc/GMT-1')
+        # create date int
+        dto <- as.integer(format(to, '%Y%m%d'))
+    }
+    # get subset index based on time range
+    takeme <- sonic_dates >= dfrom & sonic_dates <= dto
+    # no data within time range
+    if (!any(takeme)) {
+        cat('No data for specified date range...\n')
+        return(list())
+    }
+    # get sonic label
+    sonic <- unique(sub('^data_(sonic-.)_.*', '\\1', sonic_files[takeme]))
+    if (length(sonic) > 1) {
+        stop('Folder "', path_sonic, '" contains files from different sonic computers',
+            ' for the given time range!')
+    }
     # find matches
     #     -> check sonic
     ht_sonic <- grep(sonic, ht_files, fixed = TRUE, value = TRUE)
     ht_dates <- as.integer(sub('.*_(\\d{8})_.*', '\\1', ht_sonic))
     #     -> check date
-    dates_ok <- ht_dates %in% sonic_dates
+    dates_ok <- ht_dates %in% sonic_dates[takeme]
     unique_dates <- as.character(unique(ht_dates[dates_ok]))
     # select sonic files
     sonic_ok <- lapply(unique_dates, grep, 
@@ -42,7 +64,7 @@ process_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
     ht_ok <- lapply(unique_dates, grep, 
         x = ht_sonic, fixed = TRUE, value = TRUE)
     names(ht_ok) <- unique_dates
-    # check if merged file exists
+    # check merged file
     merged_files <- character(0)
     if (!is.null(path_merged)) {
         merged_files <- dir(path_merged, pattern = '^ht_merged_')

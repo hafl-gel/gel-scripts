@@ -26,7 +26,7 @@ select_files <- function(ht_path, sonic_path, from, to) {
     sonic_dates <- as.integer(sub('.*_(\\d{8})_.*', '\\1', sonic_files))
     # check from
     if (is.null(from) || from[1] == 'first') {
-        dfrom <- sonic_dates[1]
+        dfrom <- min(sonic_dates)
     } else {
         # fix to/from to Etc/GMT-1 (data time zone)
         from <- parse_date_time3(from, tz = 'Etc/GMT-1')
@@ -35,7 +35,7 @@ select_files <- function(ht_path, sonic_path, from, to) {
     }
     # check to
     if (is.null(to) || to[1] == 'last') {
-        dto <- tail(sonic_dates, 1L)
+        dto <- max(sonic_dates)
     } else {
         # fix to to Etc/GMT-1 (data time zone)
         to <- parse_date_time3(to, tz = 'Etc/GMT-1')
@@ -50,6 +50,7 @@ select_files <- function(ht_path, sonic_path, from, to) {
     takeme <- sonic_dates >= dfrom & sonic_dates <= dto
     # no data within time range
     if (!any(takeme)) {
+        verbose <- dynGet('verbose', 1)
         if (verbose > 0) cat('No data for specified date range...\n')
         return(list())
     }
@@ -82,7 +83,7 @@ select_files <- function(ht_path, sonic_path, from, to) {
     )
 }
 
-process_daily_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
+ht_merged_daily <- function(path_ht = NULL, path_sonic = NULL, path_merged = NULL,
     from_date = NULL, to_date = NULL, save_file = FALSE, sonic_basis = TRUE,
     tzone_out = 'Etc/GMT-1', verbose = 1) {
     # get files & dates
@@ -93,18 +94,18 @@ process_daily_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NU
         merged_files <- dir(path_merged, pattern = '^ht_merged_')
     }
     merged_dates <- sub('^ht_merged_.*Hz_sonic-._(\\d{8})_.*', '\\1', merged_files)
-    out <- lapply(unique_dates, \(u_date) {
+    out <- lapply(files[['dates']], \(u_date) {
         if (verbose > 0) cat('merging data from', sub('(\\d{4})(\\d{2})(\\d{2})', '\\3.\\2.\\1', u_date), '')
-        u_sonic_files <- sonic_ok[[u_date]]
-        u_ht_files <- ht_ok[[u_date]]
+        u_sonic_files <- files[['sonic']][[u_date]]
+        u_ht_files <- files[['ht8700']][[u_date]]
         # gen hash all sonic and ht files
         u_sha_full <- sha1(list(
             # names
             u_sonic_files,
             u_ht_files,
             # sizes
-            file.size(file.path(path_sonic, sonic_ok[[u_date]])),
-            file.size(file.path(path_ht, ht_ok[[u_date]]))
+            file.size(file.path(path_sonic, files[['sonic']][[u_date]])),
+            file.size(file.path(path_ht, files[['ht8700']][[u_date]]))
         ))
         u_sha <- substr(u_sha_full, 1, 14)
         m_file <- m_sha <- ''
@@ -160,10 +161,11 @@ process_daily_ht <- function(path_ht = NULL, path_sonic = NULL, path_merged = NU
         }
         m_data
     })
-    names(out) <- unique_dates
-    cat('Fix tzone out!\n')
-    browser()
-    rbindlist(out)
+    names(out) <- files[['dates']]
+    out <- rbindlist(out)
+    # fix tzone
+    out[, Time := with_tz(Time, tzone_out)]
+    out[]
 }
 
 

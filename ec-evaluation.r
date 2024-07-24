@@ -721,7 +721,7 @@ ec_ht8700 <- function(
 		, start_time = NULL
 		, end_time = NULL
 		, avg_period = '30mins'
-		, tz_sonic = 'Etc/GMT-1'
+		, tz_times = 'Etc/GMT-1'
 		, z_sonic = NULL
 		, dev_north = NULL
         , declination = NULL
@@ -783,6 +783,12 @@ ec_ht8700 <- function(
     covariances_plotnames <- make.names(gsub("x", "", covariances))
     scalar_covariances <- as.numeric(grepl("(^ux|xu$)", covariances)) + as.numeric(grepl("(^wx|xw$)", covariances)) + as.numeric(grepl("(^Tx|xT$)", covariances)) < 2
 
+    # check if covar vars are given in variables
+    if (length(vmiss <- setdiff(unique(unlist(strsplit(covariances, split = 'x'))), variables)) > 0) {
+        stop('Covariance variable(s) ', paste(vmiss, collapse = ', '), 
+            ' must be defined with argument "variables"!')
+    }
+
     # ------------------------------------------------------------------------------
 
     # check functions:                                      
@@ -801,170 +807,155 @@ ec_ht8700 <- function(
     sonic_files <- dir(sonic_directory, pattern = '^data_sonic-.')
     ht_files <- dir(ht_directory, pattern = '^ht8700_sonic-.')
 
-    # fix start_time
-    if (is.null(start_time)) {
-        stop('argument "start_time" is NULL. Valid values are "first" or a single value ',
+    # parse time diff
+    avg_period <- parse_time_diff(avg_period)
+
+    # check 
+    if (is.null(start_time) && is.null(end_time)) {
+        stop('arguments "start_time" and "end_time" are both NULL.'
+            ' Valid values are "first"/"last" or a single value ',
             'or vector of any time format recognized by ibts::parse_date_time3')
-    } else if (length(start_time) == 1 && start_time == 'first') {
+    } 
+
+    # fix start_time
+    if (length(start_time) == 1 && start_time == 'first') {
         start_time <- min(
             strptime(sub('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', sonic_files[1]),
-                '%Y%m%d%H%M%S', tz = tz_sonic),
+                '%Y%m%d%H%M%S', tz = tz_times),
             strptime(sub('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', ht_files[1]),
-                '%Y%m%d%H%M%S', tz = tz_sonic)
+                '%Y%m%d%H%M%S', tz = tz_times)
             )
-    } else {
-        start_time <- parse_date_time3(start_time, tz = tz_sonic)
+    } else if (!is.null(start_time)) {
+        start_time <- parse_date_time3(start_time, tz = tz_times)
     }
 
     # fix end_time
     if (is.null(end_time)) {
-        stop('argument "end_time" is NULL. Valid values are "last" or a single value ',
-            'or vector of any time format recognized by ibts::parse_date_time3')
+        end_time <- start_time + avg_period
     } else if (length(end_time) == 1 && end_time == 'last') {
         end_time <- min(
             strptime(sub('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', tail(sonic_files, 1)),
-                '%Y%m%d%H%M%S', tz = tz_sonic),
+                '%Y%m%d%H%M%S', tz = tz_times),
             strptime(sub('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', tail(ht_files, 1)),
-                '%Y%m%d%H%M%S', tz = tz_sonic)
+                '%Y%m%d%H%M%S', tz = tz_times)
             )
     } else {
-        end_time <- parse_date_time3(end_time, tz = tz_sonic)
+        end_time <- parse_date_time3(end_time, tz = tz_times)
     }
 
-    # create output list with daily entries
-    ## hier bin ich!!! -> what if vector of start/end times?
+    # fix start_time == NULL (unlikely)
+    if (is.null(start_time)) {
+        start_time <- end_time - avg_period
+    }
 
-    browser()
+    # switch to sonic/ht tzone Etc/GMT-1
+    if (tz_times != 'Etc/GMT-1') {
+        start_time <- with_tz(start_time, 'Etc/GMT-1')
+        end_time <- with_tz(end_time, 'Etc/GMT-1')
+    }
 
-    # days <- start_time -> end_time
-    out <- vector(mode = 'list', length(days))
+    # check & extend start/end times
+    if (length(start_time) != length(end_time)) {
+        stop('arguments "start_time" and "end_time" must have equal lengths!')
+    } else if (length(start_time) == 1) {
+        start_time <- seq(start_time, end_time, by = avg_period)
+        end_time <- start_time + avg_period
+    }
 
+    # create vector of start/end dates
+    start_dates <- unique(date(start_time))
+    end_dates <- unique(date(end_time))
 
-    # start reading and processing single data files:                                      
-    # ------------------------------------------------------------------------------ 
-    for (day in days) {
+    # select available daily files
+    files <- select_files(ht_directory, sonic_directory, start_dates, end_dates)
 
+    # create output list
+    out <- vector(mode = 'list', length(files$dates))
+    names(out) <- files$dates
 
-        # start of code
-        # ==============================================================================
-        # ==============================================================================
-        now <- Sys.time()
-        now1 <- format(now,"%d.%m.%Y %H:%M:%S")
-        now0 <- format(now,"%Y%m%d_%H%M")
-        filename <- sub("([.]{1}.*)","",basename(dfname[1]))
+    cat("\n************************************************************\n")
+    cat("HT8700 EC evaluation\n")
+    cat("************************************************************\n")
 
+    # loop over dates
+    for (day in files$dates) {
 
-        # create result folder (folder name includes first input-filename) and set this directory as working directory                                      
-        # ------------------------------------------------------------------------------ 
-        former_wd <- getwd()
-        if(isFALSE(save_directory)){
-            create_graphs <- FALSE
-        } else {					
-            if(add_name!=""){
-                folder <- paste0("REddy-",filename,"-",add_name,"-eval",now0,"-avg",avg_period)
-            } else {
-                folder <- paste0("REddy-",filename,"-eval",now0,"-avg",avg_period)
-            }
-            path_folder <- file.path(save_directory, folder)
-            dir.create(path_folder, recursive = FALSE)
-            # on.exit(setwd(former_wd))
-            # setwd(paste0(save_directory,"/",folder))
-        }
-
-        read_rawdata <- get(rawdata_function,mode="function")
+        # day <- files$dates[1]
+        cat('\nReading raw data for', sub('(\\d{4})(\\d{2})(\\d{2})', '\\3.\\2.\\1', day), '\n')
 
         # reading data file:                                      
         # ------------------------------------------------------------------------------
-        cat("\n************************************************************\n")
-        cat("REddy EC evaluation\n")
-        cat("************************************************************\n")
-        cat('\nReading raw data from file "', dfname, '"\n', sep = '')
-        # browser() 
-        Data <- read_rawdata(dfname)
+        cat('~~~\nReading sonic files - ')
+
+    ## hier bin ich!!! -> use Rcpp functions to read sonic & ht with from/to
+
+        # read sonic files
+        capture.output(
+            sonic <- rbindlist(lapply(files$sonic[[day]], read_windmaster_ascii))
+        )
+
+        cat('done\nReading HT8700 files - ')
+
+        # read ht files
+        capture.output(
+            ht <- rbindlist(lapply(files$ht8700[[day]], read_ht8700))
+        )
+
+        cat('done\nMerging files - ')
+
+        daily_data <- merge_data(sonic, ht)
+
+        cat('done\n~~~\n')
+
         # check if empty
-        if (nrow(Data) == 0) {
-            cat('Empty file...\n')
+        if (nrow(daily_data) == 0) {
+            cat('No valid data available...\n')
             return(NULL)
         }
-        if(!all(cn_check <- variables %in% names(Data))){
-            stop("cannot find variable(s): ",paste(variables[!cn_check],collapse=" ,"),"\nAvailable column names are: ",paste(names(Data),collapse=" ,"))
-        }
-        # check if delta_t exists:
-        if(names(Data)[2] %in% c("u","v","w","T")){
-            delta_t <- as.numeric(diff(Data[,1]))*1000
-            Data <- cbind(Data[,1],delta_t=c(median(delta_t),delta_t),Data[,-1])
-        }
-        Data <- Data[,c(1:2,which(names(Data) %in% variables))]
-        
-        # correct time zone:                                      
-        # ------------------------------------------------------------------------------ 
-        if(!identical(tz_sonic,tz(Data[,1]))){
-            tz(Data[,1]) <- tz_sonic
-        }
-        # enforce POSIXct
-        if(!is.POSIXct(Data[,1]))Data[,1] <- as.POSIXct(Data[,1])
 
-        # browser()
+        # check variables and covars and subset by columns
+        if (!all(cn_check <- variables %in% names(daily_data))) {
+            stop("cannot find variable(s): ", paste(variables[!cn_check], collapse = ", "), "\nAvailable column names are: ", paste(names(daily_data), collapse = ", "))
+        } else {
+            daily_data <- daily_data[, .SD, .SDcols = unique(
+                c(variables, 'Time', 'temp_amb', 'press_amb', 'oss', 
+                    'alarm_lower_bit', 'alarm_upper_bit'))]
+        }
+
+        ## hier bin ich!!! -> oss threshold! -> alarms => NA
+        browser()
+
         # get intervals:                                      
         # ------------------------------------------------------------------------------ 
-        Data_Day <- format(Data[1,1],"%Y.%m.%d")
-        # start
-        if(is.character(start_time)){
-            if(grepl("[:]",start_time[1])){
-                Start <- ibts::parse_date_time3(paste(Data_Day,start_time),tz=tz_sonic)
+        day_date <- as.Date(strptime(day, '%Y%m%d', tz = 'Etc/GMT-1'))
+        int_index <- which(date(start_time) == day_date)
+        start_int <- start_time[int_index]
+        end_int <- end_time[int_index]
+
+        # define bins
+        daily_data[, bin := getIntervals(Time, start_int, end_int)]
+
+        ## hier bin ich!!! -> weiter im Text
+
+        # create result folder (folder name includes first input-filename) and set this directory as working directory                                      
+        # ------------------------------------------------------------------------------ 
+        if (isFALSE(save_directory)) {
+            create_graphs <- FALSE
+        } else {					
+            tstamp <- format(Sys.time(), "%Y%m%d_%H%M")
+            if (add_name != "") {
+                folder <- paste0("HT8700-EC-", day, "-", add_name, "-eval", tstamp, "-avg", avg_period)
             } else {
-                Start <- switch(start_time
-                    ,"full_interval" =
-                    , "interval" = {
-                        is <- ibts::parse_date_time3(paste(Data_Day,"00:00:00"),tz=tz_sonic) + seq(0,24*3600,avg_period*60)
-                        is[which(is >= Data[1,1])[1]]
-                    }
-                    ,"start" = 
-                    ,"beginning" = Data[1,1]
-                    )
+                folder <- paste0("HT8700-EC-", day, "-eval", tstamp, "-avg", avg_period)
             }
-        } else {
-            # check POSIX
-            if(is.POSIXlt(start_time)){
-                Start <- as.POSIXct(start_time)
-            } else if(is.POSIXct(start_time)){
-                Start <- start_time
-            } else {
-                stop("invalid argument type: 'start_time'")
-            }
-        }
-        # end
-        if(is.character(end_time)){
-            if(grepl("[:]",end_time[1])){
-                End <- ibts::parse_date_time3(paste(Data_Day,end_time),tz=tz_sonic)
-                if(any(add1day <- end_time %in% c("00:00:00","00:00"))){
-                    End[add1day] <- End[add1day] + as.difftime(1,units="days")
-                }
-            } else {
-                End <- switch(end_time
-                    ,"full_interval" =
-                    , "interval" = {
-                        is <- ibts::parse_date_time3(paste(Data_Day,"00:00:00"),tz=tz_sonic) + seq(0,24*3600,avg_period*60)
-                        is[rev(which(is <= Data[nrow(Data),1]))[1]]
-                    }
-                    ,"all" = 
-                    ,"end" = Data[nrow(Data),1]
-                    )
-            }
-        } else {
-            # check POSIX
-            if(is.POSIXlt(end_time)){
-                End <- as.POSIXct(end_time)
-            } else if(is.POSIXct(end_time)){
-                End <- end_time
-            } else {
-                stop("invalid argument type: 'end_time'")
-            }
+            path_folder <- file.path(save_directory, folder)
+            dir.create(path_folder, recursive = FALSE)
         }
 
         if(length(Start)==1){
             if(End-avg_period*60 < Start){
-                warning(paste0("File '",filename,"' (",format(Data_Day),"): Too few data to evaluate! Returning 'NULL'"))
+                ## FIXME: change warning below
+                warning(paste0("File '",day,"' (",format(Data_Day),"): Too few data to evaluate! Returning 'NULL'"))
                 return(NULL)
             }
             st_interval <- seq(Start,End-avg_period*60,avg_period*60)

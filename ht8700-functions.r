@@ -5,7 +5,9 @@ library(ibts)
 
 select_files <- function(ht_path, sonic_path, from, to) {
     # read ht folder
-    if (length(ht_path) == 1 && file.info(ht_path)$isdir) {
+    if (!file.exists(ht_path)) {
+        stop('ht_path "', ht_path, '" is not accessible!')
+    } else if (length(ht_path) == 1 && file.info(ht_path)$isdir) {
         ht_files <- dir(ht_path, pattern = '^ht8700_sonic-.')
     } else {
         ht_files <- basename(ht_path)
@@ -15,7 +17,9 @@ select_files <- function(ht_path, sonic_path, from, to) {
         stop('No HT8700 data in directory "', ht_path, '"')
     }
     # read sonic folder
-    if (length(sonic_path) == 1 && file.info(sonic_path)$isdir) {
+    if (!file.exists(sonic_path)) {
+        stop('sonic_path "', sonic_path, '" is not accessible!')
+    } else if (length(sonic_path) == 1 && file.info(sonic_path)$isdir) {
         sonic_files <- dir(sonic_path, pattern = '^data_sonic-.')
     } else {
         sonic_files <- basename(sonic_path)

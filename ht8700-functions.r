@@ -221,10 +221,10 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
     suppressWarnings(out[, (char_cols) := lapply(.SD, as.character), .SDcols = char_cols])
     suppressWarnings(out[, (num_cols) := lapply(.SD, as.numeric), .SDcols = num_cols])
     suppressWarnings(out[, V19 := as.integer(V19)])
-    # check hexmode ok lower bit
-    suppressWarnings(out <- out[!is.na(strtoi(V17, 16L))])
-    # check hexmode ok upper bit
-    suppressWarnings(out <- out[!is.na(strtoi(V18, 16L))])
+    # lower bits
+    suppressWarnings(out[, V17 := as.character(V17)])
+    # upper bits
+    suppressWarnings(out[, V18 := as.character(V18)])
     # remove NA lines that come from conversion
     out <- na.omit(out)
     # check if empty again
@@ -423,10 +423,21 @@ List decal(IntegerVector x, IntegerVector y)
 }
 ')
 
+
+# NOTE:
+# decode_alarm() could be done in R starting from:
+# decode_alarm <- function(lower, upper) {
+#     which(rev(unlist(strsplit(paste0(
+#         # upper
+#         sprintf('%016i', as.integer(R.utils::intToBin(strtoi(upper, 16L)))),
+#         # lower
+#         sprintf('%016i', as.integer(R.utils::intToBin(strtoi(lower, 16L))))
+#         ), split = ''))) == '1')
+# }
 # helper function to decode alarm codes
 decode_alarm <- function(lower, upper) {
-    lo <- as.integer(as.hexmode(lower))
-    up <- as.integer(as.hexmode(upper))
+    lo <- strtoi(lower, 16L)
+    up <- strtoi(upper, 16L)
     if (length(lo) != length(up)) {
         stop('arguments "lower" and "upper" must be of equal lengths!')
     }

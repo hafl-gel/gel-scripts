@@ -278,7 +278,8 @@ H.flags <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){
 	
 	if(pmatch(hflg.met, "replace", nomatch = 0) && any(hflgs)){
 
-		cat("Replacing NA values by running mean...\n")
+		# cat("Replacing NA values by window mean...\n")
+		cat("Replacing NA values by window median...\n")
 		# since we're only intrested in specific time windows, find first NAs:
 		isna <- lapply(dat[hflgs],function(x)which(is.na(x)))
 		# replace if all NA? (Why could this happen?)
@@ -921,8 +922,8 @@ ec_ht8700 <- function(
     files <- select_files(ht_directory, sonic_directory, start_dates, end_dates)
 
     # create output list
-    result <- vector(mode = 'list', length(files$dates))
-    names(result) <- files$dates
+    result_list <- vector(mode = 'list', length(files$dates))
+    names(result_list) <- files$dates
 
     cat("\n************************************************************\n")
     cat("HT8700 EC evaluation\n")
@@ -1068,7 +1069,7 @@ ec_ht8700 <- function(
             , upper = round((lag_fix + lag_dyn) * Hz)
         )
 
-        result[[day]] <- daily_data[, {
+        result_list[[day]] <- daily_data[, {
 
             cat("~~~~~~~~\ninterval", .GRP, "of", .NGRP, "\n")
             # get subset:
@@ -1368,13 +1369,20 @@ ec_ht8700 <- function(
 
     } # end for loop over days
 
-    browser()
-
     # rbind list to data.table
-    results <- rbindlist(result)
+    results <- rbindlist(result_list)
 
-    browser()
-    ## hier bin ich!!! -> wxT etc. umbenennen zu w'T'
+    # remove bin column
+    results[, bin := NULL]
+
+    # rename covariances
+    nms <- names(results)
+    for (cov_nm in covariances) {
+        nms_old <- grep(cov_nm, nms, fixed = TRUE, value = TRUE)
+        cov_sub <- sub('(.+)x(.+)', "<\\1'\\2'>", cov_nm)
+        nms_new <- sub(cov_nm, cov_sub, nms_old, fixed = TRUE)
+        setnames(results, nms_old, nms_new)
+    }
 
     if (as_ibts) {
         results <- as.ibts(results)

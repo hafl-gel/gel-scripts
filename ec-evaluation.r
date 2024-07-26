@@ -318,12 +318,38 @@ H.flags <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){
 		# run.m <- lapply(dat_r,function(x)caTools::runmean(x, wind, alg = "C", endrule = "mean"))
 		# using correct windows, bit slower though
 		st1 <- as.numeric(time)
-		st2 <- c(st1[-1],st1[length(st1)] + d_t)
+		st2 <- c(st1[-1], st1[length(st1)] + d_t / 1000)
 		for(i in seq_along(isna)){
-			x1 <- st1[isna[[i]]] - wind/2 + d_t/2
-			x2 <- st1[isna[[i]]] + wind/2 - d_t/2
+			x1 <- st1[isna[[i]]] - wind/2 + d_t/2000
+			x2 <- st1[isna[[i]]] + wind/2 - d_t/2000
 
-			ind <- cutIntervals(st1,st2,x1,x2)
+            ## HERE !!! -> hier weiter!!! -> fixme cutIntervals & getIntervals sind continuous!!! -> add contin. check in ibts!!!
+            ## HERE !!! -> ev. neue Funktion in cpp machen?
+
+            microbenchmark::microbenchmark(
+			    ibts = ind0 <- mapply(\(x, y) which(getIntervals(time, x, y) > 0), x = x1, y = x2, SIMPLIFY = FALSE),
+                base = ind <- mapply(\(x, y) which(time >= x & time < y), x = x1, y = x2, SIMPLIFY = FALSE)
+                )
+
+
+
+            identical(ind0, ind)
+
+			dat[hflgs][[i]][isna[[i]]] <- sapply(ind,function(x)mean(dat[hflgs][[i]][x],na.rm=TRUE))
+
+            ind[[1]]
+            ind[[2]]
+
+            x <- sapply(ind,function(x)mean(dat[hflgs][[i]][x[,1]],na.rm=TRUE))
+            mean(dat[hflgs][[1]][ind[[2]][, 1]], na.rm = TRUE)
+            dat[hflgs][[1]][ind[[2]][, 1]]
+            ind[[2]][, 1]
+
+            x1[2]
+            x2[2]
+
+            st1[1]
+            st1[2]
 
 			dat[hflgs][[i]][isna[[i]]] <- sapply(ind,function(x)mean(dat[hflgs][[i]][x[,1]],na.rm=TRUE))
 		}	
@@ -492,7 +518,6 @@ reduce_cospec <- function(cospec,freq,length.out=100){
 }
 
 damp_hac5 <- function(ogive, freq, freq.limits, ogive_ref){
-	# browser()
 	require(deming)
 	# select undamped frequqency region:
 	undamped_ind <- freq < (1/freq.limits[1]) & freq > (1/freq.limits[2])
@@ -529,7 +554,7 @@ split_index <- function(index_length,n_subint){
 }
 
 wind_statistics <- function(wind,z_canopy,z_sonic){
-	Cov_sonic <- cov(as.data.frame(wind[1:4]))
+	Cov_sonic <- cov(list2DF(wind[1:4]))
 	Var_sonic <- diag(Cov_sonic)
 	names(Var_sonic) <- c("<u'u'>","<v'v'>","<w'w'>","<T'T'>")
 	Cov_sonic <- Cov_sonic[cbind(c("uprot","uprot","uprot","vprot","vprot","wprot"),c("vprot","wprot","Tdet","wprot","Tdet","Tdet"))]
@@ -722,9 +747,9 @@ ec_ht8700 <- function(
 		, end_time = NULL
 		, avg_period = '30mins'
 		, tz_times = 'Etc/GMT-1'
-		, z_sonic = NULL
 		, dev_north = NULL
         , declination = NULL
+		, z_ec = NULL
 		, z_canopy = NULL
 		, variables = c('u', 'v', 'w', 'T', 'nh3_ppb')
         # detrending -> valid entries are blockAVG,linear,linear_robust,ma_xx (xx = time in seconds)
@@ -732,7 +757,7 @@ ec_ht8700 <- function(
         , hard_flag = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE)
         , hard_flag_lower = c(u = -30, v = -30, w = -10, T = 243, nh3_ppb = -50)
         , hard_flag_upper = c(u = 30, v = 30, w = 10, T = 333, nh3_ppb = 5000)
-        , hard_flag_window = 500
+        , hard_flag_window = '5mins'
         , hard_flag_replace = TRUE
 		, covariances = c('uxw', 'wxT', 'wxnh3_ppb')
         # fix lag in seconds
@@ -746,8 +771,10 @@ ec_ht8700 <- function(
         , subintervals = TRUE
         , subint_n = 5
         , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear')
+        , oss_threshold = 0
+        , na_alarm_code = c(1:3, 5:8, 11, 13)
 		, create_graphs = TRUE
-		, save_directory = NULL
+		, graphs_directory = NULL
 		, add_name = ''
         , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', T = 'K', nh3_ppb = 'ppb')
         , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', nh3_ppb = 'indianred')
@@ -764,14 +791,15 @@ ec_ht8700 <- function(
 
     # check input
     if (create_graphs) {
-        if (is.null(save_directory)) {
-            stop('argument "create_graphs" is TRUE, but save_directory is not specified!')
+        # TODO: eventually remove one of either arguments
+        if (is.null(graphs_directory)) {
+            stop('argument "create_graphs" is TRUE, but "graphs_directory" is not specified!')
         }
     }
-    if (!is.null(save_directory) && (
-            !is.character(save_directory) || !dir.exists(save_directory)
+    if (!is.null(graphs_directory) && (
+            !is.character(graphs_directory) || !dir.exists(graphs_directory)
             )) {
-        stop('argument "save_directory": directory "', save_directory, 
+        stop('argument "graphs_directory": directory "', graphs_directory, 
             '" does not exist!')
     }
     hf_method <- if (hard_flag_replace) 'repl' else 'norepl'
@@ -782,9 +810,36 @@ ec_ht8700 <- function(
     covariances_variables <- strsplit(covariances, "x")
     covariances_plotnames <- make.names(gsub("x", "", covariances))
     scalar_covariances <- as.numeric(grepl("(^ux|xu$)", covariances)) + as.numeric(grepl("(^wx|xw$)", covariances)) + as.numeric(grepl("(^Tx|xT$)", covariances)) < 2
+    if (is.null(z_ec) || !is.numeric(z_ec)) {
+        stop('argument "z_ec" must be provided as numeric value (height in m a.g.l)!')
+    }
+    if (is.null(z_canopy) || !is.numeric(z_canopy)) {
+        stop('argument "z_canopy" must be provided as numeric value ',
+            '(height of canopy in meters)!')
+    }
+    if (is.null(dev_north) || !is.numeric(dev_north)) {
+        stop('argument "dev_north" must be provided as numeric value!')
+    }
+    if (is.null(declination)) {
+        stop('argument "declination" must be provided!',
+        ' -> it is also possible to provide a list with lon/lat entries...')
+    } else if (is.list(declination) || length(declination) == 2) {
+        if (!require(oce)) {
+            stop('R package "oce" must be installed when lat/lon is provided')
+        }
+        mag_dec <- \(x) oce::magneticField(declination$lon, declination$lat, x)$declination
+    } else if (!is.numeric(declination) || length(declination) != 1) {
+        stop('argument "declination" must be a single numeric value!')
+    } else {
+        mag_dec <- \(x) declination
+    }
+
+    # get flux variables and lag times:                                      
+    # ------------------------------------------------------------------------------ 
+    flux_variables <- unique(unlist(strsplit(covariances, split = "x")))
 
     # check if covar vars are given in variables
-    if (length(vmiss <- setdiff(unique(unlist(strsplit(covariances, split = 'x'))), variables)) > 0) {
+    if (length(vmiss <- setdiff(flux_variables, variables)) > 0) {
         stop('Covariance variable(s) ', paste(vmiss, collapse = ', '), 
             ' must be defined with argument "variables"!')
     }
@@ -808,11 +863,11 @@ ec_ht8700 <- function(
     ht_files <- dir(ht_directory, pattern = '^ht8700_sonic-.')
 
     # parse time diff
-    avg_period <- parse_time_diff(avg_period)
+    avg_secs <- parse_time_diff(avg_period)
 
     # check 
     if (is.null(start_time) && is.null(end_time)) {
-        stop('arguments "start_time" and "end_time" are both NULL.'
+        stop('arguments "start_time" and "end_time" are both NULL.',
             ' Valid values are "first"/"last" or a single value ',
             'or vector of any time format recognized by ibts::parse_date_time3')
     } 
@@ -831,7 +886,7 @@ ec_ht8700 <- function(
 
     # fix end_time
     if (is.null(end_time)) {
-        end_time <- start_time + avg_period
+        end_time <- start_time + avg_secs
     } else if (length(end_time) == 1 && end_time == 'last') {
         end_time <- min(
             strptime(sub('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', tail(sonic_files, 1)),
@@ -845,7 +900,7 @@ ec_ht8700 <- function(
 
     # fix start_time == NULL (unlikely)
     if (is.null(start_time)) {
-        start_time <- end_time - avg_period
+        start_time <- end_time - avg_secs
     }
 
     # switch to sonic/ht tzone Etc/GMT-1
@@ -858,8 +913,8 @@ ec_ht8700 <- function(
     if (length(start_time) != length(end_time)) {
         stop('arguments "start_time" and "end_time" must have equal lengths!')
     } else if (length(start_time) == 1) {
-        start_time <- seq(start_time, end_time, by = avg_period)
-        end_time <- start_time + avg_period
+        start_time <- seq(start_time, end_time, by = avg_secs)
+        end_time <- start_time + avg_secs
     }
 
     # create vector of start/end dates
@@ -870,8 +925,8 @@ ec_ht8700 <- function(
     files <- select_files(ht_directory, sonic_directory, start_dates, end_dates)
 
     # create output list
-    out <- vector(mode = 'list', length(files$dates))
-    names(out) <- files$dates
+    result <- vector(mode = 'list', length(files$dates))
+    names(result) <- files$dates
 
     cat("\n************************************************************\n")
     cat("HT8700 EC evaluation\n")
@@ -881,7 +936,11 @@ ec_ht8700 <- function(
     for (day in files$dates) {
 
         # day <- files$dates[1]
-        cat('\nReading raw data for', sub('(\\d{4})(\\d{2})(\\d{2})', '\\3.\\2.\\1', day), '\n')
+        cat(
+            '\n\n-------------------------------------------',
+            '\nReading raw data for', sub('(\\d{4})(\\d{2})(\\d{2})', '\\3.\\2.\\1', day),
+            '\n-------------------------------------------\n\n'
+        )
 
         # reading data file:                                      
         # ------------------------------------------------------------------------------
@@ -901,7 +960,25 @@ ec_ht8700 <- function(
             ht <- rbindlist(lapply(files$ht8700[[day]], read_ht8700))
         )
 
-        cat('done\nMerging files - ')
+        cat('done\nChecking oss and alarm codes - ')
+
+        # add alarm code
+        ht[, alarm_code := get_alarms(.SD)]
+        # create regex pattern
+        na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'), collapse = '|')
+        # check alarms and set nh3 NA
+        na0 <- ht[, sum(is.na(nh3_ppb))]
+        ht[grepl(na_alarm_pattern, alarm_code),
+            paste0('nh3_', c('ppb', 'ugm3')) := NA_real_]
+        na1 <- ht[, sum(is.na(nh3_ppb))]
+        # check oss
+        ht[oss < oss_threshold,
+            paste0('nh3_', c('ppb', 'ugm3')) := NA_real_]
+
+        cat('done\nBad alarms:', na1 - na0, '\nValues below OSS:', 
+            ht[, sum(oss < oss_threshold)], '\n')
+
+        cat('Merging files - ')
 
         daily_data <- merge_data(sonic, ht)
 
@@ -918,28 +995,29 @@ ec_ht8700 <- function(
             stop("cannot find variable(s): ", paste(variables[!cn_check], collapse = ", "), "\nAvailable column names are: ", paste(names(daily_data), collapse = ", "))
         } else {
             daily_data <- daily_data[, .SD, .SDcols = unique(
-                c(variables, 'Time', 'temp_amb', 'press_amb', 'oss', 
-                    'alarm_lower_bit', 'alarm_upper_bit'))]
+                c(variables, 'Time', 'temp_amb', 'press_amb', 'oss', 'alarm_code'))]
         }
-
-        ## hier bin ich!!! -> oss threshold! -> alarms => NA
-        browser()
 
         # get intervals:                                      
         # ------------------------------------------------------------------------------ 
         day_date <- as.Date(strptime(day, '%Y%m%d', tz = 'Etc/GMT-1'))
         int_index <- which(date(start_time) == day_date)
-        start_int <- start_time[int_index]
-        end_int <- end_time[int_index]
+        st_interval <- start_time[int_index]
+        et_interval <- end_time[int_index]
 
-        # define bins
-        daily_data[, bin := getIntervals(Time, start_int, end_int)]
+        # define bins & subset again
+        daily_data <- daily_data[, bin := getIntervals(Time, st_interval, et_interval)][bin != 0L]
 
-        ## hier bin ich!!! -> weiter im Text
+        # check again if empty
+        if (nrow(daily_data) == 0) {
+            cat('No valid data available...\n')
+            # advance to next day
+            next
+        }
 
         # create result folder (folder name includes first input-filename) and set this directory as working directory                                      
         # ------------------------------------------------------------------------------ 
-        if (isFALSE(save_directory)) {
+        if (is.null(graphs_directory) || isFALSE(graphs_directory)) {
             create_graphs <- FALSE
         } else {					
             tstamp <- format(Sys.time(), "%Y%m%d_%H%M")
@@ -948,149 +1026,88 @@ ec_ht8700 <- function(
             } else {
                 folder <- paste0("HT8700-EC-", day, "-eval", tstamp, "-avg", avg_period)
             }
-            path_folder <- file.path(save_directory, folder)
+            path_folder <- file.path(graphs_directory, folder)
             dir.create(path_folder, recursive = FALSE)
         }
 
-        if(length(Start)==1){
-            if(End-avg_period*60 < Start){
-                ## FIXME: change warning below
-                warning(paste0("File '",day,"' (",format(Data_Day),"): Too few data to evaluate! Returning 'NULL'"))
-                return(NULL)
-            }
-            st_interval <- seq(Start,End-avg_period*60,avg_period*60)
-            et_interval <- st_interval + avg_period*60
-            cat("\n~~~\nCalculation will include all intervals between",format(st_interval[1],format="%Y-%m-%d %H:%M"),"and",format(et_interval[length(et_interval)],format="%Y-%m-%d %H:%M",usetz=TRUE),"on a",avg_period,"min basis\n~~~\n\n")
-        } else {
-            st_interval <- Start
-            et_interval <- End
-            cat("\n~~~\nCalculation will include the following intervals:\n",paste(format(st_interval,format="   %Y-%m-%d %H:%M"),"to",format(et_interval,format="%Y-%m-%d %H:%M",usetz=TRUE)), '\n~~~\n')
-        }
+        # be verbose
+        cat("\n~~~\nCalculation will include",
+            daily_data[, uniqueN(bin)]
+            ,"intervals between", 
+            format(st_interval[1], format = "%Y-%m-%d %H:%M"), "and", 
+            format(et_interval[length(et_interval)], 
+                format = "%Y-%m-%d %H:%M", usetz = TRUE), 
+            "on a", avg_period, "min basis\n~~~\n\n")
 
-        # prepare results:                                      
-        # ------------------------------------------------------------------------------ 
-        results <- cbind(
-            data.frame(
-                st=st_interval
-                ,et=et_interval
-                ,Data_Start = with_tz(NA_POSIXct_, tz_sonic)
-                ,Data_End = with_tz(NA_POSIXct_, tz_sonic)
-                ,tzone = tz_sonic
-                ,"Int_Length (min)" = avg_period
-                ,stringsAsFactors=FALSE,check.names=FALSE
-                )
-            ,
-            matrix(NA,ncol=45 + 4*length(covariances) + 4*sum(scalar_covariances) + 3*length(scalars),nrow=length(st_interval))
-            )
-        checkNames <- TRUE
-
-        # get flux variables and lag times:                                      
-        # ------------------------------------------------------------------------------ 
-        flux_variables <- unique(unlist(strsplit(covariances,"'")))
         # --------------------- read fix lags from lag_lookuptable ---------------------
-        cov_names <- make.names(gsub("'","",covariances))
-        names(cov_names) <- covariances
-        if(fixlag_lookup_file!=""){
-            df.lag.fix.sec <- read.table(fixlag_lookup_file, header=TRUE, sep=";", as.is=TRUE, fill=TRUE)
-            table_time <- fast_strptime(df.lag.fix.sec[,1], "%d.%m.%Y",tz="Etc/GMT-1",lt=FALSE)
-            rownames(df.lag.fix.sec) <- format(table_time, "%y%m%d")
-            cov_exist <- cov_names %in% names(df.lag.fix.sec)
-            # select for specified time range:
-            table_ind <- which(table_time >= trunc(Start[1],"days") & table_time <= trunc(End[1],"days"))
-            df.lag.fix.sec <- df.lag.fix.sec[table_ind,,drop=FALSE]
-            # take existing fix lags from look up table:
-            df.lag.fix.sec <- -df.lag.fix.sec[,cov_names[cov_exist],drop=FALSE]
-            for(i in seq.int(ncol(df.lag.fix.sec))){
-                df.lag.fix.sec[is.na(df.lag.fix.sec[,i]),i] <- as.numeric(lag_fix[covariances[cov_exist][i]])
-                # what if this is not numeric!!!
-            }
-            names(df.lag.fix.sec) <- covariances[cov_exist]
-        } else {
-            cov_exist <- rep(TRUE,length(covariances))
-            df.lag.fix.sec <- as.data.frame(as.list(lag_fix),check.names=FALSE)
-            rownames(df.lag.fix.sec) <- format(Data[1,1],"%y%m%d")
-        }
-        # add non-existing fix lags to look up table:
-        if(any(!cov_exist)){
-            for(i in covariances[!cov_exist]){
-                lag_add <- lag_fix[i]
-                if(lag_add %in% names(df.lag.fix.sec)){
-                    lag_value <- df.lag.fix.sec[,lag_add]
-                } else {
-                    lag_value <- as.numeric(lag_fix[i])
-                }
-                df.lag.fix.sec[,i] <- lag_value
-            }
-        }
-        # sort (not really necessary, though):
-        df.lag.fix.sec <- df.lag.fix.sec[,covariances]
+        # TODO: only if necessary/wanted
 
-        # find data in individual intervals:
-        # ------------------------------------------------------------------------------ 
-        if(any(st_interval[-1] - et_interval[-length(et_interval)] < 0))stop("Intervals need to be in strictly increasing order!")
-        ind_interval <- findInterval2(as.numeric(Data[,1]),as.numeric(st_interval),as.numeric(et_interval))
-        unique_ind <- unique(ind_interval) %w/o% 0
-
-        if(ogives_out){
-            Cospec_dyn_Out <- Cospec_fix_Out <- Covars_Out <- Ogive_fix_Out <- Ogive_dyn_Out <- vector("list",length(st_interval))
-            names(Cospec_fix_Out) <- names(Cospec_dyn_Out) <- names(Covars_Out) <- names(Ogive_fix_Out) <- names(Ogive_dyn_Out) <- format(st_interval,format="%H%M")
+        # prepare ogive output (TODO: would be better outside of for loop...)
+        if (ogives_out) {
+            Cospec_dyn_Out <- Cospec_fix_Out <- Covars_Out <- Ogive_fix_Out <- Ogive_dyn_Out <- vector("list", length(st_interval))
+            names(Cospec_fix_Out) <- names(Cospec_dyn_Out) <- names(Covars_Out) <- names(Ogive_fix_Out) <- names(Ogive_dyn_Out) <- format(st_interval, format = "%H%M")
         }
-
-        # browser()
 
         # loop over individual intervals:
         # ------------------------------------------------------------------------------ 
-        for(intval in unique_ind){
-            
-            # intval <- 1L
-            # intval <- 65L
-            # intval <- 1L
-            # intval <- 2L
-            # browser()
-            cat("~~~~~~~~\ninterval",which(intval == unique_ind),"of",length(unique_ind),"\n")
+        ## hier bin ich!!! -> transform for loop to data.table by
+        ## hier bin ich!!! -> add threshold for % of avg_period as argument
+        thresh_period <- 0.75
+        Hz <- daily_data[, {
+            d_t <- diff(as.numeric(Time))
+            round(1 / median(d_t, na.rm = TRUE), -1)
+        }]
+        if (Hz < 10) {
+            cat('Frequency is lower than 10 Hz! Skipping evaluation!\n')
+            next
+        }
+        n_period <- avg_secs * Hz
+        n_threshold <- thresh_period * n_period
+
+        # fix and dyn lags:                                      
+        # ------------------------------------------------------------------------------ 
+        fix_lag <- round(lag_fix * Hz)
+        dyn_lag <- rbind(
+            lower = round((lag_fix - lag_dyn) * Hz)
+            , upper = round((lag_fix + lag_dyn) * Hz)
+        )
+
+        result[[day]] <- daily_data[, {
+
+            cat("~~~~~~~~\ninterval", .GRP, "of", .NGRP, "\n")
             # get subset:
             # --------------------------------------------------------------------------
-            index <- ind_interval %in% intval
-            Int_length <- sum(index)
-            if(Int_length > 10){
-                Data_int <- Data[index,]
+            if (.N > n_threshold && all(sapply(mget(scalars), \(x) sum(is.finite(x))) > n_threshold)) {
+
+                # ugly copy because of inability to change .SD values
+                SD <- copy(.SD)
 
                 # times, frequencies etc.
                 # --------------------------------------------------------------------------
-                Time <- Data_int[,1]
                 Int_Start <- Time[1]
-                Int_End <- Time[length(Time)] + Data_int[length(Time),2]/1000
-                Int_Time <- as.numeric(Int_End - Int_Start,units="secs")
-                d_t <- diff(as.numeric(Time))
-                Hz <- round(1/summary(d_t)[['Median']])
-                if (Hz < 10) {
-                    cat('Frequency is lower than 10 Hz! Skipping interval.\n')
-                    next
-                }
-                # freq <- seq(floor(Int_length/2))*2/Int_Time
-                freq <- Hz * seq(floor(Int_length / 2)) / floor(Int_length / 2)
-                # for later: include NA where d_t>2*mean, remove entries where d_t < 0.5*mean
-
-                # fix and dyn lags:                                      
-                # ------------------------------------------------------------------------------ 
-                fix_raw <- unlist(df.lag.fix.sec[format(Data[1,1],"%y%m%d"),])
-                fix_lag <- round(fix_raw*Hz)
-                dyn_lag <- rbind(
-                    lower=round((fix_raw - lag_dyn)*Hz)
-                    ,upper=round((fix_raw + lag_dyn)*Hz)
-                    )
-                # # check dyn lag <= 0 for scalars:
-                # dyn_lag[2,scalar_covariances] <- pmin(dyn_lag[2,scalar_covariances],0)
+                Int_End <- tail(Time, 1) + 1 / Hz
+                Int_Time <- as.numeric(Int_End - Int_Start, units = "secs")
+                freq <- Hz * seq(floor(.N / 2)) / floor(.N / 2)
+                # TODO (maybe for later): include NA where d_t>2*mean, remove entries where d_t < 0.5*mean
 
                 # raw data quality control I, i.e. hard flags = physical range
                 # --------------------------------------------------------------------------
                 cat("~~~\nchecking hard flags...\n")
-                if(any(hard_flag)){
-                    Data_int[,variables[hard_flag]] <- H.flags(Data_int[,variables[hard_flag],drop=FALSE],Time,Hz,lim_range[,variables[hard_flag],drop=FALSE],hard_flag_window,hf_method)
+                if (any(hard_flag)) {
+                    SD[, variables[hard_flag] := H.flags(mget(variables[hard_flag]), Time, Hz, lim_range[, variables[hard_flag], drop = FALSE], hard_flag_window, hf_method)]
                 } 
 
                 # check for remaining NA values
-                if(anyNA(Data_int[,c("u","v","w","T", scalars)])){
+                if (SD[, anyNA(.SD), .SDcols = c("u", "v", "w", "T", scalars)]) {
+
+                    if (day == 20240721 && .GRP == 7) browser()
+                    ## hier bin ich!!! -> check Hard Flag function which provides NA instead of mean
+
+                    debug(H.flags)
+
+                    SD <- copy(.SD)
+                    SD[, variables[hard_flag] := H.flags(mget(variables[hard_flag]), Time, Hz, lim_range[, variables[hard_flag], drop = FALSE], hard_flag_window, hf_method)]
+
                     cat("NA values in data. Skipping interval...")
                     next
                 }
@@ -1098,17 +1115,37 @@ ec_ht8700 <- function(
                 # calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
                 # -------------------------------------------------------------------------- 
                 cat("~~~\nrotating and deterending sonic data...\n")
-                wind <- rotate_detrend(Data_int[,"u"],Data_int[,"v"],Data_int[,"w"],Data_int[,"T"],phi=if(rotation_method %in% "two_axis") NULL else 0,method=detrending[c("u","v","w","T")],c.system=sonic_type,Hz_ts=Hz)
-                Data_int[,c("u","v","w","T")] <- wind[c("uprot","vprot","wprot","Tdet")]
+                wind <- SD[, I(rotate_detrend(u, v, w, T, method = detrending[c("u", "v", "w", "T")], Hz_ts = Hz))]
+                SD[, c("u", "v", "w", "T") := wind[c("uprot", "vprot", "wprot", "Tdet")]]
+
+                # calculate some turbulence parameters and collect some wind parameters
+                # -------------------------------------------------------------------------- 
+                wind_stats <- wind_statistics(wind, z_canopy, z_ec)
+                ### correct for sonic north deviation and magn. declination
+                current_declination <- mag_dec(Time[1])
+                wind_stats["WD"] <- (wind_stats["WD"] + dev_north + current_declination) %% 360
 
                 # detrend scalars
                 # -------------------------------------------------------------------------- 
-                if(length(scalars)){
+                if (length(scalars)) {
                     cat("~~~\ndetrending scalars...\n")
-                    detrended_scalars <- mapply(trend,y=Data_int[,scalars, drop = FALSE],method=detrending[scalars],MoreArgs=list(Hz_ts=Hz),SIMPLIFY=FALSE)
-                    Data_int[,scalars] <- lapply(detrended_scalars,"[[","residuals")
+                    detrended_scalars <- mapply(trend, y = SD[, scalars, with = FALSE], method = detrending[scalars], MoreArgs = list(Hz_ts = Hz), SIMPLIFY = FALSE)
+                    SD[, (scalars) := lapply(detrended_scalars, "[[", "residuals")]
                 } else {
                     detrended_scalars <- NULL
+                }
+
+                # calculate scalar averages and sd:
+                # -------------------------------------------------------------------------- 
+                if (length(scalars)) {
+                    scalar_means <- sapply(detrended_scalars, function(x) mean(x[["fitted"]] + x[["residuals"]]))
+                    scalar_means_trend <- sapply(detrended_scalars, function(x) mean(x[["fitted"]]))
+                    scalar_sd <- sapply(detrended_scalars, function(x) sd(x[["residuals"]]))
+                    names(scalar_means) <- paste0("mean(", names(scalar_means), ")") 
+                    names(scalar_means_trend) <- paste0("mean(trend.", names(scalar_means_trend), ")") 
+                    names(scalar_sd) <- paste0("sd(", names(scalar_sd), ")") 
+                } else {
+                    scalar_sd <- scalar_means_trend <- scalar_means <- NULL
                 }
 
                 # start of flux relevant data manipulation
@@ -1116,30 +1153,33 @@ ec_ht8700 <- function(
                 # -------------------------------------------------------------------------- 
                 cat("~~~\nstarting flux evaluation...\n")
 
-                cov_vars <- unique(unlist(covariances_variables))
-                FFTs <- lapply(Data_int[,cov_vars],function(x)fft(x)/Int_length)
+                # get fft (keep list format)
+                FFTs <- SD[, I(lapply(.SD, \(x) fft(x) / .N)), .SDcols = flux_variables]
 
                 # calculate covariances with fix lag time:
                 # -------------------------------------------------------------------------- 
                 cat("\t- covariances\n")
-                if(Int_length%%2){
-                    Covars <- lapply(covariances_variables,function(i,x){
-                        Re(fft(Conj(FFTs[[i[2]]]) * FFTs[[i[1]]], inverse=TRUE))[c(((Int_length+1)/2+1):Int_length,1:((Int_length+1)/2))]*Int_length/(Int_length-1)
-                        },x=FFTs)
+                if (.N %% 2) {
+                    Covars <- lapply(covariances_variables, function(i, x) {
+                        Re(fft(Conj(FFTs[[i[2]]]) * FFTs[[i[1]]], inverse = TRUE))[
+                            c(((.N + 1) / 2 + 1):.N, 1:((.N + 1) / 2))
+                            ] * .N / (.N - 1)
+                        }, x = FFTs)
                 } else {
-                    Covars <- lapply(covariances_variables,function(i,x){
-                        Re(fft(Conj(FFTs[[i[2]]]) * FFTs[[i[1]]], inverse=TRUE))[c((Int_length/2+1):Int_length,1:(Int_length/2))]*Int_length/(Int_length-1)
-                        },x=FFTs)
+                    Covars <- lapply(covariances_variables, function(i, x) {
+                        Re(fft(Conj(FFTs[[i[2]]]) * FFTs[[i[1]]], inverse = TRUE))[
+                            c((.N / 2 + 1):.N, 1:(.N / 2))
+                            ] * .N / (.N - 1)
+                        }, x = FFTs)
                 }
                 names(Covars) <- covariances
 
                 # find maximum in dynamic lag time range:
                 # -------------------------------------------------------------------------- 
                 cat("\t- dyn lag\n")
-                # browser()
-                dyn_lag_max <- sapply(covariances,function(i,x,lag){
-                    find_dynlag(x[[i]],lag[,i])
-                },x=Covars,lag=dyn_lag)
+                dyn_lag_max <- sapply(covariances, function(i, x, lag) {
+                    find_dynlag(x[[i]], lag[, i])
+                }, x = Covars, lag = dyn_lag)
 
                 # covariance function's standard deviation and mean values left and right of fix lag
                 # ------------------------------------------------------------------------
@@ -1152,62 +1192,68 @@ ec_ht8700 <- function(
                 # cospectra for fixed & dynamic lags
                 # ------------------------------------------------------------------------ 			
                 cat("\t- co-spectra\n")
-                Cospec_fix <- mapply(function(i,lag,x1,x2){
-                        xs <- fft(shift(x2[,i[2]],-lag))/Int_length
-                        Re(Conj(xs) * x1[[i[1]]])[seq(Int_length/2)+1]*Int_length/(Int_length-1)*2
-                    },i=covariances_variables,lag=fix_lag,MoreArgs=list(x1=FFTs,x2=Data_int),SIMPLIFY=FALSE)
+                Cospec_fix <- mapply(function(i, lag) {
+                        xs <- fft(shift(SD[, get(i[2])], -lag)) / .N
+                        Re(Conj(xs) * FFTs[[i[1]]])[seq(.N / 2) + 1] * .N / (.N - 1) * 2
+                    }, i = covariances_variables, lag = fix_lag, SIMPLIFY = FALSE)
                 names(Cospec_fix) <- covariances
-                # browser()
-                Cospec_dyn <- mapply(function(i,lag,x1,x2){
-                        xs <- fft(shift(x2[,i[2]],-lag))/Int_length
-                        Re(Conj(xs) * x1[[i[1]]])[seq(Int_length/2)+1]*Int_length/(Int_length-1)*2
-                    },i=covariances_variables,lag=dyn_lag_max[2,],MoreArgs=list(x1=FFTs,x2=Data_int),SIMPLIFY=FALSE)
+                Cospec_dyn <- mapply(function(i, lag) {
+                        xs <- fft(shift(SD[, get(i[2])], -lag)) / .N
+                        Re(Conj(xs) * FFTs[[i[1]]])[seq(.N / 2) + 1] * .N / (.N - 1) * 2
+                    }, i = covariances_variables, lag = dyn_lag_max[2, ], SIMPLIFY = FALSE)
                 names(Cospec_dyn) <- covariances
         
-                
-                #*** hac5: *** ogives for fixed & dynamic lags 
+                # ogives for fixed & dynamic lags 
                 # ------------------------------------------------------------------------ 
-                Ogive_fix <- lapply(Cospec_fix,function(x)rev(cumsum(rev(x))))
-                Ogive_dyn <- lapply(Cospec_dyn,function(x)rev(cumsum(rev(x))))		
-                if(ogives_out){
-                    Cospec_fix_Out[[intval]] <- c(list(freq = freq), Cospec_fix)
-                    Cospec_dyn_Out[[intval]] <- c(list(freq = freq), Cospec_dyn)
-                    Ogive_fix_Out[[intval]] <- c(list(freq = freq), Ogive_fix)
-                    Ogive_dyn_Out[[intval]] <- c(list(freq = freq), Ogive_dyn)
-                    Covars_Out[[intval]] <- c(list(Hz = Hz), Covars)
+                Ogive_fix <- lapply(Cospec_fix, function(x) rev(cumsum(rev(x))))
+                Ogive_dyn <- lapply(Cospec_dyn, function(x) rev(cumsum(rev(x))))		
+                if (ogives_out) {
+                    Cospec_fix_Out[[.GRP]] <- c(list(freq = freq), Cospec_fix)
+                    Cospec_dyn_Out[[.GRP]] <- c(list(freq = freq), Cospec_dyn)
+                    Ogive_fix_Out[[.GRP]] <- c(list(freq = freq), Ogive_fix)
+                    Ogive_dyn_Out[[.GRP]] <- c(list(freq = freq), Ogive_dyn)
+                    Covars_Out[[.GRP]] <- c(list(Hz = Hz), Covars)
                 }
 
 
-                # empirical damping (hac5), dyn and fix should have best reference (dyn/fix)...
+                # empirical damping estimation, dyn and fix should have best reference (dyn/fix)...
                 # ------------------------------------------------------------------------
-                if(any(scalar_covariances)){
+                if (any(scalar_covariances)) {
                     cat("\t- damping\n")
-                    Damping_fix <- mapply(damp_hac5,ogive=Ogive_fix[scalar_covariances],ogive_ref=Ogive_fix[damping_reference[scalar_covariances]],freq.limits = damp_region[scalar_covariances],MoreArgs = list(freq = freq),SIMPLIFY=FALSE)
-                    Damping_dyn <- mapply(damp_hac5,ogive=Ogive_dyn[scalar_covariances],ogive_ref=Ogive_dyn[damping_reference[scalar_covariances]],freq.limits = damp_region[scalar_covariances],MoreArgs = list(freq = freq),SIMPLIFY=FALSE)
+                    Damping_fix <- mapply(damp_hac5, ogive = Ogive_fix[scalar_covariances], 
+                        ogive_ref = Ogive_fix[damping_reference], freq.limits = damp_region,
+                        MoreArgs = list(freq = freq), SIMPLIFY = FALSE)
+                    Damping_dyn <- mapply(damp_hac5, ogive = Ogive_dyn[scalar_covariances], 
+                        ogive_ref = Ogive_dyn[damping_reference], freq.limits = damp_region,
+                        MoreArgs = list(freq = freq), SIMPLIFY = FALSE)
                 } else {
                     Damping_dyn <- Damping_fix <- NULL
                 }
 
-                # sub-int: sub-interval calculations
+                # sub-int: sub-interval calculations (switch do data.frame since code already exists (I'm lazy))
                 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                cat("~~~\nsub-intervals\n")
-                sub_indices <- split_index(Int_length,n_stationarity_subint)
-                sub_Data <- lapply(sub_indices,function(i,x)x[i,],x=Data[index,])
+                cat("~~~\nsub-intervals (subint_n = ", subint_n, ")\n", sep = '')
+                sub_indices <- split_index(.N, subint_n)
+                sub_Data <- lapply(sub_indices, function(i, x) x[i, ], x = as.data.frame(SD))
 
                 # sub-int: calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
                 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                sub_wind <- lapply(sub_Data,function(x)rotate_detrend(x[,"u"],x[,"v"],x[,"w"],x[,"T"],phi=if(rotation_method %in% "two_axis") NULL else 0,method=subint_detrending[c("u","v","w","T")],c.system=sonic_type,Hz_ts=Hz))
+                sub_wind <- lapply(sub_Data, function(x) 
+                    rotate_detrend(x[, "u"], x[, "v"], x[, "w"], x[, "T"], 
+                        method = subint_detrending[c("u", "v", "w", "T")], Hz_ts = Hz))
                 for(sub in seq_along(sub_wind)){
                     sub_Data[[sub]][,c("u","v","w","T")] <- sub_wind[[sub]][c("uprot","vprot","wprot","Tdet")]
                 }
 
                 # sub-int: detrend scalars
                 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                if(length(scalars)){
-                    sub_detrended_scalars <- lapply(sub_Data,function(x)mapply(trend,y=x[,scalars, drop = FALSE],method=subint_detrending[scalars],MoreArgs=list(Hz_ts=Hz),SIMPLIFY=FALSE))
-                    Data_int[,scalars] <- lapply(detrended_scalars,"[[","residuals")
-                    for(sub in seq_along(sub_wind)){
-                        sub_Data[[sub]][,scalars] <- lapply(sub_detrended_scalars[[sub]],"[[","residuals")
+                if (length(scalars)) {
+                    sub_detrended_scalars <- lapply(sub_Data, 
+                        function(x) mapply(trend, y = x[, scalars, drop = FALSE], 
+                            method = subint_detrending[scalars], 
+                            MoreArgs = list(Hz_ts = Hz), SIMPLIFY = FALSE))
+                    for (sub in seq_along(sub_wind)) {
+                        sub_Data[[sub]][, scalars] <- lapply(sub_detrended_scalars[[sub]], "[[", "residuals")
                     }
                 }
 
@@ -1215,118 +1261,72 @@ ec_ht8700 <- function(
                 
                 # extract covariances etc.:
                 # ------------------------------------------------------------------------ 
-
-                # calculate some turbulence parameters and collect some wind parameters
-                # -------------------------------------------------------------------------- 
-                wind_stats <- wind_statistics(wind,z_canopy,z_sonic)
-                ### correct for soni north deviation 
-                wind_stats["WD"] <- (wind_stats["WD"] + dev_north) %% 360
-
-                # calculate scalar averages and sd:
-                # -------------------------------------------------------------------------- 
-                if(length(scalars)){
-                    scalar_means <- sapply(detrended_scalars,function(x)mean(x[["fitted"]]+x[["residuals"]]))
-                    scalar_means_trend <- sapply(detrended_scalars,function(x)mean(x[["fitted"]]))
-                    scalar_sd <- sapply(detrended_scalars,function(x)sd(x[["residuals"]]))
-                    names(scalar_means) <- paste0("mean(",names(scalar_means),")") 
-                    names(scalar_means_trend) <- paste0("mean(trend.",names(scalar_means_trend),")") 
-                    names(scalar_sd) <- paste0("sd(",names(scalar_sd),")") 
-                } else {
-                    scalar_sd <- scalar_means_trend <- scalar_means <- NULL
-                }
-
                 # sub-int: calculate covariances of sub-intervals
                 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                sub_covs <- sapply(sub_wind,function(x)cov(as.data.frame(x[1:4]))[cbind(c("uprot","vprot","wprot","Tdet","uprot","uprot","uprot","vprot","vprot","wprot"),c("uprot","vprot","wprot","Tdet","vprot","wprot","Tdet","wprot","Tdet","Tdet"))])
-                sub_cov_means <- apply(sub_covs,1,mean)
-                sub_cov_sd <- apply(sub_covs,1,sd)
-                names(sub_cov_means) <- paste0("mean(sub.int.",c("<u'u'>","<v'v'>","<w'w'>","<T'T'>","<u'v'>","<u'w'>","<u'T'>","<v'w'>","<v'T'>","<w'T'>"),")")
-                names(sub_cov_sd) <- paste0("sd(sub.int.",c("<u'u'>","<v'v'>","<w'w'>","<T'T'>","<u'v'>","<u'w'>","<u'T'>","<v'w'>","<v'T'>","<w'T'>"),")")
+                sub_covs <- sapply(sub_wind, function(x) cov(list2DF(x[1:4]))[
+                    cbind(
+                        c("uprot", "vprot", "wprot", "Tdet", "uprot", "uprot", "uprot", "vprot", "vprot", "wprot"), 
+                        c("uprot", "vprot", "wprot", "Tdet", "vprot", "wprot", "Tdet", "wprot", "Tdet", "Tdet")
+                        )]
+                )
+                sub_cov_means <- apply(sub_covs, 1, mean)
+                sub_cov_sd <- apply(sub_covs, 1, sd)
+                names(sub_cov_means) <- paste0("mean(sub.int.", c("<u'u'>", "<v'v'>", "<w'w'>", "<T'T'>", "<u'v'>", "<u'w'>", "<u'T'>", "<v'w'>", "<v'T'>", "<w'T'>"), ")")
+                names(sub_cov_sd) <- paste0("sd(sub.int.", c("<u'u'>", "<v'v'>", "<w'w'>", "<T'T'>", "<u'v'>", "<u'w'>", "<u'T'>", "<v'w'>", "<v'T'>", "<w'T'>"), ")")
 
                 ### some output and namings
                 fix_lag_out <- fix_lag
-                names(fix_lag_out) <- paste("fix.lag",names(fix_lag_out))
-                dyn_lag_out <- dyn_lag_max["tau",]
-                names(dyn_lag_out) <- paste("dyn.lag",names(dyn_lag_out))
-                flux_fix_lag <- sapply(Ogive_fix,"[",1)
-                names(flux_fix_lag) <- paste("flux.fix.lag",names(flux_fix_lag))
-                flux_dyn_lag <- sapply(Ogive_dyn,"[",1)
-                names(flux_dyn_lag) <- paste("flux.dyn.lag",names(flux_dyn_lag))
-                fix_damping_pbreg <- sapply(Damping_fix,"[[",1)
-                if(!is.null(Damping_fix))names(fix_damping_pbreg) <- paste("damping.pbreg.fix.lag",names(Damping_fix))
-                dyn_damping_pbreg <- sapply(Damping_dyn,"[[",1)
-                if(!is.null(Damping_dyn))names(dyn_damping_pbreg) <- paste("damping.pbreg.dyn.lag",names(Damping_dyn))
-                fix_damping_deming <- sapply(Damping_fix,"[[",2)
-                if(!is.null(Damping_fix))names(fix_damping_deming) <- paste("damping.deming.fix.lag",names(Damping_fix))
-                dyn_damping_deming <- sapply(Damping_dyn,"[[",2)
-                if(!is.null(Damping_dyn))names(dyn_damping_deming) <- paste("damping.deming.dyn.lag",names(Damping_dyn))
+                names(fix_lag_out) <- paste("fix.lag", names(fix_lag_out))
+                dyn_lag_out <- dyn_lag_max["tau", ]
+                names(dyn_lag_out) <- paste("dyn.lag", names(dyn_lag_out))
+                flux_fix_lag <- sapply(Ogive_fix, "[", 1)
+                names(flux_fix_lag) <- paste("flux.fix.lag", names(flux_fix_lag))
+                flux_dyn_lag <- sapply(Ogive_dyn, "[", 1)
+                names(flux_dyn_lag) <- paste("flux.dyn.lag", names(flux_dyn_lag))
+                fix_damping_pbreg <- sapply(Damping_fix, "[[", 1)
+                if (!is.null(Damping_fix)) names(fix_damping_pbreg) <- paste("damping.pbreg.fix.lag", names(Damping_fix))
+                dyn_damping_pbreg <- sapply(Damping_dyn, "[[", 1)
+                if (!is.null(Damping_dyn)) names(dyn_damping_pbreg) <- paste("damping.pbreg.dyn.lag", names(Damping_dyn))
+                fix_damping_deming <- sapply(Damping_fix, "[[", 2)
+                if (!is.null(Damping_fix)) names(fix_damping_deming) <- paste("damping.deming.fix.lag", names(Damping_fix))
+                dyn_damping_deming <- sapply(Damping_dyn, "[[", 2)
+                if (!is.null(Damping_dyn)) names(dyn_damping_deming) <- paste("damping.deming.dyn.lag", names(Damping_dyn))
 
                 
                 # write results:
                 # -------------------------------------------------------------------------- 
-                # browser()
-                if(checkNames){
-                    # browser()
-                    res_temp <- cbind(data.frame(
-                            Data_Start = Int_Start
-                            ,Data_End = Int_End
-                            ,tzone = tz_sonic
-                            ,"Int_Length (min)" = round(Int_Time/60,4)
-                            ,N = Int_length
-                            ,SubInts = n_stationarity_subint
-                            ,check.names=FALSE,stringsAsFactors=FALSE
-                            )
-                        ,as.list(c(
-                            wind_stats
-                            ,scalar_means
-                            ,scalar_means_trend
-                            ,scalar_sd
-                            ,sub_cov_means
-                            ,sub_cov_sd
-                            ,fix_lag_out
-                            ,dyn_lag_out
-                            ,flux_fix_lag
-                            ,flux_dyn_lag
-                            ,fix_damping_pbreg
-                            ,dyn_damping_pbreg
-                            ,fix_damping_deming
-                            ,dyn_damping_deming
-                            ))
-                        )
-                    names(results)[-(1:2)] <- names(res_temp)
-                    checkNames <- FALSE
-                    results[intval,-(1:2)] <- res_temp
-                } else {
-                    results[intval,-(1:2)] <- cbind(data.frame(
-                            Data_Start = Int_Start
-                            ,Data_End = Int_End
-                            ,tzone = tz_sonic
-                            ,"Int_Length (min)" = round(Int_Time/60,4)
-                            ,N = Int_length
-                            ,SubInts = n_stationarity_subint
-                            ,check.names=FALSE,stringsAsFactors=FALSE
-                            )
-                        ,as.list(c(
-                            wind_stats
-                            ,scalar_means
-                            ,scalar_means_trend
-                            ,scalar_sd
-                            ,sub_cov_means
-                            ,sub_cov_sd
-                            ,fix_lag_out
-                            ,dyn_lag_out
-                            ,flux_fix_lag
-                            ,flux_dyn_lag
-                            ,fix_damping_pbreg
-                            ,dyn_damping_pbreg
-                            ,fix_damping_deming
-                            ,dyn_damping_deming
-                            ))
-                        )				
-                }
+                out <- c(
+                    list(
+                        st = st_interval[.BY[[1]]]
+                        , et = et_interval[.BY[[1]]]
+                        , Data_Start = with_tz(Int_Start, tz_times)
+                        , Data_End = with_tz(Int_End, tz_times)
+                        , tzone = tz_times
+                        , "Int_Length (min)" = round(Int_Time / 60, 4)
+                        , N = .N
+                        , SubInts =  subint_n
+                    ),
+                    as.list(c(
+                        wind_stats
+                        , scalar_means
+                        , scalar_means_trend
+                        , scalar_sd
+                        , sub_cov_means
+                        , sub_cov_sd
+                        , fix_lag_out
+                        , dyn_lag_out
+                        , flux_fix_lag
+                        , flux_dyn_lag
+                        , fix_damping_pbreg
+                        , dyn_damping_pbreg
+                        , fix_damping_deming
+                        , dyn_damping_deming
+                        ))
+                )				
 
 
-                if(create_graphs){
+                if (create_graphs) {
+                    stop('Fix me @ line 1311 -> plotting with new routine')
                     # plotting:
                     # -------------------------------------------------------------------------- 
                     # -------------------------------------------------------------------------- 
@@ -1366,12 +1366,24 @@ ec_ht8700 <- function(
                         dev.off()	
                     }
                 } # end plotting
+                # return out
+                out
             } else {
                 cat("less than 10 data points in raw data - skipping interval.\n")
+                # return NULL
+                NULL
             }
-        } # end for loop intval	
+        }, by = bin]
 
-    } # end for loop
+    } # end for loop over days
+
+    browser()
+
+    # rbind list to data.table
+    results <- rbindlist(result)
+
+    browser()
+    ## hier bin ich!!! -> wxT etc. umbenennen zu w'T'
 
     if (as_ibts) {
         results <- as.ibts(results)

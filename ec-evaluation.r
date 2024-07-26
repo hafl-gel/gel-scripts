@@ -251,30 +251,8 @@ convertARTbinary_2012 <- function(Pfad,FilePattern="PSX%y%m%d_0.dat",asRDS=TRUE,
 	x[!(x %in% y)]
 }
 
-# find time in intervals (from ibts: findI_st)
-cppFunction("
-	IntegerVector findInterval2(NumericVector x,NumericVector y1,NumericVector y2){
-		// case: st_closed = TRUE
-		int lenx = x.size();
-		IntegerVector Out = rep(0,lenx);
-		int leny = y1.size() - 1;
-		int run = 0;
 
-		for(int i = 0; (i < lenx) & (run <= leny); i++){
-			if(x[i] >= y2[leny]){
-				break;
-			}
-			while((y2[run] <= x[i]) & (run <= leny)){
-				run += 1;
-			}
-			if(y1[run] <= x[i]){
-				Out[i] = run + 1;
-			}
-		}
-		return Out;
-	}
-	")
-
+# hard flag function
 H.flags <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){ 
 	# *****************************************************************************
 	# ***************** Detects values outside of physical range... ***************
@@ -1762,7 +1740,7 @@ evalREddy <- function(
 			# find data in individual intervals:
 			# ------------------------------------------------------------------------------ 
 			if(any(st_interval[-1] - et_interval[-length(et_interval)] < 0))stop("Intervals need to be in strictly increasing order!")
-			ind_interval <- findInterval2(as.numeric(Data[,1]),as.numeric(st_interval),as.numeric(et_interval))
+			ind_interval <- getIntervals(Data[, 1], st_interval, et_interval)
 			unique_ind <- unique(ind_interval) %w/o% 0
 
 			if(ogives_out){

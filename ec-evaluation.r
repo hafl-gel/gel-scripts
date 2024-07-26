@@ -752,7 +752,7 @@ ec_ht8700 <- function(
         # detrending -> valid entries are blockAVG,linear,linear_robust,ma_xx (xx = time in seconds)
         , detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear')
         , hard_flag = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE)
-        , hard_flag_lower = c(u = -30, v = -30, w = -10, T = 243, nh3_ppb = -50)
+        , hard_flag_lower = c(u = -30, v = -30, w = -10, T = 243, nh3_ppb = -100)
         , hard_flag_upper = c(u = 30, v = 30, w = 10, T = 333, nh3_ppb = 5000)
         , hard_flag_window = '5mins'
         , hard_flag_replace = TRUE
@@ -1361,7 +1361,7 @@ ec_ht8700 <- function(
                 # return out
                 out
             } else {
-                cat("less than 10 data points in raw data - skipping interval.\n")
+                cat("less than ", round(thresh_period * 100),"% of data points in raw data - skipping interval.\n", sep = '')
                 # return NULL
                 NULL
             }

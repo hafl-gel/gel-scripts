@@ -322,36 +322,10 @@ H.flags <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){
 		for(i in seq_along(isna)){
 			x1 <- st1[isna[[i]]] - wind/2 + d_t/2000
 			x2 <- st1[isna[[i]]] + wind/2 - d_t/2000
-
-            ## HERE !!! -> hier weiter!!! -> fixme cutIntervals & getIntervals sind continuous!!! -> add contin. check in ibts!!!
-            ## HERE !!! -> ev. neue Funktion in cpp machen?
-
-            microbenchmark::microbenchmark(
-			    ibts = ind0 <- mapply(\(x, y) which(getIntervals(time, x, y) > 0), x = x1, y = x2, SIMPLIFY = FALSE),
-                base = ind <- mapply(\(x, y) which(time >= x & time < y), x = x1, y = x2, SIMPLIFY = FALSE)
-                )
-
-
-
-            identical(ind0, ind)
-
-			dat[hflgs][[i]][isna[[i]]] <- sapply(ind,function(x)mean(dat[hflgs][[i]][x],na.rm=TRUE))
-
-            ind[[1]]
-            ind[[2]]
-
-            x <- sapply(ind,function(x)mean(dat[hflgs][[i]][x[,1]],na.rm=TRUE))
-            mean(dat[hflgs][[1]][ind[[2]][, 1]], na.rm = TRUE)
-            dat[hflgs][[1]][ind[[2]][, 1]]
-            ind[[2]][, 1]
-
-            x1[2]
-            x2[2]
-
-            st1[1]
-            st1[2]
-
-			dat[hflgs][[i]][isna[[i]]] <- sapply(ind,function(x)mean(dat[hflgs][[i]][x[,1]],na.rm=TRUE))
+            # NOTE: fixme cutIntervals & getIntervals sind continuous!!! -> add contin. check in ibts!!!
+            ind <- find_window(time, x1, x2)
+			# dat[hflgs][[i]][isna[[i]]] <- sapply(ind, function(x) mean(dat[hflgs][[i]][x], na.rm = TRUE))
+			dat[hflgs][[i]][isna[[i]]] <- sapply(ind, function(x) median(dat[hflgs][[i]][x], na.rm = TRUE))
 		}	
 		cat("number of replaced values\n*~~~~*\n", names(dat[hflgs]),"\n", lengths(isna),"\n*~~~~*\n")
 	}
@@ -359,6 +333,50 @@ H.flags <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){
 	dat
 	
 }
+
+sourceCpp(code = '
+#include <Rcpp.h>
+using namespace Rcpp;
+// [[Rcpp::export]]
+Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2)
+	{
+	Rcpp::List Out(y1);
+	int lenx = x.size();
+	int leny = y1.size();
+	int run = 0;
+	int j = 0;
+	for (int i = 0; i < leny; i++) {
+        // pass j to runner & set j to 0
+        run = j;
+        j = 0;
+        LogicalVector LogVec = rep(false, lenx);
+		if ((x[lenx - 1] < y1[i]) || (x[run] > y2[i])) {
+			Out[i] = LogVec;
+		} else {
+            // goto y1[i]
+			while ((x[run] < y1[i]) && (run < lenx)) {
+				run += 1;
+			}
+            // goto y2[i]
+			while ((run < lenx) && (x[run] < y2[i])) {
+                if (i < leny && j == 0 && x[run] >= y1[i + 1]) {
+                    j = run;
+                }
+                LogVec[run] = true;
+				run += 1; 
+			}
+            // check j
+            if (j == 0) {
+                j = run;
+            } else if (j == lenx) {
+                j -= 1;
+            }
+            Out[i] = LogVec;
+		}
+	}
+	return(Out);
+}
+')
 
 trend <- function(y,method=c("blockAVG","linear","linear_robust","ma_360"),Hz_ts=10){
 	n <- length(y)

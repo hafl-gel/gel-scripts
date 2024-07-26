@@ -1095,15 +1095,6 @@ ec_ht8700 <- function(
 
                 # check for remaining NA values
                 if (SD[, anyNA(.SD), .SDcols = c("u", "v", "w", "T", scalars)]) {
-
-                    if (day == 20240721 && .GRP == 7) browser()
-                    ## hier bin ich!!! -> check Hard Flag function which provides NA instead of mean
-
-                    debug(H.flags)
-
-                    SD <- copy(.SD)
-                    SD[, variables[hard_flag] := H.flags(mget(variables[hard_flag]), Time, Hz, lim_range[, variables[hard_flag], drop = FALSE], hard_flag_window, hf_method)]
-
                     cat("NA values in data. Skipping interval...")
                     next
                 }
@@ -1301,6 +1292,10 @@ ec_ht8700 <- function(
                         , "Int_Length (min)" = round(Int_Time / 60, 4)
                         , N = .N
                         , SubInts =  subint_n
+                        , temp_amb = mean(temp_amb, na.rm = TRUE)
+                        , press_amb = mean(press_amb, na.rm = TRUE)
+                        , oss = mean(oss, na.rm = TRUE)
+                        , alarm_codes = paste(unique(unlist(strsplit(unique(alarm_code[!is.na(alarm_code)]), split = ','))), collapse = ',')
                     ),
                     as.list(c(
                         wind_stats

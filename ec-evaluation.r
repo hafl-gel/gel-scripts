@@ -738,6 +738,23 @@ plot_damping <- function(ogive_damp,freq,ylab=NULL,xlim=NULL,ylim=NULL,cx=1.5,cx
 	legend(pos,legend=c("damped","scaled reference (pbreg)","scaled reference (deming)",sprintf("damping (pbreg): %1.1f%%",(1 - dampf_pbreg)*100),sprintf("damping (deming): %1.1f%%",(1 - dampf_deming)*100)),col=c(col,"lightgrey","darkgrey",NA,NA),bty="n",lty=1,lwd=2,cex=cx.leg)
 }
 
+fix_defaults <- function(x, vars) {
+    # find vars not in x
+    missing_vars <- vars[!(vars %in% names(x))]
+    if (length(missing_vars)) {
+        # get formals
+        frms <- formals(sys.function(sys.parent(1L)))
+        # get formal name
+        fname <- as.character(substitute(x))
+        # get default values
+        default <- eval(frms[[fname]])
+        # extend x with default
+        x <- c(x, default[missing_vars])
+    }
+    # return
+    x[vars]
+}
+
 ec_ht8700 <- function(
 		sonic_directory, ht_directory
 		, start_time = NULL
@@ -750,35 +767,35 @@ ec_ht8700 <- function(
 		, z_canopy = NULL
 		, variables = c('u', 'v', 'w', 'T', 'nh3_ppb')
         # detrending -> valid entries are blockAVG,linear,linear_robust,ma_xx (xx = time in seconds)
-        , detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear')
-        , hard_flag = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE)
-        , hard_flag_lower = c(u = -30, v = -30, w = -10, T = 243, nh3_ppb = -100)
-        , hard_flag_upper = c(u = 30, v = 30, w = 10, T = 333, nh3_ppb = 5000)
+        , detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear')
+        , hard_flag = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE, nh3_ugm3 = TRUE)
+        , hard_flag_lower = c(u = -30, v = -30, w = -10, T = 243, nh3_ppb = -100, nh3_ugm3 = -100)
+        , hard_flag_upper = c(u = 30, v = 30, w = 10, T = 333, nh3_ppb = 5000, nh3_ugm3 = 5000)
         , hard_flag_window = '5mins'
         , hard_flag_replace = TRUE
 		, covariances = c('uxw', 'wxT', 'wxnh3_ppb')
         # fix lag in seconds
-		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4)
+		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4)
         # dyn lag in seconds around lag_fix
-		, lag_dyn = c(uxw = 0.2, wxT = 0.2, wxnh3_ppb = 1.5)
-		, damping_reference = c(wxnh3_ppb = 'wxT')
+		, lag_dyn = c(uxw = 0.2, wxT = 0.2, wxnh3_ppb = 1.5, wxnh3_ugm3 = 1.5)
+		, damping_reference = c(wxnh3_ppb = 'wxT', wxnh3_ugm3 = 'wxT')
         # lower & upper bounds of fitting ogives (in seconds)
-		, damping_lower = c(wxnh3_ppb = 2)
-		, damping_upper = c(wxnh3_ppb = 20)
+		, damping_lower = c(wxnh3_ppb = 2, wxnh3_ugm3 = 2)
+		, damping_upper = c(wxnh3_ppb = 20, wxnh3_ugm3 = 20)
         , subintervals = TRUE
         , subint_n = 5
-        , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear')
+        , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear')
         , oss_threshold = 0
         , na_alarm_code = c(1:3, 5:8, 11, 13)
         , thresh_period = 0.75
 		, create_graphs = TRUE
 		, graphs_directory = NULL
 		, add_name = ''
-        , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', T = 'K', nh3_ppb = 'ppb')
-        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', nh3_ppb = 'indianred')
-        , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE)
-        , plotting_covar_units = c(uxw = 'm2/s2', wxT = 'K*m/s', wxnh3_ppb = 'ppb*m/s')
-        , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred')
+        , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', T = 'K', nh3_ppb = 'ppb', nh3_ugm3 = 'ug/m3')
+        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', nh3_ppb = 'indianred', nh3_ugm3 = 'indianred')
+        , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE, nh3_ugm3 = TRUE)
+        , plotting_covar_units = c(uxw = 'm2/s2', wxT = 'K*m/s', wxnh3_ppb = 'ppb*m/s', wxnh3_ugm3 = 'ug/m2/s')
+        , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred', wxnh3_ugm3 = 'indianred')
 		, ogives_out = FALSE
         , as_ibts = TRUE
 	){
@@ -834,6 +851,23 @@ ec_ht8700 <- function(
     } else {
         mag_dec <- \(x) declination
     }
+
+    # fix input (vectors of default values)
+    detrending <- fix_defaults(detrending, variables)
+    hard_flag <- fix_defaults(hard_flag, variables)
+    hard_flag_lower <- fix_defaults(hard_flag_lower, variables)
+    hard_flag_upper <- fix_defaults(hard_flag_upper, variables)
+    lag_fix <- fix_defaults(lag_fix, covariances)
+    lag_dyn <- fix_defaults(lag_dyn, covariances)
+    damping_reference <- fix_defaults(damping_reference, covariances[scalar_covariances])
+    damping_lower <- fix_defaults(damping_lower, covariances[scalar_covariances])
+    damping_upper <- fix_defaults(damping_upper, covariances[scalar_covariances])
+    subint_detrending <- fix_defaults(subint_detrending, variables)
+    plotting_var_units <- fix_defaults(plotting_var_units, variables)
+    plotting_var_colors <- fix_defaults(plotting_var_colors, variables)
+    plot_timeseries <- fix_defaults(plot_timeseries, variables)
+    plotting_covar_units <- fix_defaults(plotting_covar_units, variables)
+    plotting_covar_colors <- fix_defaults(plotting_covar_colors, variables)
 
     # get flux variables and lag times:                                      
     # ------------------------------------------------------------------------------ 

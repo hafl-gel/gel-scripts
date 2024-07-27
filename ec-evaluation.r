@@ -594,7 +594,7 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
 	dat[,c("u","v","w","T")] <- mapply("+",wind[c("umrot","vmrot","wmrot","Tmdet")],wind[c("uprot","vprot","wprot","Tdet")])
 	dat2 <- reshape2::melt(dat[,c("st",selection)],id="st")
 	### get trends:
-	dat3 <- data.frame(wind[c("umrot","vmrot","wmrot","Tmdet")])
+	dat3 <- list2DF(wind[c("umrot","vmrot","wmrot","Tmdet")])
 	names(dat3) <- c("u","v","w","T")
 	if(!is.null(scal)){
 		dat3 <- cbind(dat3,lapply(scal,"[[","fitted"))
@@ -625,7 +625,7 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
 				x=list(cex=1.25, tck=c(-0.75,-0.75), format="%H:%M"),
 				y=list(relation="free", cex=1.25, tck=c(-0.75,-0.75), rot=0)),
 		xscale.component=myxscale.component, yscale.component=myyscale.component,
-		strip=FALSE, layout=c(1,ncol(dat)-2), between=list(x=0,y=1), subscripts=TRUE, lwd=rep(1,length(color)), lty=rep(1,length(color)), col=color,
+		strip=FALSE, layout=c(1, length(selection)), between=list(x=0,y=1), subscripts=TRUE, lwd=rep(1,length(color)), lty=rep(1,length(color)), col=color,
 		panel=function(x, y, ...) {
 			#panel.grid(h=-1, v=-1, lty=3, col="gray80")
 			y2 <- dat2[list(...)$subscripts,"trend"]
@@ -793,6 +793,8 @@ ec_ht8700 <- function(
         if (is.null(graphs_directory)) {
             stop('argument "create_graphs" is TRUE, but "graphs_directory" is not specified!')
         }
+        library(reshape2)
+        library(lattice)
     }
     if (!is.null(graphs_directory) && (
             !is.character(graphs_directory) || !dir.exists(graphs_directory)
@@ -808,6 +810,7 @@ ec_ht8700 <- function(
     covariances_variables <- strsplit(covariances, "x")
     covariances_plotnames <- make.names(gsub("x", "", covariances))
     scalar_covariances <- as.numeric(grepl("(^ux|xu$)", covariances)) + as.numeric(grepl("(^wx|xw$)", covariances)) + as.numeric(grepl("(^Tx|xT$)", covariances)) < 2
+    names(scalar_covariances) <- names(covariances_plotnames) <- covariances
     if (is.null(z_ec) || !is.numeric(z_ec)) {
         stop('argument "z_ec" must be provided as numeric value (height in m a.g.l)!')
     }
@@ -1031,7 +1034,6 @@ ec_ht8700 <- function(
                 folder <- paste0("HT8700-EC-", day, "-eval", tstamp, "-avg", avg_period)
             }
             path_folder <- file.path(graphs_directory, folder)
-            dir.create(path_folder, recursive = FALSE)
         }
 
         # be verbose
@@ -1294,7 +1296,9 @@ ec_ht8700 <- function(
                         , temp_amb = mean(temp_amb, na.rm = TRUE)
                         , press_amb = mean(press_amb, na.rm = TRUE)
                         , oss = mean(oss, na.rm = TRUE)
-                        , alarm_codes = paste(unique(unlist(strsplit(unique(alarm_code[!is.na(alarm_code)]), split = ','))), collapse = ',')
+                        , alarm_codes = paste(unique(unlist(strsplit(
+                                        unique(alarm_code[!is.na(alarm_code)])
+                                        , split = ','))), collapse = ',')
                     ),
                     as.list(c(
                         wind_stats
@@ -1316,7 +1320,9 @@ ec_ht8700 <- function(
 
 
                 if (create_graphs) {
-                    stop('Fix me @ line 1311 -> plotting with new routine')
+                    if (!dir.exists(path_folder)) {
+                        dir.create(path_folder, recursive = FALSE)
+                    }
                     # plotting:
                     # -------------------------------------------------------------------------- 
                     # -------------------------------------------------------------------------- 
@@ -1325,10 +1331,14 @@ ec_ht8700 <- function(
                     # -------------------------------------------------------------------------- 
                     # plot and save (rotated) data time series with raw-data trends...
                     # ------------------------------------------------------------------------
-                    time2 <- format(Int_End,format="%H%M%S")
-                    plotname <- paste("timeseries", filename, time2, sep="-") 
-                    jpeg(file=paste0(path_folder, '/', plotname,".jpg"),width=600, height=(sum(plot_timeseries))*100, quality=60)
-                        ts_plot <- plot.tseries(Data[index,],wind,detrended_scalars,names(plot_timeseries)[plot_timeseries],plotting_var_colors,plotting_var_units)
+                    time2 <- format(Int_End, format = "%H%M%S")
+                    plotname <- paste("timeseries", day, time2, sep="-") 
+                    ts_vars <- names(plot_timeseries)[plot_timeseries]
+                    jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), width = 600, height = (sum(plot_timeseries)) * 100, quality = 60)
+                        ts_plot <- plot.tseries(
+                            cbind(st = Time, as.data.frame(SD)),
+                            wind, detrended_scalars, ts_vars,
+                            plotting_var_colors, plotting_var_units)
                         print(ts_plot)
                     dev.off()
 
@@ -1336,17 +1346,17 @@ ec_ht8700 <- function(
                     # ------------------------------------------------------------------------
                     for(i in covariances){
                         # i <- "w'TDL CH4'"
-                        plotname <- paste("plots",filename,time2,covariances_plotnames[i],sep="-")
+                        plotname <- paste("plots", day, time2, covariances_plotnames[i], sep = "-")
+                        # fix ylab
+                        ylab <- sub('(.+)x(.+)', "<\\1'\\2'>", i)
                         jpeg(file=paste0(path_folder, '/', plotname,".jpg"),width=1350, height=900, quality=60)
                             par(mfrow=c(2,3))
                             # ----------------------- Covariance -------------------------------------
-                            ## HERE!!! -> see below
-                            stop('-> fix ylab incl units!!!')
-                            plot_covfunc(Covars[[i]],Int_Time,dyn_lag_max[,i],fix_lag[i],ylab=i, xlim = c(-50,50), cx=1.5, cxmt=1.25, cl=plotting_covar_colors[i])
+                            plot_covfunc(Covars[[i]],Int_Time,dyn_lag_max[,i],fix_lag[i],ylab=ylab, xlim = c(-50,50), cx=1.5, cxmt=1.25, cl=plotting_covar_colors[i])
                             # ---------------------- Co-Spec/Ogive fix lag -----------------------------------
-                            plot_cospec_ogive(Ogive_fix[[i]],Cospec_fix[[i]],freq,ylab=paste0("ogive (fix lag) of ",i),cx=1.5,col=plotting_covar_colors[i])
+                            plot_cospec_ogive(Ogive_fix[[i]],Cospec_fix[[i]],freq,ylab=paste0("ogive (fix lag) of ",ylab),cx=1.5,col=plotting_covar_colors[i])
                             # ---------------------- Co-Spec/Ogive dyn lag -----------------------------------
-                            plot_cospec_ogive(Ogive_dyn[[i]],Cospec_dyn[[i]],freq,ylab=paste0("ogive (dyn lag) of ",i),cx=1.5,col=plotting_covar_colors[i])
+                            plot_cospec_ogive(Ogive_dyn[[i]],Cospec_dyn[[i]],freq,ylab=paste0("ogive (dyn lag) of ",ylab),cx=1.5,col=plotting_covar_colors[i])
                             # ---------------------- empirical damping -----------------------------------
                             if(scalar_covariances[i]){
                                 plot_damping(Damping_fix[[i]],freq,ylab=paste0("ogive (fix lag) of ",i),cx=1.5,col=plotting_covar_colors[i])
@@ -1429,7 +1439,7 @@ evalREddy <- function(
     library(tcltk)
     library(xlsx)
     # library(Rcpp)
-    # library(reshape2)
+    library(reshape2)
     library(lattice)
     # library(caTools)
 

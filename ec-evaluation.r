@@ -770,6 +770,7 @@ ec_ht8700 <- function(
         , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear')
         , oss_threshold = 0
         , na_alarm_code = c(1:3, 5:8, 11, 13)
+        , thresh_period = 0.75
 		, create_graphs = TRUE
 		, graphs_directory = NULL
 		, add_name = ''
@@ -925,6 +926,12 @@ ec_ht8700 <- function(
     result_list <- vector(mode = 'list', length(files$dates))
     names(result_list) <- files$dates
 
+    # prepare ogive output
+    if (ogives_out) {
+        Cospec_dyn_Out <- Cospec_fix_Out <- Covars_Out <- Ogive_fix_Out <- Ogive_dyn_Out <- vector("list", length(files$dates))
+        names(Cospec_fix_Out) <- names(Cospec_dyn_Out) <- names(Covars_Out) <- names(Ogive_fix_Out) <- names(Ogive_dyn_Out) <- files$dates
+    }
+
     cat("\n************************************************************\n")
     cat("HT8700 EC evaluation\n")
     cat("************************************************************\n")
@@ -1039,17 +1046,8 @@ ec_ht8700 <- function(
         # --------------------- read fix lags from lag_lookuptable ---------------------
         # TODO: only if necessary/wanted
 
-        # prepare ogive output (TODO: would be better outside of for loop...)
-        if (ogives_out) {
-            Cospec_dyn_Out <- Cospec_fix_Out <- Covars_Out <- Ogive_fix_Out <- Ogive_dyn_Out <- vector("list", length(st_interval))
-            names(Cospec_fix_Out) <- names(Cospec_dyn_Out) <- names(Covars_Out) <- names(Ogive_fix_Out) <- names(Ogive_dyn_Out) <- format(st_interval, format = "%H%M")
-        }
-
         # loop over individual intervals:
         # ------------------------------------------------------------------------------ 
-        ## hier bin ich!!! -> transform for loop to data.table by
-        ## hier bin ich!!! -> add threshold for % of avg_period as argument
-        thresh_period <- 0.75
         Hz <- daily_data[, {
             d_t <- diff(as.numeric(Time))
             round(1 / median(d_t, na.rm = TRUE), -1)
@@ -1196,11 +1194,11 @@ ec_ht8700 <- function(
                 Ogive_fix <- lapply(Cospec_fix, function(x) rev(cumsum(rev(x))))
                 Ogive_dyn <- lapply(Cospec_dyn, function(x) rev(cumsum(rev(x))))		
                 if (ogives_out) {
-                    Cospec_fix_Out[[.GRP]] <- c(list(freq = freq), Cospec_fix)
-                    Cospec_dyn_Out[[.GRP]] <- c(list(freq = freq), Cospec_dyn)
-                    Ogive_fix_Out[[.GRP]] <- c(list(freq = freq), Ogive_fix)
-                    Ogive_dyn_Out[[.GRP]] <- c(list(freq = freq), Ogive_dyn)
-                    Covars_Out[[.GRP]] <- c(list(Hz = Hz), Covars)
+                    Cospec_fix_Out[[day]][[.GRP]] <- c(list(freq = freq), Cospec_fix)
+                    Cospec_dyn_Out[[day]][[.GRP]] <- c(list(freq = freq), Cospec_dyn)
+                    Ogive_fix_Out[[day]][[.GRP]] <- c(list(freq = freq), Ogive_fix)
+                    Ogive_dyn_Out[[day]][[.GRP]] <- c(list(freq = freq), Ogive_dyn)
+                    Covars_Out[[day]][[.GRP]] <- c(list(Hz = Hz), Covars)
                 }
 
 
@@ -1388,22 +1386,24 @@ ec_ht8700 <- function(
         results <- as.ibts(results)
     }
 
-
 	# #################################### END VERSION HISTORY #################################### #
 	cat("************************************************************\n") 
-	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"),"time elapsed: ", difftime(Sys.time(), script.start, unit="mins"),"minutes\n")
+	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
+        "time elapsed: ", difftime(Sys.time(), script.start, unit = "mins"),
+        "minutes\n")
 	cat("************************************************************\n")  
-	if(ogives_out){
-		return(list(
-                results = results, 
-                covars = Covars_Out,
-                cospec_fix = Cospec_fix_Out, 
-                cospec_dyn = Cospec_dyn_Out,
-                ogv_fix = Ogive_fix_Out, 
-                ogv_dyn = Ogive_dyn_Out
-                ))
+
+	if (ogives_out) {
+		structure(
+            results, 
+            covars = Covars_Out,
+            cospec_fix = Cospec_fix_Out, 
+            cospec_dyn = Cospec_dyn_Out,
+            ogv_fix = Ogive_fix_Out, 
+            ogv_dyn = Ogive_dyn_Out
+        )
 	} else {
-		return(results)
+        results
 	}
 }
 

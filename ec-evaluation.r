@@ -399,6 +399,9 @@ trend <- function(y,method=c("blockAVG","linear","linear_robust","ma_360"),Hz_ts
 				) 
 		}
 		,{
+            if (!grepl('^ma_', method)) stop('detrending method not valid! ',
+                'Should be one of "blockAVG", "linear", "linear_robust" or "ma_xxx" where',
+                ' xxx represents the moving average seconds')
 			ma <- round(as.numeric(gsub("ma_","",method))*Hz_ts)
 			fitted <- caTools::runmean(y,ma,"C","mean")
 			list(

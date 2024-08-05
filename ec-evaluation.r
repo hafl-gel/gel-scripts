@@ -559,7 +559,7 @@ wind_statistics <- function(wind,z_canopy,z_sonic){
 	names(Var_sonic) <- c("<u'u'>","<v'v'>","<w'w'>","<T'T'>")
 	Cov_sonic <- Cov_sonic[cbind(c("uprot","uprot","uprot","vprot","vprot","wprot"),c("vprot","wprot","Tdet","wprot","Tdet","Tdet"))]
 	names(Cov_sonic) <- c("<u'v'>","<u'w'>","<u'T'>","<v'w'>","<v'T'>","<w'T'>")
-	Ustar <- c(sqrt(-Cov_sonic["<u'w'>"]),use.names = FALSE)
+	suppressWarnings(Ustar <- c(sqrt(-Cov_sonic["<u'w'>"]),use.names = FALSE))
 	T_K <- mean(wind$Tmdet + wind$Tdet)
 	U <- mean(wind$umrot + wind$uprot)
 	L <- c(-Ustar^3 * T_K / (0.4 * 9.80620 * Cov_sonic["<w'T'>"]),use.names = FALSE)
@@ -983,7 +983,8 @@ ec_ht8700 <- function(
         # day <- files$dates[1]
         cat(
             '\n\n-------------------------------------------',
-            '\nReading raw data for', sub('(\\d{4})(\\d{2})(\\d{2})', '\\3.\\2.\\1', day),
+            '\nReading raw data for', 
+            day_nice <- sub('(\\d{4})(\\d{2})(\\d{2})', '\\3.\\2.\\1', day),
             '\n-------------------------------------------\n\n'
         )
 
@@ -1109,7 +1110,7 @@ ec_ht8700 <- function(
 
         result_list[[day]] <- daily_data[, {
 
-            cat("~~~~~~~~\ninterval", .GRP, "of", .NGRP, "\n")
+            cat("\n\n~~~~~~~~\n", day_nice, ": interval ", .GRP, " of ", .NGRP, "\n", sep = '')
             # get subset:
             # --------------------------------------------------------------------------
             if (.N > n_threshold && all(sapply(mget(scalars), \(x) sum(is.finite(x))) > n_threshold)) {

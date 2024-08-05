@@ -869,8 +869,8 @@ ec_ht8700 <- function(
     plotting_var_units <- fix_defaults(plotting_var_units, variables)
     plotting_var_colors <- fix_defaults(plotting_var_colors, variables)
     plot_timeseries <- fix_defaults(plot_timeseries, variables)
-    plotting_covar_units <- fix_defaults(plotting_covar_units, variables)
-    plotting_covar_colors <- fix_defaults(plotting_covar_colors, variables)
+    plotting_covar_units <- fix_defaults(plotting_covar_units, covariances)
+    plotting_covar_colors <- fix_defaults(plotting_covar_colors, covariances)
 
     # get flux variables and lag times:                                      
     # ------------------------------------------------------------------------------ 
@@ -956,8 +956,9 @@ ec_ht8700 <- function(
     }
 
     # create vector of start/end dates
-    start_dates <- unique(date(start_time))
-    end_dates <- unique(date(end_time))
+    end_dates <- start_dates <- unique(
+        date(c(start_time, end_time))
+    )
 
     # select available daily files
     files <- select_files(ht_directory, sonic_directory, start_dates, end_dates)
@@ -1399,7 +1400,13 @@ ec_ht8700 <- function(
                                 plot_damping(Damping_fix[[i]],freq,ylab=paste0("ogive (fix lag) of ",i),cx=1.5,col=plotting_covar_colors[i])
                                 plot_damping(Damping_dyn[[i]],freq,ylab=paste0("ogive (dyn lag) of ",i),cx=1.5,col=plotting_covar_colors[i])
                             }
-                            title(paste0(i," flux ",format(Int_Start,format="(%H:%M:%S")," - ",format(Int_End,format="%H:%M:%S)"),if(scalar_covariances[i])paste0(" - damping reference flux: ",damping_reference[i])),outer=TRUE,line=-1)
+                            title(paste0(ylab, " flux ", 
+                                format(Int_Start, format = "(%H:%M:%S"), " - ", format(Int_End, format = "%H:%M:%S)"), 
+                                if (scalar_covariances[i]) {
+                                    reflab <- sub('(.+)x(.+)', "<\\1'\\2'>", damping_reference[i])
+                                    paste0(" - damping reference flux: ", reflab)
+                                }
+                            ), outer = TRUE, line = -1)
                         dev.off()	
                     }
                 } # end plotting

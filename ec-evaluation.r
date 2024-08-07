@@ -1324,6 +1324,7 @@ ec_ht8700 <- function(
                 
                 # write results:
                 # -------------------------------------------------------------------------- 
+                browser()
                 out <- c(
                     list(
                         st = st_interval[.BY[[1]]]
@@ -1348,8 +1349,9 @@ ec_ht8700 <- function(
                         , scalar_sd
                         , sub_cov_means
                         , sub_cov_sd
-                        , fix_lag_out
-                        , dyn_lag_out
+                        # fix/dyn lag as seconds
+                        , fix_lag_out / Hz
+                        , dyn_lag_out / Hz
                         , flux_fix_lag
                         , flux_dyn_lag
                         , fix_damping_pbreg

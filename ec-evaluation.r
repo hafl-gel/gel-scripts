@@ -9,6 +9,7 @@
 # REddy.version <- "v20220218"
 library(data.table)
 library(ibts)
+library(Rcpp)
 
 # library(latticeExtra)
 # library(gridExtra)
@@ -822,11 +823,9 @@ ec_ht8700 <- function(
         stop('argument "graphs_directory": directory "', graphs_directory, 
             '" does not exist!')
     }
+
     hf_method <- if (hard_flag_replace) 'repl' else 'norepl'
     scalars <- variables %w/o% c("u","v","w","T")
-    lim_range <- rbind(lower = hard_flag_lower, top = hard_flag_upper)
-    damping_reference[damping_reference %in% ""] <- "wxT"
-    damp_region <- mapply(c, damping_lower, damping_upper, SIMPLIFY = FALSE)
     covariances_variables <- strsplit(covariances, "x")
     covariances_plotnames <- make.names(gsub("x", "", covariances))
     scalar_covariances <- as.numeric(grepl("(^ux|xu$)", covariances)) + as.numeric(grepl("(^wx|xw$)", covariances)) + as.numeric(grepl("(^Tx|xT$)", covariances)) < 2
@@ -871,6 +870,9 @@ ec_ht8700 <- function(
     plot_timeseries <- fix_defaults(plot_timeseries, variables)
     plotting_covar_units <- fix_defaults(plotting_covar_units, covariances)
     plotting_covar_colors <- fix_defaults(plotting_covar_colors, covariances)
+
+    lim_range <- rbind(lower = hard_flag_lower, top = hard_flag_upper)
+    damp_region <- mapply(c, damping_lower, damping_upper, SIMPLIFY = FALSE)
 
     # get flux variables and lag times:                                      
     # ------------------------------------------------------------------------------ 

@@ -204,8 +204,8 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'UTC',
         xnode_list[[n_dir]] <- read_fun[[n_dir]](dirs[n_dir], .to = to, use_jq = jq_available)
     }
     cat('done\n')
-    # bind list
-    xnode_data <- rbindlist(xnode_list, fill = TRUE, use.names = TRUE)
+    # bind list & remove NA values in time
+    xnode_data <- rbindlist(xnode_list, fill = TRUE, use.names = TRUE)[!is.na(time)]
     # rename
     setnames(xnode_data, sub('^.*[.]', '', names(xnode_data)))
     setnames(xnode_data, c('value', 'name'), c('ppm', 'gas'))

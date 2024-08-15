@@ -70,7 +70,13 @@ read_frequi <- function(path_data, rds_fan_calib,
                 fill = TRUE, blank.lines.skip = TRUE))
     # new path structure, check unique diameter
     if (is.null(fan_dia)) {
-        dias <- as.integer(sub('.*_(\\d{3})mm-.*', '\\1', files_fan)) / 10
+        suppressWarnings(
+            dias <- as.integer(sub('.*_(\\d{3})mm-.*', '\\1', files_fan)) / 10
+        )
+        if (all(is.na(dias))) {
+            # old file structure
+            dias <- as.integer(sub('.*-(\\d{3})mm-.*', '\\1', files_fan)) / 10
+        }
         if (length(fan_dia <- unique(dias)) != 1) {
             stop('fan diameter is not unique for provided time range (', paste(fan_dia, collapse = ' and '), ')')
         }

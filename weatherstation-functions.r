@@ -33,6 +33,7 @@ ws_read <- function(file_name, Ex = c('E0', 'E2', 'E4')) {
 
 ws_e0 <- function(dat, tz_ws700 = 'Etc/GMT-1') {
     # read E0 (Ta: Tair, Hr: RH, Pa: Pair, Ra: precip sum, Rt: precip type, Ri: precip intens.)
+    # units: Tair: °C, RH: %, Pair: hPa, precip sum: mm, precip intens: mm/h
     e0 <- dat[('E0'), {
         Time <- fast_strptime(V1, format = '%Y%m%d %H:%M:%S', tz = tz_ws700, lt = FALSE)
         c(
@@ -51,6 +52,7 @@ ws_e0 <- function(dat, tz_ws700 = 'Etc/GMT-1') {
 
 ws_e2 <- function(dat, tz_ws700 = 'Etc/GMT-1') {
     # read E2 (Sv: U vct, Dv: WD vct)
+    # units: U: m/s, WD: °N
     # V7, V11
     e2 <- dat[('E2'), {
         Time <- fast_strptime(V1, format = '%Y%m%d %H:%M:%S', tz = tz_ws700, lt = FALSE)
@@ -80,6 +82,7 @@ ws_1minute <- function(file_names) {
 
 ws_e4 <- function(dat, tz_ws700 = 'Etc/GMT-1') {
     # read E4 (Ca: Compass, Gg: avg gRAD)
+    # units: Compass: °N, gRAD: W/m2
     # V3, V7
     e4 <- dat[('E4'), {
         Time <- fast_strptime(V1, format = '%Y%m%d %H:%M:%S', tz = tz_ws700, lt = FALSE)

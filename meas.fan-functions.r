@@ -119,7 +119,7 @@ read_frequi <- function(path_data, rds_fan_calib,
         list(
             speed,
             speed * pi * (fan_dia / 200) ^ 2,
-            Hz < attr(fan_cfs, 'limits')[1] | Hz > attr(fan_cfs, 'limits')[2]
+            Hz > 0 & (Hz < attr(fan_cfs, 'limits')[1] | Hz > attr(fan_cfs, 'limits')[2])
         )
     }]
     # set flow values below critical V to NA

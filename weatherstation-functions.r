@@ -206,6 +206,9 @@ get_ws700 <- function(folder, from = NULL, to = NULL,
     setnames(ws10, 'Time', 'et')
     ws1[, st := et - c(60, pmin(90, as.numeric(diff(et), units = 'secs')))]
     ws10[, st := et - c(600, pmin(900, as.numeric(diff(et), units = 'secs')))]
+    # subset to times
+    ws1 <- ws1[st >= from & et <= to]
+    ws10 <- ws10[st >= from & et <= to]
     setcolorder(ws1, c('st', 'et'))
     setcolorder(ws10, c('st', 'et'))
     # return with switch on argument pooled

@@ -216,6 +216,27 @@ stations <- function(obj) {
         unique(obj[, c('stn', 'name', 'ch.x', 'ch.y', 'm.asl')])
     }
 }
+data_info <- function(obj) {
+    x <- copy(as.data.table(obj))
+    out <- x[, {
+            c(
+                list(
+                    start = st[1],
+                    end = et[.N],
+                    N =.N
+                ),
+                sapply(.SD, \(x) any(is.finite(x)), simplify = FALSE)
+            )
+        }, 
+        by = .(stn, name, ch.x, ch.y, m.asl, granularity),
+        .SDcols = names(x)[-(1:8)]
+    ]
+    cat('~~~~ data sets ~~~~\n')
+    print(out)
+    cat('\n~~~~ parameters ~~~~\n')
+    print(parameters(obj))
+    invisible(out)
+}
 
 # add objects to environment (directly adding objects breaks ctags)
 idaweb <- new.env()
@@ -225,7 +246,8 @@ idaweb$read_ida <- read_ida
 idaweb$smry_ida <- smry_ida
 idaweb$parameters <- parameters
 idaweb$stations <- stations
-rm(check_ida, plot_ida, read_ida, smry_ida, parameters, stations)
+idaweb$data_info <- data_info
+rm(check_ida, plot_ida, read_ida, smry_ida, parameters, stations, data_info)
 
 # attach to search path
 pos_name <- 'user:idaweb'

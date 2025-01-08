@@ -64,8 +64,22 @@ read_s31 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
     dat
 }
 
-# read ltc2 data
+# read tc/ltc2 data
 read_ltc2 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
+    read_tc_sensors(path_data, sensor, from, to, tz, as_ibts = FALSE,
+        type = 'ltc2')
+}
+read_tc <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
+    read_tc_sensors(path_data, sensor, from, to, tz, as_ibts = FALSE,
+        type = 'tc')
+}
+read_tc_sensors <- function(path_data, sensor, from, to, tz, as_ibts = FALSE,
+    type = c('tc', 'ltc2')[1]) {
+    # check type
+    type <- type[1]
+    if (!(type %in% c('tc', 'ltc2'))) {
+        stop('sensor type not valid. should be "tc" or "ltc2"')
+    }
     # process from/to
     if (missing(from)) {
         from_psx <- from_int <- 1
@@ -84,7 +98,7 @@ read_ltc2 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
         to_int <- as.integer(format(to_psx, '%Y%m%d'))
     }
     # check path
-    if (grepl('dragino-ltc2-\\d{2}/?$', path_data)) {
+    if (grepl(paste0('dragino-', type, '-\\d{2}/?$'), path_data)) {
         path_files <- path_data
     } else {
         # get id
@@ -94,7 +108,7 @@ read_ltc2 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
             stop('sensor name "', sensor, '" not recognized!')
         }
         # get path to files
-        path_files <- sprintf('%s/dragino-ltc2-%02i', path_data, id)
+        path_files <- sprintf(paste0('%s/dragino-', type, '-%02i'), path_data, id)
     }
     # get files
     files <- dir(path_files)

@@ -120,6 +120,11 @@ read_tc_sensors <- function(path_data, sensor, from, to, tz, as_ibts = FALSE,
         file.path(path_files, . = _) |>
         lapply(FUN = fread) |>
         rbindlist()
+    # check available data
+    if (nrow(dat) == 0) {
+        warning('no data available for given time period!')
+        return(NULL)
+    }
     # fix times (ltc2 is always UTC) and round to seconds
     dat[, et := fast_strptime(time, format = '%Y-%m-%dT%H:%M:%OSZ+00:00', lt = FALSE) |>
         round() |> as.POSIXct()]

@@ -4,7 +4,7 @@ library(ibts)
 
 
 # read s31 data
-read_s31 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
+read_s31 <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = FALSE) {
     # process from/to
     if (missing(from)) {
         from_psx <- from_int <- 1
@@ -56,6 +56,13 @@ read_s31 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
     dat[, time := NULL]
     # subset by from/to
     dat <- dat[st >= from_psx & et <= to_psx]
+    # fix time zone
+    if (tz != 'UTC') {
+        dat[, c('st', 'et') := .(
+            with_tz(st, tz),
+            with_tz(et, tz)
+        )]
+    }
     # st/et as first columns
     setcolorder(dat, c('st', 'et'))
     if (as_ibts) {
@@ -65,15 +72,13 @@ read_s31 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
 }
 
 # read tc01/ltc2 data
-read_ltc2 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
-    read_tc_sensors(path_data, sensor, from, to, tz, as_ibts = FALSE,
-        type = 'ltc2')
+read_ltc2 <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = FALSE) {
+    read_tc_sensors(path_data, sensor, from, to, tz = tz, as_ibts = as_ibts, type = 'ltc2')
 }
-read_tc01 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
-    read_tc_sensors(path_data, sensor, from, to, tz, as_ibts = FALSE,
-        type = 'tc01')
+read_tc01 <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = FALSE) {
+    read_tc_sensors(path_data, sensor, from, to, tz = tz, as_ibts = as_ibts, type = 'tc01')
 }
-read_tc_sensors <- function(path_data, sensor, from, to, tz, as_ibts = FALSE,
+read_tc_sensors <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = FALSE,
     type = c('tc01', 'ltc2')[1]) {
     # check type
     type <- type[1]
@@ -136,6 +141,13 @@ read_tc_sensors <- function(path_data, sensor, from, to, tz, as_ibts = FALSE,
     dat[, time := NULL]
     # subset by from/to
     dat <- dat[st >= from_psx & et <= to_psx]
+    # fix time zone
+    if (tz != 'UTC') {
+        dat[, c('st', 'et') := .(
+            with_tz(st, tz),
+            with_tz(et, tz)
+        )]
+    }
     # st/et as first columns
     setcolorder(dat, c('st', 'et'))
     if (as_ibts) {

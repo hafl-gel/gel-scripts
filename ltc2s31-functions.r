@@ -64,21 +64,21 @@ read_s31 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
     dat
 }
 
-# read tc/ltc2 data
+# read tc01/ltc2 data
 read_ltc2 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
     read_tc_sensors(path_data, sensor, from, to, tz, as_ibts = FALSE,
         type = 'ltc2')
 }
-read_tc <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
+read_tc01 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
     read_tc_sensors(path_data, sensor, from, to, tz, as_ibts = FALSE,
-        type = 'tc')
+        type = 'tc01')
 }
 read_tc_sensors <- function(path_data, sensor, from, to, tz, as_ibts = FALSE,
-    type = c('tc', 'ltc2')[1]) {
+    type = c('tc01', 'ltc2')[1]) {
     # check type
     type <- type[1]
-    if (!(type %in% c('tc', 'ltc2'))) {
-        stop('sensor type not valid. should be "tc" or "ltc2"')
+    if (!(type %in% c('tc01', 'ltc2'))) {
+        stop('sensor type not valid. should be "tc01" or "ltc2"')
     }
     # process from/to
     if (missing(from)) {

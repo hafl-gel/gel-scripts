@@ -7,7 +7,7 @@ library(ibts)
 read_s31 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
     # process from/to
     if (missing(from)) {
-        from <- 1
+        from_psx <- from_int <- 1
     } else {
         # convert to POSIXct
         from_psx <- parse_date_time3(from, tz = tz)
@@ -15,7 +15,7 @@ read_s31 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
         from_int <- as.integer(format(from_psx, '%Y%m%d'))
     }
     if (missing(to)) {
-        to <- Inf
+        to_psx <- to_int <- Inf
     } else {
         # convert to POSIXct
         to_psx <- parse_date_time3(to, tz = tz)
@@ -54,6 +54,8 @@ read_s31 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
     dat[, st := c(et[1] - 60, et[-.N])]
     # remove time column
     dat[, time := NULL]
+    # subset by from/to
+    dat <- dat[st >= from_psx & et <= to_psx]
     # st/et as first columns
     setcolorder(dat, c('st', 'et'))
     if (as_ibts) {
@@ -66,7 +68,7 @@ read_s31 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
 read_ltc2 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
     # process from/to
     if (missing(from)) {
-        from <- 1
+        from_psx <- from_int <- 1
     } else {
         # convert to POSIXct
         from_psx <- parse_date_time3(from, tz = tz)
@@ -74,7 +76,7 @@ read_ltc2 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
         from_int <- as.integer(format(from_psx, '%Y%m%d'))
     }
     if (missing(to)) {
-        to <- Inf
+        to_psx <- to_int <- Inf
     } else {
         # convert to POSIXct
         to_psx <- parse_date_time3(to, tz = tz)
@@ -113,6 +115,8 @@ read_ltc2 <- function(path_data, sensor, from, to, tz, as_ibts = FALSE) {
     dat[, st := c(et[1] - 60, et[-.N])]
     # remove time column
     dat[, time := NULL]
+    # subset by from/to
+    dat <- dat[st >= from_psx & et <= to_psx]
     # st/et as first columns
     setcolorder(dat, c('st', 'et'))
     if (as_ibts) {

@@ -63,6 +63,8 @@ read_s31 <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = FALSE) {
     setorder(dat, et)
     # recorded are 1-minute averages
     dat[, st := c(et[1] - 60, et[-.N])]
+    # restrict time gaps to 70 seconds
+    dat[which(as.numeric(et - st) > 70), st := et - 60]
     # remove time column
     dat[, time := NULL]
     # subset by from/to
@@ -151,8 +153,11 @@ read_tc_sensors <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = F
         round() |> as.POSIXct()]
     # fix apparently sometimes occuring wrong time order
     setorder(dat, et)
-    # recorded are 1-minute averages
-    dat[, st := c(et[1] - 60, et[-.N])]
+    # recorded are 1-minute or 5 second averages
+    t_avg <- if (type == 'ltc2') 60 else 5
+    dat[, st := c(et[1] - t_avg, et[-.N])]
+    # restrict time gaps to 70/15 (t_avg + 10) seconds
+    dat[which(as.numeric(et - st) > (t_avg + 10)), st := et - t_avg]
     # remove time column
     dat[, time := NULL]
     # subset by from/to

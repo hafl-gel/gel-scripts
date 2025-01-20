@@ -45,7 +45,18 @@ read_s31 <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = FALSE) {
         file.path(path_files, . = _) |>
         lapply(FUN = fread) |>
         rbindlist()
-    # fix times (s31 is always UTC) and round to seconds
+    # check available data
+    if (nrow(dat) == 0) {
+        warning('no data available for given time period!')
+        return(NULL)
+    }
+    # enforce numeric
+    dat[, c('batV', 'temperature', 'rel.hum.') := .(
+        suppressWarnings(as.numeric(batV)),
+        suppressWarnings(as.numeric(temperature)),
+        suppressWarnings(as.numeric(rel.hum.))
+        )]
+    # fix times (ltc2/tc01 are always UTC) and round to seconds
     dat[, et := fast_strptime(time, format = '%Y-%m-%dT%H:%M:%OSZ+00:00', lt = FALSE) |>
         round() |> as.POSIXct()]
     # fix apparently sometimes occuring wrong time order
@@ -130,6 +141,11 @@ read_tc_sensors <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = F
         warning('no data available for given time period!')
         return(NULL)
     }
+    # enforce numeric
+    dat[, c('batV', 'temperature') := .(
+        suppressWarnings(as.numeric(batV)),
+        suppressWarnings(as.numeric(temperature))
+        )]
     # fix times (ltc2 is always UTC) and round to seconds
     dat[, et := fast_strptime(time, format = '%Y-%m-%dT%H:%M:%OSZ+00:00', lt = FALSE) |>
         round() |> as.POSIXct()]

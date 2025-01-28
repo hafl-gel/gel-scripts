@@ -81,7 +81,7 @@ lines.rawdat <- function(x, y, sweep_fun = NULL, sweep_stats = median, col = 'bl
 }
 
 # split raw data depending on difference in light level
-split_raw <- function(rawdat, max_dist = 5e-3) {
+split_raw <- function(rawdat, max_dist = 5e-3, avg_dist = 3e-3, sd_dist = 3e-4) {
     # get specs
     specs <- rawdat$RawData
     # get windows
@@ -91,14 +91,31 @@ split_raw <- function(rawdat, max_dist = 5e-3) {
         # change to max between 190 and 230
         mapply(function(x, y) {
             # subsets
-            xs <- x[wins$pixel_filter]
-            ys <- y[wins$pixel_filter]
-            max(abs(xs - ys) / (xs + ys))
+            # xs <- x[wins$pixel_filter]
+            # ys <- y[wins$pixel_filter]
+            xs <- x[wins$pixel_fit]
+            ys <- y[wins$pixel_fit]
+            ds <- abs(xs - ys) / (xs + ys)
+            out <- c(max = max(ds), avg = mean(ds), std = sd(ds))
+            # set dist > max_dist etc. to NA
+            if (any(out > c(max_dist, avg_dist, sd_dist))) {
+                NA_real_
+            } else {
+                out[1]
+            }
             }, x = specs[i], y = specs[j], SIMPLIFY = TRUE)
     })
+    # dist <- lapply(c(max, mean, sd), \(fun) outer(seq_along(specs), seq_along(specs), function(i, j) {
+    #     # change to max between 190 and 230
+    #     mapply(function(x, y) {
+    #         # subsets
+    #         xs <- x[wins$pixel_filter]
+    #         ys <- y[wins$pixel_filter]
+    #         ds <- abs(xs - ys) / (xs + ys)
+    #         fun(ds)
+    #         }, x = specs[i], y = specs[j], SIMPLIFY = TRUE)
+    # }))
     diag(dist) <- NA
-    # set dist > max_dist to NA?
-    dist[dist > max_dist] <- NA
     out <- list()
     while (!all(is.na(dist))) {
         # print(dist)
@@ -328,9 +345,11 @@ create_calref <- function(spec_set) {
 read_calref <- function(...) {
     create_calref(getSpecSet(...))
 }
+
 process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all, 
     n2 = list(nh3 = all, no = all, so2 = all), cuvette.length = 0.075, 
-    cuvette.mgm3 = list(nh3 = 193.4095, no = 593.9938, so2 = 76.29128)) {
+    cuvette.mgm3 = list(nh3 = 193.4095, no = 593.9938, so2 = 76.29128),
+    dark_spec = NULL) {
     # capture n2 arg
     n2_args <- list(nh3 = all, no = all, so2 = all)
     if (is.list(n2)) {
@@ -358,10 +377,20 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
             n2_nms <- n2_nms[n2_nms %in% nms]
             # loop over n2 entries
             setNames(lapply(n2_nms, function(y) {
-                read_cal(callist[[x]][['avgs']][[n2_args[[y]]]])
+                # average spectra?
+                if (length(n2_args[[y]]) != 1) {
+                    read_cal(.avg_avgs(callist[[x]][['avgs']][n2_args[[y]]]), dark = dark_spec)
+                } else {
+                    read_cal(callist[[x]][['avgs']][[n2_args[[y]]]], dark = dark_spec)
+                }
             }), n2_nms)
         } else {
-            read_cal(callist[[x]][['avgs']][[args[[x]]]])
+            # average spectra?
+            if (length(args[[x]]) != 1) {
+                read_cal(.avg_avgs(callist[[x]][['avgs']][args[[x]]]), dark = dark_spec)
+            } else {
+                read_cal(callist[[x]][['avgs']][[args[[x]]]], dark = dark_spec)
+            }
         }
     }), nms)  
     # correct cuvette concentration
@@ -397,8 +426,44 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     }
     structure(out, class = 'calref')
 }
+.avg_avgs <- function(...) {
+    dots <- list(...)
+    if (length(dots) == 1 && is.list(dots) && is.null(names(dots))) {
+        dots <- dots[[1]]
+    }
+    rawdat_list <- lapply(dots, attr, 'RawData')
+    if (uniqueN(sapply(rawdat_list, \(x) x$DOASinfo$DOASmodel)) != 1) {
+        stop('data is not from one single minidoas!')
+    }
+    if (sum(sapply(dots, \(x) attr(x, 'straylight.corrected'))) %in% c(1, 2)) {
+        stop('straylight correction is inconsistent!')
+    }
+    if (sum(sapply(dots, \(x) attr(x, 'linearity.corrected'))) %in% c(1, 2)) {
+        stop('linearity correction is inconsistent!')
+    }
+    if (sum(sapply(dots, \(x) attr(x, 'dark.corrected'))) %in% c(1, 2)) {
+        stop('dark correction is inconsistent!')
+    }
+    rd <- do.call('c', lapply(rawdat_list, '[[', 'RawData'))
+    hd <- do.call('rbind', lapply(rawdat_list, '[[', 'Header'))
+    di <- rawdat_list[[1]]$DOASinfo
+    di$timerange <- range(hd$st, hd$et)
+    RawData <- structure(list(
+        RawData = rd,
+        Header = hd,
+        DOASinfo = di
+    ), class = 'rawdat')
+    structure(
+        suppressWarnings(avg_spec(RawData)),
+        RawData = RawData,
+        straylight.corrected = FALSE,
+        linearity.corrected = FALSE,
+        dark.corrected = FALSE
+    )
+}
+
 plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save.path = NULL, 
-    scale_cheng = 1, ylim = NULL, ...) {
+    scale_cheng = 1, ylim = c('fix', 'free')[1], dc_grid = TRUE, ...) {
     # save figure?
     if (!is.null(save.path)) {
         # derive figure name
@@ -413,6 +478,15 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
             plot(x, add_cheng = add_cheng, per_molecule = per_molecule, log = log, save.path = NULL, ...)
         dev.off()
     }
+    if (dc_grid) {
+        panel_dc <- function() {
+            grid()
+            abline(h = 0, col = 'lightgrey')
+        }
+    } else {
+        panel_dc <- function() NULL
+    }
+    ylim_arg <- ylim
     par(mfrow = c(3, 3))
     for (i in seq_along(x)) {
         # plot cal spec
@@ -438,14 +512,50 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
             # scale cheng
             s_cheng$cnt <- s_cheng$cnt * scale_cheng
             s_dc <- dc2sigma(x[['nh3']][['dc']], copy = TRUE)
-            if (is.null(ylim)) ylim <- range(c(s_cheng$cnt, s_dc$cnt), na.rm = TRUE)
-            plot(x[[i]][['dc']], per_molecule = per_molecule, type = 'n', ylim = ylim, ...)
+            if (isTRUE(is.character(ylim[1]))) {
+                ylim <- switch(ylim_arg[1]
+                    , free = 
+                    , range = {
+                        range(c(s_cheng$cnt, s_dc$cnt), na.rm = TRUE)
+                    }
+                    , fix = 
+                    , fixed = 
+                    , given = {
+                        c(-3.5, 2) * 1e-18
+                    }
+                    , stop('argument ylim is not valid!')
+                )
+            } else if (is.null(ylim_arg)) {
+                ylim <- range(c(s_cheng$cnt, s_dc$cnt), na.rm = TRUE)
+            }
+            plot(x[[i]][['dc']], per_molecule = per_molecule, type = 'n', ylim = ylim, 
+                panel.first = panel_dc(), ...)
             lines(cheng$cheng, fctr = scale_cheng, col = 'indianred', per_molecule = per_molecule)
             lines(x[[i]][['dc']], per_molecule = per_molecule, col = 'black')
             legend('bottomright', legend = sprintf('span = %1.3f (+/- %1.3f)\nshift = %1.2f', 
                     cheng$coefs[2], cheng$se[2], cheng$shift), bty = 'n', inset = 0.05)
         } else {
-            plot(x[[i]][['dc']], per_molecule = per_molecule, ...)
+            if (isTRUE(is.character(ylim_arg[1]))) {
+                ylim <- switch(ylim_arg[1]
+                    , free = 
+                    , range = {
+                        range(s_dc$cnt, na.rm = TRUE)
+                    }
+                    , fix = 
+                    , fixed = 
+                    , given = {
+                        switch(names(x)[i]
+                            , no = c(-1.8, 0.6) * 1e-18
+                            , so2 = c(-4.8, 3) * 1e-18
+                        )
+                    }
+                    , stop('argument ylim is not valid!')
+                )
+            } else if (is.null(ylim_arg)) {
+                ylim <- range(s_dc$cnt, na.rm = TRUE)
+            }
+            plot(x[[i]][['dc']], per_molecule = per_molecule, ylim = ylim, 
+                panel.first = panel_dc(), ...)
         }
     }
 }
@@ -459,7 +569,8 @@ mgm3_ppm <- function(mgm3, T_deg, p_hPa, molar_mass = 17) {
 
 
 #### process calref rawdata
-read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3, min.num = 2) {
+read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3, 
+    avg.dist = 3e-3, sd.dist = 3e-4, min.num = 2) {
     if (inherits(path_data, 'rawdat')) {
         # pass on
         rawdata <- path_data
@@ -495,7 +606,7 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3, min.num
         time_filtered <- TRUE
     }
     # split
-    sets <- split_raw(raw, max.dist)
+    sets <- split_raw(raw, max.dist, avg.dist, sd.dist)
     # remove sets with less than min.num
     sets <- sets[sapply(sets, function(x) length(x$RawData) >= min.num)]
     if (show) {
@@ -527,7 +638,8 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3, min.num
                     '- set', i, ':', length(sets[[i]]$RawData), 'specs - ', 
                     sprintf('%1.0f', max(sapply(sets[[i]]$RawData, max, na.rm = TRUE)))), 
                 col = cpal[i])
-            plot(sets[[i]], sweep_fun = '/')
+            plot(sets[[i]], sweep_fun = '/', col = '#00000022', ylim = 1 + c(-1, 1) * 
+            max.dist)
             })
     }
     # average spectra
@@ -544,7 +656,8 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3, min.num
         )
 }
 read_all_gases <- function(path_data, timerange, show = TRUE, 
-    gases = c('N2', 'NH3', 'NO', 'SO2'), max.dist = 5e-3, min.num = 2) {
+    gases = c('N2', 'NH3', 'NO', 'SO2'), max.dist = 5e-3, avg.dist = 3e-3,
+    sd.dist = 3e-4, min.num = 2) {
     if (inherits(path_data, 'rawdat')) {
         # pass on
         rawdata <- path_data
@@ -564,13 +677,39 @@ read_all_gases <- function(path_data, timerange, show = TRUE,
     } else if (!missing(max.dist) && is.numeric(max.dist)) {
         md <- setNames(rep(list(max.dist), length(md)), names(md))
     }
+    ad <- list(nh3 = 3e-3, no = 3e-3, so2 = 3e-3, n2 = 3e-3, closed = 3e-3/5)
+    if (is.list(avg.dist)) {
+        avg.dist <- avg.dist[names(avg.dist) %in% names(ad)]
+        if (length(avg.dist)) {
+            for (nm in names(avg.dist)) {
+                ad[[nm]] <- avg.dist[[nm]]
+            }
+        }
+    } else if (!missing(avg.dist) && is.numeric(avg.dist)) {
+        ad <- setNames(rep(list(avg.dist), length(ad)), names(ad))
+    }
+    sd <- list(nh3 = 3e-4, no = 3e-4, so2 = 3e-4, n2 = 3e-4, closed = 3e-4/5)
+    if (is.list(sd.dist)) {
+        sd.dist <- sd.dist[names(sd.dist) %in% names(sd)]
+        if (length(sd.dist)) {
+            for (nm in names(sd.dist)) {
+                sd[[nm]] <- sd.dist[[nm]]
+            }
+        }
+    } else if (!missing(sd.dist) && is.numeric(sd.dist)) {
+        sd <- setNames(rep(list(sd.dist), length(sd)), names(sd))
+    }
     # loop over gases
     if (is.list(gases)) {
         setNames(mapply(read_gas, gases, max.dist = md[tolower(names(gases))], 
+                avg.dist = ad[tolower(names(gases))],
+                sd.dist = sd[tolower(names(gases))],
                 MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
                 SIMPLIFY = FALSE), names(gases))
     } else {
         setNames(mapply(read_gas, gases, max.dist = md[tolower(gases)], 
+                avg.dist = ad[tolower(gases)],
+                sd.dist = sd[tolower(gases)],
                 MoreArgs = list(path_data = rawdata, show = show, min.num = min.num), 
                 SIMPLIFY = FALSE), gases)
     }
@@ -879,6 +1018,17 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
         # if file is result from getSpecSet
         if (is.null(spec)) {
             stop('argument spec is unset. spec defines which SpecSet list entry will be selected')
+            # valid names:
+            # "ref.spec"
+            # "ref.dark.spec"
+            # "dark.spec"
+            # "NH3.cal.spec"
+            # "SO2.cal.spec"
+            # "NO.cal.spec"
+            # "N2.NH3.cal.spec"
+            # "N2.SO2.cal.spec"
+            # "N2.NO.cal.spec"
+            # "N2.dark.cal.spec"
         }
         if (!(spec %in% names(file)[-1])) {
             stop('Argument spec - recognized names are:', 
@@ -910,7 +1060,16 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
     if (!is_dark && is.null(dark)) {
         if (!dont_warn_dark) warning('no dark spectrum provided')
     } else if(!is_dark) {
-        cdark <- dark$data[, cnt]
+        if (all(c('type', 'tracer', 'dir', 'timerange') %in% names(dark))) {
+            dark <- getSpec(dark, DOASmodel = out$DOASinfo$DOASmodel, SpecName = 'dark.spec')
+        }
+        if (all(c('SpecAvg', 'Info', 'Specs', 'DOASinfo', 'txt') %in% names(dark))) {
+            cdark <- dark$SpecAvg
+        } else if (all(c('dat.spec', 'timerange', 'info.spec') %in% names(dark))) {
+            cdark <- dark$dat.spec
+        } else {
+            cdark <- dark$data[, cnt]
+        }
         out$data[, cnt := cnt - cdark]
         out$Calinfo$dark.corrected <- TRUE
         out$Calinfo$dark.spec <- cdark
@@ -1507,6 +1666,53 @@ ann_time <- function(obj, x = NULL, y = NULL, x_adj = 0, y_adj = 0, cex = 0.6, .
     }
 }
 
+annotate_revolver <- function(obj, side = 'top', lcol = 'lightblue',
+    tcol = 'black', add_vlines = FALSE, add_jitter = TRUE, 
+    jitter_amount = c(n2 = 0.05, nh3 = 0, no = -0.05, so2 = -0.1)
+    ) {
+    st_ind <- st(obj)
+    et_ind <- et(obj)
+    rl <- rle(obj$revolver)
+    sts <- cumsum(c(1, rl[[1]]))
+    ets <- sts[-1] - 1
+    usr <- par('usr')
+    if (is.character(side)) {
+        side <- c(top = 0.9, bottom = 0.1)[side]
+    }
+    if (missing(jitter_amount) && length(side) == 1 && side < 0.5) {
+        jitter_amount <- -jitter_amount
+    }
+    if (add_jitter) {
+        side <- side + jitter_amount[tolower(rl[[2]])]
+    } else {
+        side <- rep(side, length(ets))[seq_along(ets)]
+    }
+    y <- usr[3] + (usr[4] - usr[3]) * side
+    for (i in seq_along(ets)) {
+        x1 <- st_ind[sts[i]]
+        x2 <- et_ind[ets[i]]
+        at <- x1 + (x2 - x1) / 2
+        lines(c(x1, x2), c(y[i], y[i]), col = lcol)
+        text(at, y[i], labels = rl[[2]][i], col = tcol)
+        if (add_vlines) {
+            abline(v = c(x1, x2), col = lcol)
+        }
+    }
+}
+
+gather_callists <- function(nh3_callist, no_callist, so2_callist) {
+    list(
+        nh3 = nh3_callist$nh3, 
+        no = no_callist$no, 
+        so2 = so2_callist$so2,
+        n2 = list(
+            raw = list(nh3_callist$n2$raw, no_callist$n2$raw, so2_callist$n2$raw),
+            sets = c(nh3_callist$n2$sets, no_callist$n2$sets, so2_callist$n2$sets),
+            avgs = c(nh3_callist$n2$avgs, no_callist$n2$avgs, so2_callist$n2$avgs),
+            i_max = c(nh3_callist$n2$i_max, no_callist$n2$i_max, so2_callist$n2$i_max)
+        )
+    )
+}
 
 
 #### save calibration to files
@@ -1935,7 +2141,7 @@ filter_closed <- function(rawdat) {
 # filter raw data by revolver position
 filter_position <- function(rawdat, position) {
     # get indices
-    ind <- which(rawdat[['Header']][['RevPos']] %in% position)
+    ind <- which(tolower(rawdat[['Header']][['RevPos']]) %in% tolower(position))
     # throw error if position doesn't exist
     if (length(ind) == 0) {
         stop(

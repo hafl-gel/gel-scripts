@@ -633,7 +633,9 @@ getSpec <- function(spec, DOASmodel = NULL, lite = FALSE, SpecName = NULL) {
 
 
     if (is.list(spec)) {
-        if (all(names(spec)%in%c("dat.spec","ambient","cuvette","timerange"))) {
+        if (all(names(spec) %in% c('SpecAvg', 'Info', 'Specs', 'DOASinfo', 'txt'))) {
+            return(spec)
+        } else if (all(names(spec)%in%c("dat.spec","ambient","cuvette","timerange"))) {
             dat.spec <- spec$dat.spec
             ambient <- spec$ambient
             cuvette <- spec$cuvette
@@ -1166,9 +1168,67 @@ evalOffline <- function(
         )
     } else {
         cat("argument 'CalRefSpecs' supplied...\n")
+        if (is.character(CalRefSpecs)) {
+            CalRefSpec <- switch(
+                sub('.*[.]([a-z]+)$', '\\1', CalRefSpecs)
+                , qs = {
+                    if (!require(qs)) {
+                        stop("package 'qs' needs to be installed")
+                    }
+                    qread(CalRefSpecs)
+                }
+            )
+        }
+        # need to convert it?
+        if (inherits(CalRefSpecs, 'calref')) {
+            CalRefSpecs <- convert_calref(CalRefSpecs, ref.spec = ref.spec)
+        } else if (!is.null(ref.spec)) {
+            cat('ref.spec will be replaced with corresponding input\n')
+            CalRefSpecs$dat.ref <- getSpec(ref.spec, DOASmodel = DOAS.model, lite = TRUE)
+        }
+        if (!is.null(dark.spec)) {
+            cat('dark.spec will be replaced with corresponding input\n')
+            CalRefSpecs$dat.dark <- getSpec(dark.spec, DOASmodel = DOAS.model, lite = TRUE)
+        }
+        if (!is.null(ref.dark.spec)) {
+            cat('ref.dark.spec will be replaced with corresponding input\n')
+            CalRefSpecs$dat.ref.dark <- getSpec(ref.dark.spec, DOASmodel = DOAS.model, lite = TRUE)
+        }
+        if (!is.null(N2.dark.cal.spec)) {
+            cat('N2.dark.cal.spec will be replaced with corresponding input\n')
+            CalRefSpecs$dat.N2.dark <- getSpec(N2.dark.cal.spec, DOASmodel = DOAS.model, lite = TRUE)
+        }
+        if (!is.null(NH3.cal.spec)) {
+            cat('NH3.cal.spec will be replaced with corresponding input\n')
+            CalRefSpecs$dat.NH3 <- getSpec(NH3.cal.spec, DOASmodel = DOAS.model, lite = TRUE)
+        }
+        if (!is.null(SO2.cal.spec)) {
+            cat('SO2.cal.spec will be replaced with corresponding input\n')
+            CalRefSpecs$dat.SO2 <- getSpec(SO2.cal.spec, DOASmodel = DOAS.model, lite = TRUE)
+        }
+        if (!is.null(NO.cal.spec)) {
+            cat('NO.cal.spec will be replaced with corresponding input\n')
+            CalRefSpecs$dat.NO <- getSpec(NO.cal.spec, DOASmodel = DOAS.model, lite = TRUE)
+        }
+        if (!is.null(N2.NH3.cal.spec)) {
+            cat('N2.NH3.cal.spec will be replaced with corresponding input\n')
+            CalRefSpecs$dat.N2.NH3 <- getSpec(N2.NH3.cal.spec, DOASmodel = DOAS.model, lite = TRUE)
+        }
+        if (!is.null(N2.SO2.cal.spec)) {
+            cat('N2.SO2.cal.spec will be replaced with corresponding input\n')
+            CalRefSpecs$dat.N2.SO2 <- getSpec(N2.SO2.cal.spec, DOASmodel = DOAS.model, lite = TRUE)
+        }
+        if (!is.null(N2.NO.cal.spec)) {
+            cat('N2.NO.cal.spec will be replaced with corresponding input\n')
+            CalRefSpecs$dat.N2.NO <- getSpec(N2.NO.cal.spec, DOASmodel = DOAS.model, lite = TRUE)
+        }
     }
 
-    if (is.null(CalRefSpecs$dat.ref)) stop('Invalid reference spectrum...')
+    if (is.null(CalRefSpecs$dat.ref)) stop('Missing reference spectrum...')
+    # if (is.null(CalRefSpecs$dat.dark)) stop('Missing dark spectrum...')
+    if (is.null(CalRefSpecs$dat.NH3)) stop('Missing NH3 spectrum...')
+    if (is.null(CalRefSpecs$dat.SO2)) stop('Missing SO2 spectrum...')
+    if (is.null(CalRefSpecs$dat.NO)) stop('Missing NO spectrum...')
 
     ### calibration concentrations in ppb
     cat(

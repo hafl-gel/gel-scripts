@@ -395,7 +395,11 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     }), nms)  
     # correct cuvette concentration
     if (!missing(cuvette.mgm3)) {
-        # cuv_conc <- eval(formals(process_callist)$cuvette.mgm3)
+        if (isTRUE(cuvette.mgm3) || 
+            (isTRUE(is.character(cuvette.mgm3)) && cuvette.mgm3 == 'revolver')
+        ) {
+            cuvette.mgm3 <- eval(formals(process_callist)$cuvette.mgm3)
+        }
         for (nm in names(cuvette.mgm3)) {
             # fix conc
             cal_read[[nm]]$Calinfo$cuvette.conc <- cuvette.mgm3[[nm]]
@@ -405,6 +409,8 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
             cal_read[[nm]]$Calinfo$cuvette.gas <- toupper(nm)
             ind <- grep('cuvette gas', cal_read[[nm]]$calref.info)
             cal_read[[nm]]$calref.info[ind] <- sub(':.*$', paste(':', toupper(nm)), cal_read[[nm]]$calref.info[ind])
+            # fix cuvette length
+            cal_read[[nm]]$Calinfo$cuvette.path <- cuvette.length
         }
     }
     # assamble output
@@ -468,9 +474,13 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
     if (!is.null(save.path)) {
         # derive figure name
         tr <- as.POSIXct(range(lapply(x, function(y) get_timerange(y[['dc']]))), origin = '1970-01-01', tz = 'Etc/GMT-1')
-        name <- paste0('miniDOAS-ref_cal_spec-',
-            paste(format(tr[1], '%y%m%d'), paste(format(tr, '%H%M'), collapse = '_'), sep = '-')
-            , '-', attr(x[['nh3']][['dc']], 'meas')$DOASinfo$DOASmodel, '.jpg')
+        name <- paste0('miniDOAS-', attr(x[['nh3']][['dc']], 'meas')$DOASinfo$DOASmodel,
+            '-ref_cal_spec-', paste(
+                format(tr[1], '%y%m%d'), 
+                paste(format(tr, '%H%M'), collapse = '_')
+                , sep = '-'
+            ) , '.jpg'
+        )
         # be verbose
         cat('saving figure to', file.path(save.path, name), '\n')
         height <- 480 * 1.5
@@ -592,6 +602,8 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3,
         split_times <- strsplit(gas, split = paste(getOption('time.separators'), collapse = '|'))
         # filter by time
         times <- lapply(split_times, function(x) {
+            # trim whitespace
+            x <- trimws(x)
             # get days
             days <- sub('(.*)[0-9]{2}:[0-9]{2}(:[0-9]{2})?$', '\\1', x)
             days[days == ''] <- day
@@ -655,6 +667,7 @@ read_gas <- function(gas, path_data, from, show = TRUE, max.dist = 5e-3,
         i_max = i_max
         )
 }
+
 read_all_gases <- function(path_data, timerange, show = TRUE, 
     gases = c('N2', 'NH3', 'NO', 'SO2'), max.dist = 5e-3, avg.dist = 3e-3,
     sd.dist = 3e-4, min.num = 2) {
@@ -1105,6 +1118,68 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
         )
 }
 
+convert_calref <- function(obj, ref.spec = NULL, dark.spec = NULL) {
+    if (!inherits(obj, 'calref')) stop('conversion only from "calref" object to spec set')
+    if (is.null(dark.spec)) {
+        dark.spec <- .conv_calref(obj, 'nh3', dark = TRUE)
+    }
+    list(
+        DOAS.model = obj[[1]]$cal_spec$DOASinfo$DOASmodel
+        , dat.ref = ref.spec
+        , dat.ref.dark = dark.spec
+        , dat.dark = dark.spec
+        , dat.NH3 = .conv_calref(obj, 'nh3')
+        , dat.N2.NH3 = .conv_calref(obj, 'nh3', TRUE)
+        , dat.SO2 = .conv_calref(obj, 'so2')
+        , dat.N2.SO2 = .conv_calref(obj, 'so2', TRUE)
+        , dat.NO = .conv_calref(obj, 'no')
+        , dat.N2.NO = .conv_calref(obj, 'no', TRUE)
+        , dat.N2.dark = dark.spec
+    )
+}
+.conv_calref <- function(obj, gas, n2 = FALSE, dark = FALSE) {
+    # check for calref in main function
+    what <- if (n2) 'ref_spec' else 'cal_spec'
+    gas <- tolower(gas)
+    if (dark) {
+        list(
+            dat.spec = obj[[gas]][[what]]$Calinfo$dark.spec
+            , ambient = list(
+                pathLength = NA,
+                NH3ambient_ug = NA,
+                SO2ambient_ug = NA,
+                NOambient_ug = NA 
+            )
+            , cuvette = list(
+                cuvetteLength = NA,
+                cuvetteConc_mg = NA,
+                cuvetteGas = NA
+            )
+            , timerange = NA
+            , info.spec = 'no info available'
+        )
+    } else {
+        list(
+            dat.spec = obj[[gas]][[what]]$Calinfo$raw.spec
+            , ambient = list(
+                pathLength = NA,
+                NH3ambient_ug = NA,
+                SO2ambient_ug = NA,
+                NOambient_ug = NA 
+            )
+            , cuvette = list(
+                cuvetteLength = obj[[gas]][[what]]$Calinfo$cuvette.path,
+                cuvetteConc_mg = obj[[gas]][[what]]$Calinfo$cuvette.conc,
+                cuvetteGas = obj[[gas]][[what]]$Calinfo$cuvette.gas
+            )
+            , timerange = obj[[gas]][[what]]$DOASinfo$timerange
+            , info.spec = obj[[gas]][[what]]$calref.info
+        )
+    }
+}
+
+
+
 #### print caldat method
 print.caldat <- function(x, ...){
     wl <- get_wl(x)
@@ -1164,6 +1239,16 @@ get_header <- function(rawdat) {
         return(get_header(attr(rawdat, 'meas')))
     }
     rawdat$calref.info
+}
+
+get_refcal_spec <- function(rawdat, timerange, SpecName, tz = 'Etc/GMT-1', lite = FALSE) {
+    tr <- parse_timerange(timerange, tz = tz)
+    rd <- list(
+        type = '',
+        tracer = '',
+        rawdat = filter_time(rawdat, tr[1], tr[2])
+    )
+    getSpec(rd, rd$rawdat$DOASinfo$DOASmodel, SpecName = SpecName, lite = lite)
 }
 
 
@@ -1246,7 +1331,9 @@ local_minima <- function(dc, zero_value = -0.2e-20, wl_range = c(203, 219), show
     # find exact minima
     min_exact <- grps[grp != 0, {
         m <- which(minima)
-        if (cnt[m - 1] > cnt[m + 1]) {
+        if (m == 1 || m == .N) {
+            px <- as.numeric(pix[m])
+        } else if (cnt[m - 1] > cnt[m + 1]) {
             dl <- cnt[m] - cnt[m - 1]
             dr <- cnt[m + 1] - cnt[m + 2]
             px <- (dl * pix[m] + dr * pix[m + 1]) / (dl + dr)
@@ -1410,7 +1497,34 @@ find_cheng <- function(dc, show = FALSE, interval = c(-1, 1),
     return.cheng.dc = FALSE, mgm3 = 193.4095) {
     # S5 cheng dc
     cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref')))
-    ms <- median(local_minima(dc)$wl_exact - local_minima(cheng)$wl_exact)
+    lmc <- local_minima(cheng)$wl_exact
+    lmm <- local_minima(dc)$wl_exact
+    dl <- length(lmm) - length(lmc)
+    if (dl != 0) {
+        adl <- abs(dl)
+        sdl <- sign(dl)
+        if (sdl > 0) {
+            ref <- lmc
+            too_long <- lmm
+        } else {
+            ref <- lmm
+            too_long <- lmc
+        }
+        # get differences from leave dl out and find minimum
+        l <- length(too_long)
+        cn <- combn(l, adl)
+        combs <- apply(cn, 2, \(x) {
+            d <- ref - too_long[-x]
+            max(abs(d - median(d)))
+        })
+        fix <- too_long[-cn[, which.min(combs)]]
+        if (sdl > 0) {
+            lmm <- fix
+        } else {
+            lmc <- fix
+        }
+    }
+    ms <- median(lmm - lmc)
     # optimize
     par <- optimize(function(x) {
         cheng_factor(dc, x, mgm3 = mgm3)$rmse
@@ -2058,15 +2172,15 @@ filter_time <- function(rawdat, index, to = NULL, including = TRUE) {
     rd_tz <- tzone(rd_st)
     # check from
     if (!is.null(to)) {
+        # parse from/to
+        if (is.character(index)) {
+            index <- parse_date_time3(index, tz = rd_tz)
+        }
+        if (is.character(to)) {
+            to <- parse_date_time3(to, tz = rd_tz)
+        }
         ind <- integer(0)
         for (i in seq_along(to)) {
-            # parse from/to
-            if (is.character(index)) {
-                index <- parse_date_time3(index, tz = rd_tz)
-            }
-            if (is.character(to)) {
-                to <- parse_date_time3(to, tz = rd_tz)
-            }
             # from / to
             if (including) {
                ind <- c(ind, which(rd_et > index[i] & rd_st < to[i]))

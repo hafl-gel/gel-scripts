@@ -80,10 +80,13 @@ read_frequi <- function(path_data, rds_fan_calib,
         if (length(fan_dia <- unique(dias)) != 1) {
             stop('fan diameter is not unique for provided time range (', paste(fan_dia, collapse = ' and '), ')')
         }
-    } else {
-        # sort by date/time since sorting is not guaranteed from filenames
-        fan_data <- fan_data[order(V1)]
+    } 
+    if (fan_data[, is.character(V1)]) {
+        fan_data[, V1 := fast_strptime(V1, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE)]
     }
+    # sort by date/time since sorting is not guaranteed from filenames
+    fan_data <- fan_data[order(V1)]
+    
     # check columns 2 & 3
     if (fan_data[, !is.numeric(V2)]) {
         # filter bad entries

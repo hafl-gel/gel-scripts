@@ -61,7 +61,7 @@ write_daily <- function(files, obj, path) {
     # write files
     writeBin(files, con, endian = 'big')
     # serialize object
-    ser <- serialize(obj, NULL, FALSE)
+    ser <- qserialize(obj, preset = 'high')
     # write length of ser
     writeBin(length(ser), con, endian = 'big')
     # write list
@@ -83,7 +83,7 @@ read_daily <- function(path, files = FALSE) {
         # read length of serialized data
         N2 <- readBin(con, 'int', 1L, endian = 'big')
         # read serialized data and unserialize
-        out <- unserialize(readBin(con, 'raw', N2, endian = 'big'))
+        out <- qdeserialize(readBin(con, 'raw', N2, endian = 'big'))
     }
     # close connection
     close(con)
@@ -92,7 +92,9 @@ read_daily <- function(path, files = FALSE) {
     out
 }
 
-process_dailyfiles <- function(folders, path_data, doas_info, RawData) {
+process_dailyfiles <- function(folders, path_data, doas_info, RawData, 
+    path_dailyfiles = path_data) {
+    require(qs)
     # loop over folders
     lapply(folders, function(i) {
         cat(paste0("..processing daily file ", i, ".bin\n"))
@@ -103,7 +105,7 @@ process_dailyfiles <- function(folders, path_data, doas_info, RawData) {
         rawdat <- rawdat_all[rawdatSize > 4000]
         if(sum(rawdatSize <= 4000)){
             cat(paste0(sum(rawdatSize <= 4000), " invalid files (< 4000 bytes)!\n"))
-            file.copy(rawdat_all[rawdatSize <= 4000], sub(".txt$", ".invalid", rawdat_all[rawdatSize <= 4000]), overwrite = TRUE)
+            file.rename(rawdat_all[rawdatSize <= 4000], sub("[.]txt$", ".invalid", rawdat_all[rawdatSize <= 4000]))
         }
         # read raw data
         if(length(rawdat)){
@@ -153,7 +155,7 @@ process_dailyfiles <- function(folders, path_data, doas_info, RawData) {
             # prepare raw data as list
             out <- list(intensity = lapply(dat[-seq.int(doas_info$rawdata.structure$'Header Lines'), ], as.numeric), header = header)
             # write daily file (files, data, path)
-            write_daily(basename(rawdat), out, file.path(path_data, i))
+            write_daily(basename(rawdat), out, file.path(path_dailyfiles, i))
             # return list
             out
         } else {
@@ -166,7 +168,7 @@ process_dailyfiles <- function(folders, path_data, doas_info, RawData) {
 }
 
 check_dailyfiles <- function(rawdat_folder, skip.check.daily, force.write.daily, 
-    lf_raw_dir, path_data, doas_info, rd_list) {
+    lf_daily, path_data, doas_info, rd_list, path_dailyfiles = path_data) {
     # target daily files
     target_daily <- paste0(rawdat_folder, ".bin")
     # check existing daily files
@@ -175,23 +177,23 @@ check_dailyfiles <- function(rawdat_folder, skip.check.daily, force.write.daily,
         daily_exist <- rep(FALSE, length(target_daily))
     } else {
         # get existing daily files
-        daily_exist <- target_daily %in% lf_raw_dir
+        daily_exist <- target_daily %in% lf_daily
         # check daily files
         if(!skip.check.daily){
             cat("checking daily files...\n")
             for (i in which(daily_exist)) {
                 # read 'old' files
-                files_daily <- try(read_daily(file.path(path_data, target_daily[i]), files = TRUE), silent = TRUE)
+                files_daily <- try(read_daily(file.path(path_dailyfiles, target_daily[i]), files = TRUE), silent = TRUE)
                 # read present files
                 files_now <- list.files(file.path(path_data, rawdat_folder[i]), pattern = '[.]txt')
                 # check for changes
-                if (identical(files_daily, files_now)){
+                if (length(setdiff(files_now, files_daily)) == 0){
                     cat(paste0("..daily file ", target_daily[i], " exists and is ok...\n"))
                     # read data from daily file
-                    rd_list[[rawdat_folder[i]]] <- read_daily(file.path(path_data, target_daily[i]))
+                    rd_list[[rawdat_folder[i]]] <- read_daily(file.path(path_dailyfiles, target_daily[i]))
                 } else {
                     # delete daily file (and re-create it later)
-                    unlink(file.path(path_data, target_daily[i]))
+                    unlink(file.path(path_dailyfiles, target_daily[i]))
                     daily_exist[i] <- FALSE
                 }
             }   
@@ -199,20 +201,22 @@ check_dailyfiles <- function(rawdat_folder, skip.check.daily, force.write.daily,
             # read existing daily files
             for (i in which(daily_exist)) {
                 cat("reading daily file", target_daily[i], "...\n")
-                rd_list[[rawdat_folder[i]]] <- read_daily(file.path(path_data, target_daily[i]))
+                rd_list[[rawdat_folder[i]]] <- read_daily(file.path(path_dailyfiles, target_daily[i]))
             }     
         }
     }
     # process daily files
-    rd_list[!daily_exist] <- process_dailyfiles(rawdat_folder[!daily_exist], path_data, doas_info, rd_list)
+    rd_list[!daily_exist] <- process_dailyfiles(rawdat_folder[!daily_exist], path_data, 
+        doas_info, rd_list, path_dailyfiles)
     # return
     rd_list[!is.null(rd_list)]
 }
 
 readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.daily = FALSE, 
-    force.write.daily = FALSE, timerange = DOASinfo$timerange, timezone = "", ncores = 1) {
+    force.write.daily = FALSE, timerange = DOASinfo$timerange, timezone = "", ncores = 1,
+    path_dailyfiles = dataDir) {
 
-    if(parl <- ((is.list(ncores) || ncores > 1) && !rawdataOnly)) {
+    if(parl <- (is.list(ncores) || ncores > 1)) {
         require(parallel)
         if (cl_was_up <- is.list(ncores)) {     
             cl <- ncores
@@ -221,6 +225,13 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
             on.exit(parallel::stopCluster(cl))
         }
         parallel::clusterCall(cl, library, package = 'lubridate', character.only = TRUE)
+        parallel::clusterCall(cl, library, package = 'qs', character.only = TRUE)
+        # get progress bar if blsmodelr is available
+        if (requireNamespace('bLSmodelR', quietly = TRUE)) {
+            cluster_apply_lb <- bLSmodelR:::.clusterApplyLB
+        } else {
+            cluster_apply_lb <- parallel::clusterApplyLB
+        }
     }
 
     if(inherits(DOASinfo, "character")){
@@ -237,17 +248,27 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
             by=as.difftime(1, units="days")), "%Y%m%d") 
 
     # get existing files/folders
-    lf.raw.dir <- list.files(dataDir, pattern = '[0-9]{8}([.]bin)?$')
-    if(!length(lf.raw.dir)){
-        if(!dir.exists(dirname(dataDir))){
-            stop("Folder \"",dirname(dataDir),"\" does not exist!")
-        } else if(!dir.exists(dataDir)){
-            stop("Folder \"",dataDir,"\" does not exist!")
-        } else {
-            stop("Folder \"",dataDir,"\" does not contain any doas data!")
+    lf.raw.dir <- list.files(dataDir, pattern = '^[0-9]{8}$')
+    # get existing daily files
+    if (!dir.exists(path_dailyfiles)) {
+        cat('directory "', path_dailyfiles, '" does not exist - creating it...\n', sep = '')
+        dir.create(path_dailyfiles, recursive = TRUE)
+    }
+    lf_daily <- list.files(path_dailyfiles, pattern = '^[0-9]{8}[.]bin$')
+
+    if (!length(lf.raw.dir)) {
+        if (rawdataOnly || force.write.daily) {
+            if(!dir.exists(dirname(dataDir))){
+                stop("Folder \"",dirname(dataDir),"\" does not exist!")
+            } else if(!dir.exists(dataDir)){
+                stop("Folder \"",dataDir,"\" does not exist!")
+            } else {
+                stop("No raw data available for specified timerange!\n",
+                "Folder \"",dataDir,"\" does not contain any doas data!")
+            }
+        } else if (!any(rawdatfolder %in% sub('.bin', '', lf_daily, fixed = TRUE))) {
+            stop("No data available for specified timerange!")
         }
-    } else if(!any(rawdatfolder %in% lf.raw.dir)){
-        stop("No data available for specified timerange!")
     }
 
     # prepare raw data output
@@ -257,81 +278,19 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
     # if rawdataOnly else daily files
     if (rawdataOnly) {
 
-        # newly introduced raw_data
-        raw_data <- RawData
-
-        # loop over folders
-        for (i in rawdatfolder) {
-            cat(paste0("..reading raw data from folder ",i,"\n"))
-            # list files
-            rawdat_all <- list.files(file.path(dataDir, i), pattern = ".txt", full.names = TRUE)
-            # read files
-            if(length(rawdat_all)){
-                if(DOASinfo$DOASmodel=="S1" && DOASinfo$timerange[1]>strptime("20160101","%Y%m%d") && DOASinfo$timerange[1]<strptime("20170101","%Y%m%d")){
-                    rawdat.et <- parse_date_time(gsub("^.*/(.*).txt","\\1",rawdat_all),c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz=tz(DOASinfo$timerange))
-                } else {
-                    rawdat.et <- parse_date_time(gsub("^.*_(.*).txt","\\1",rawdat_all),c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz=tz(DOASinfo$timerange))
-                }
-                rawdat.st <- rawdat.et - median(diff(rawdat.et))
-                takeme <- (rawdat.et >= timerange[1]) & (rawdat.st <= timerange[2])
-                rawdat_all <- rawdat_all[takeme]
-                rawdatSize <- file.size(rawdat_all)
-                rawdat <- rawdat_all[rawdatSize > 4000]
-                if(any(rawdatSize <= 4000)){
-                    cat(paste0(sum(rawdatSize <= 4000)," invalid files (< 4000 bytes)!\n"))
-                    file.copy(rawdat_all[rawdatSize <= 4000],gsub(".txt$",".invalid",rawdat_all[rawdatSize <= 4000]))
-                }
-                if(length(rawdat)){
-                    if(DOASinfo$DOASmodel == "S1"&&(as.numeric(i)-20160101)>=0&&(as.numeric(i)-20170101)<0){
-                        dat <- data.frame(
-                            wavelength=c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength[10:1021]),
-                            lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines"-9,sep="\n",as.is=TRUE,quote="",comment.char=""))
-                        )
-                        input <- data.frame(wavelength=DOASinfo$Spectrometer$wavelength[1:9],matrix(NA,nrow=9,ncol=ncol(dat)-1))
-                        names(input) <- names(dat)
-                        dat <- rbind(dat[1:8,],
-                            input,
-                            dat[9:1020,],make.row.names=FALSE)
-                    } else {
-                        # read files
-                        firstRow <- c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength)
-                        fls <- lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=DOASinfo$Spectrometer$"Pixel Number"+DOASinfo$rawdata.structure$"Header Lines",sep="\n",as.is=TRUE,quote="",comment.char=""))
-                        # temporary solution to missing Klima entries:
-                        if(nrow(fls[[1]]) == (length(firstRow) - 1)){
-                            fls <- lapply(fls, function(x) rbind(x[1:5,, drop = FALSE], 
-                                    "Board- / Ambient-T (degC) / ambient-RH (perc)= NA, NA, NA,", 
-                                    x[6:1051,, drop = FALSE]))
-                        } else if(any(check_fls <- sapply(fls,nrow) != length(firstRow))){
-                            stop("check files:\n",paste(rawdat[check_fls],collapse="\n"))
-                        }
-                        dat <- data.frame(
-                            wavelength=c(seq.int(DOASinfo$rawdata.structure$"Header Lines"),DOASinfo$Spectrometer$wavelength),
-                            fls)
-                    }
-                    # prepare header
-                    header <- list(
-                        RevPos = sub("^.*[=]", "", dat[DOASinfo$rawdata.structure$"Revolver Position", -1]),
-                        ShuPos = sub("^.*[=]", "", dat[DOASinfo$rawdata.structure$"Shutter Position", -1]),
-                        ststr = sub("^.*_", "", dat[DOASinfo$rawdata.structure$"Acquisition start time", -1]),
-                        etstr = sub("^.*_", "", dat[DOASinfo$rawdata.structure$"Acquisition stop time", -1]),
-                        TECTemp = sub("^.*[=]", "", dat[DOASinfo$rawdata.structure$"TEC-Temp (degC)", -1]),
-                        Klima = sub("^.*[=]", "", dat[DOASinfo$rawdata.structure$"Board- / Ambient-T (degC) / ambient-RH (perc)", -1]),
-                        Expos = as.numeric(sub("^.*[=]", "", dat[DOASinfo$rawdata.structure$"Exposure Time (ms)", -1])),
-                        AccNum = as.numeric(sub("^.*[=]", "", dat[DOASinfo$rawdata.structure$"Number of accumulations", -1])),
-                        st = parse_date_time(sub("^.*_", "", dat[DOASinfo$rawdata.structure$"Acquisition start time", -1]), DOASinfo$rawdata.structure$"Time Format", tz = tz(DOASinfo$timerange)),
-                        et = parse_date_time(sub("^.*_", "", dat[DOASinfo$rawdata.structure$"Acquisition stop time", -1]), DOASinfo$rawdata.structure$"Time Format", tz = tz(DOASinfo$timerange))
-                    )
-
-                    # write raw data as list
-                    raw_data[[i]] <- list(intensity = lapply(dat[-seq.int(DOASinfo$rawdata.structure$'Header Lines'), ], as.numeric), header = header)
-                } else {
-                    raw_data <- raw_data[-match(i, names(raw_data))]
-                } 
-            } else {
-                raw_data <- raw_data[-match(i, names(raw_data))]
-                cat("No data in folder", i, "\n")
-            }
+        if (parl) {
+            # # export functions
+            # parallel::clusterExport(cl, list(''))
+            # loop over folders
+            cat("reading raw data files in parallel...\n")
+            raw_data <- cluster_apply_lb(cl, rawdatfolder, read_rawdata, data_dir = dataDir, doas_info = DOASinfo)
+            names(raw_data) <- rawdatfolder
+        } else {
+            # loop over folders
+            raw_data <- lapply(rawdatfolder, read_rawdata, data_dir = dataDir, doas_info = DOASinfo)
+            names(raw_data) <- rawdatfolder
         }
+        
     } else if (parl) {
 
         # export functions
@@ -339,13 +298,13 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
 
         # call check daily in parallel
         cat("checking daily files in parallel...\n")
-        raw_data <- parallel::clusterApplyLB(cl, seq_along(RawData), function(i, check_fu, rdf, rd, ...) {
+        raw_data <- cluster_apply_lb(cl, seq_along(RawData), function(i, check_fu, rdf, rd, ...) {
             unlist(
                 check_fu(rdf[[i]], rd_list = rd[[i]], ...),
                 recursive = FALSE)
                             }, 
             check_fu = check_dailyfiles, rdf = rawdatfolder, rd = RawData, skip.check.daily, force.write.daily,
-            lf.raw.dir, dataDir, DOASinfo)
+            lf_daily, dataDir, DOASinfo, path_dailyfiles)
 
         # close cluster connection
         if (!cl_was_up) {
@@ -356,7 +315,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
     } else {
 
         raw_data <- check_dailyfiles(rawdatfolder, skip.check.daily, force.write.daily, 
-            lf.raw.dir, dataDir, DOASinfo, RawData)
+            lf_daily, dataDir, DOASinfo, RawData, path_dailyfiles)
 
     }
 
@@ -389,6 +348,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
         AccTime = round(as.numeric(difftime(header$et, header$st, units = "secs")), 3),
         st = header$st,
         et = header$et,
+        row.names = seq_along(header$st),
         stringsAsFactors = FALSE
     )
 
@@ -399,6 +359,85 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
     RawData <- mapply('/', RawData, Header[, 'AccNum'], SIMPLIFY = FALSE)
 
     return(list(RawData=RawData,Header=Header,DOASinfo=DOASinfo))
+}
+
+#### raw data processing function
+read_rawdata <- function(dir, data_dir = dataDir, doas_info = DOASinfo) {
+    cat(paste0("..reading raw data from folder ",dir,"\n"))
+    # list files
+    rawdat_all <- list.files(file.path(data_dir, dir), pattern = ".txt", full.names = TRUE)
+    # read files
+    if (length(rawdat_all)) {
+        timerange <- doas_info$timerange
+        if (doas_info$DOASmodel == "S1" && 
+            timerange[1] > strptime("20160101","%Y%m%d") && 
+            timerange[1] < strptime("20170101", "%Y%m%d")) {
+            rawdat.et <- parse_date_time(sub("^.*/(.*)[.]txt$", "\\1", rawdat_all),
+                c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz = tz(timerange))
+        } else {
+            rawdat.et <- parse_date_time(sub("^.*_(.*)[.]txt$", "\\1", rawdat_all), 
+                c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz = tz(timerange))
+        }
+        rawdat.st <- rawdat.et - median(diff(rawdat.et))
+        takeme <- (rawdat.et >= timerange[1]) & (rawdat.st <= timerange[2])
+        rawdat_all <- rawdat_all[takeme]
+        rawdatSize <- file.size(rawdat_all)
+        rawdat <- rawdat_all[rawdatSize > 4000]
+        if (any(rawdatSize <= 4000)) {
+            cat(paste0(sum(rawdatSize <= 4000)," invalid files (< 4000 bytes)!\n"))
+            file.rename(rawdat_all[rawdatSize <= 4000], 
+                sub("[.]txt$", ".invalid", rawdat_all[rawdatSize <= 4000]))
+        }
+        if (length(rawdat)) {
+            if (doas_info$DOASmodel == "S1" && (as.numeric(dir) - 20160101) >= 0 && (as.numeric(dir) - 20170101) < 0) {
+                dat <- data.frame(
+                    wavelength=c(seq.int(doas_info$rawdata.structure$"Header Lines"),doas_info$Spectrometer$wavelength[10:1021]),
+                    lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=doas_info$Spectrometer$"Pixel Number"+doas_info$rawdata.structure$"Header Lines"-9,sep="\n",as.is=TRUE,quote="",comment.char=""))
+                )
+                input <- data.frame(wavelength=doas_info$Spectrometer$wavelength[1:9],matrix(NA,nrow=9,ncol=ncol(dat)-1))
+                names(input) <- names(dat)
+                dat <- rbind(dat[1:8,],
+                    input,
+                    dat[9:1020,],make.row.names=FALSE)
+            } else {
+                # read files
+                firstRow <- c(seq.int(doas_info$rawdata.structure$"Header Lines"),doas_info$Spectrometer$wavelength)
+                fls <- lapply(rawdat, function(x) read.table(x, header=FALSE, nrows=doas_info$Spectrometer$"Pixel Number"+doas_info$rawdata.structure$"Header Lines",sep="\n",as.is=TRUE,quote="",comment.char=""))
+                # temporary solution to missing Klima entries:
+                if(nrow(fls[[1]]) == (length(firstRow) - 1)){
+                    fls <- lapply(fls, function(x) rbind(x[1:5,, drop = FALSE], 
+                            "Board- / Ambient-T (degC) / ambient-RH (perc)= NA, NA, NA,", 
+                            x[6:1051,, drop = FALSE]))
+                } else if(any(check_fls <- sapply(fls,nrow) != length(firstRow))){
+                    stop("check files:\n",paste(rawdat[check_fls],collapse="\n"))
+                }
+                dat <- data.frame(
+                    wavelength=c(seq.int(doas_info$rawdata.structure$"Header Lines"),doas_info$Spectrometer$wavelength),
+                    fls)
+            }
+            # prepare header
+            header <- list(
+                RevPos = sub("^.*[=]", "", dat[doas_info$rawdata.structure$"Revolver Position", -1]),
+                ShuPos = sub("^.*[=]", "", dat[doas_info$rawdata.structure$"Shutter Position", -1]),
+                ststr = sub("^.*_", "", dat[doas_info$rawdata.structure$"Acquisition start time", -1]),
+                etstr = sub("^.*_", "", dat[doas_info$rawdata.structure$"Acquisition stop time", -1]),
+                TECTemp = sub("^.*[=]", "", dat[doas_info$rawdata.structure$"TEC-Temp (degC)", -1]),
+                Klima = sub("^.*[=]", "", dat[doas_info$rawdata.structure$"Board- / Ambient-T (degC) / ambient-RH (perc)", -1]),
+                Expos = as.numeric(sub("^.*[=]", "", dat[doas_info$rawdata.structure$"Exposure Time (ms)", -1])),
+                AccNum = as.numeric(sub("^.*[=]", "", dat[doas_info$rawdata.structure$"Number of accumulations", -1])),
+                st = parse_date_time(sub("^.*_", "", dat[doas_info$rawdata.structure$"Acquisition start time", -1]), doas_info$rawdata.structure$"Time Format", tz = tz(doas_info$timerange)),
+                et = parse_date_time(sub("^.*_", "", dat[doas_info$rawdata.structure$"Acquisition stop time", -1]), doas_info$rawdata.structure$"Time Format", tz = tz(doas_info$timerange))
+            )
+            # write raw data as list
+            out <- list(intensity = lapply(dat[-seq.int(doas_info$rawdata.structure$'Header Lines'), ], as.numeric), header = header)
+        } else {
+            out <- NULL
+        } 
+    } else {
+        out <- NULL
+        cat("No data in folder", dir, "\n")
+    }
+    out
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -786,25 +825,51 @@ getSpecSet <- function(
     N2.NO.cal.spec=N2.cal.spec,
     N2.dark.cal.spec=dark.spec,
     DOAS.model=NULL) {
-
-    # if (is.null(ref.spec))ref.spec <- spec.dir
-    if (is.null(ref.dark.spec))ref.dark.spec <- spec.dir
-    if (is.null(dark.spec))dark.spec <- spec.dir
-    if (is.null(NH3.cal.spec))NH3.cal.spec <- spec.dir
-    if (is.null(SO2.cal.spec))SO2.cal.spec <- spec.dir
-    if (is.null(NO.cal.spec))NO.cal.spec <- spec.dir
-    if (is.null(N2.dark.cal.spec))N2.dark.cal.spec <- spec.dir
-    if (is.null(N2.NH3.cal.spec))N2.NH3.cal.spec <- spec.dir
-    if (is.null(N2.SO2.cal.spec))N2.SO2.cal.spec <- spec.dir
-    if (is.null(N2.NO.cal.spec))N2.NO.cal.spec <- spec.dir
-
-    return(
-        list(
+    # check if serialized calref file is provided
+    if (is.character(spec.dir) && isFALSE(file.info(spec.dir)$isdir)) {
+        if (file.exists(spec.dir)) {
+            spec.dir <- switch(
+                sub('.*[.]([a-z]+)$', '\\1', spec.dir)
+                , qs = qread(spec.dir)
+                , rds = readRDS(spec.dir)
+                , stop('unknown calref file format: *.',
+                    sub('.*[.]([a-z]+)$', '\\1', spec.dir))
+            )
+        } else {
+            stop('path ', spec.dir, ' is invalid')
+        }
+    }
+    # convert if calref is provided
+    if (inherits(spec.dir, 'calref')) {
+        out <- convert_calref(spec.dir)
+        # add dark spectra
+        if (!is.null(ref.dark.spec)) {
+                ### lamp reference dark spectrum
+                out$dat.ref.dark <- getSpec(ref.dark.spec, DOASmodel = out$DOAS.model, 
+                    lite = TRUE)
+        }
+        if (!is.null(dark.spec)) {
+                ### actual dark spectrum
+                out$dat.dark <- getSpec(dark.spec, DOASmodel = out$DOAS.model, 
+                    lite = TRUE)
+        }
+        if (!is.null(N2.dark.cal.spec)) {
+                ### cuvette calibration dark spectrum
+                out$dat.N2.dark <- getSpec(N2.dark.cal.spec, DOASmodel = out$DOAS.model, 
+                    lite = TRUE)
+        }
+    } else {
+        if (is.null(ref.dark.spec)) ref.dark.spec <- spec.dir
+        if (is.null(dark.spec)) dark.spec <- spec.dir
+        if (is.null(NH3.cal.spec)) NH3.cal.spec <- spec.dir
+        if (is.null(SO2.cal.spec)) SO2.cal.spec <- spec.dir
+        if (is.null(NO.cal.spec)) NO.cal.spec <- spec.dir
+        if (is.null(N2.dark.cal.spec)) N2.dark.cal.spec <- spec.dir
+        if (is.null(N2.NH3.cal.spec)) N2.NH3.cal.spec <- spec.dir
+        if (is.null(N2.SO2.cal.spec)) N2.SO2.cal.spec <- spec.dir
+        if (is.null(N2.NO.cal.spec)) N2.NO.cal.spec <- spec.dir
+        out <- list(
             DOAS.model = DOAS.model,
-            ### lamp reference spectrum
-            dat.ref = if (!is.null(ref.spec)) {
-                getSpec(ref.spec,DOASmodel=DOAS.model,lite=TRUE)
-            },
             ### lamp reference dark spectrum
             dat.ref.dark = getSpec(ref.dark.spec,DOASmodel=DOAS.model,lite=TRUE),
             ### actual dark spectrum
@@ -821,7 +886,15 @@ getSpecSet <- function(
             ### cuvette calibration dark spectrum
             dat.N2.dark = getSpec(N2.dark.cal.spec,DOASmodel=DOAS.model,lite=TRUE)
         )
-    )
+    }
+    # add reference spectrum
+    out$dat.ref <- if (!is.null(ref.spec)) {
+        getSpec(ref.spec, DOASmodel = out$DOAS.model, lite = TRUE)
+    } else {
+        warning('no reference spectrum provided')
+        NULL
+    }
+    out
 }
 
 ### process spectra data
@@ -1803,8 +1876,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
     p2 <- eval(frmls$p2)
     p3 <- eval(frmls$p3) 
     p4 <- eval(frmls$p4)
-
-    # browser()
 
     # input <- c(list(
     #     index = 1,

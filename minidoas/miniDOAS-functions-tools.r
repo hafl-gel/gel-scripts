@@ -5,7 +5,8 @@
 #### read doas data
 read_data <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', 
     doas = sub('.*(S[1-6]).*', '\\1', folder), ncores = 1,
-    Serial = NULL, force.write.daily = FALSE, rawdataOnly = TRUE){
+    Serial = NULL, force.write.daily = FALSE, rawdataOnly = missing(path_dailyfiles),
+    path_dailyfiles = folder){
     if(length(from) > 1){
         to <- from[2]
         from <- from[1]
@@ -20,7 +21,9 @@ read_data <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
     di <- getDOASinfo(doas, timerange = c(from, to), tzone = tz, Serial = Serial)
     structure(
         readDOASdata(di, folder, rawdataOnly = rawdataOnly, 
-            force.write.daily = force.write.daily, ncores = ncores)
+            force.write.daily = force.write.daily, ncores = ncores,
+            path_dailyfiles = path_dailyfiles
+        )
         , class = 'rawdat'
         )
 }

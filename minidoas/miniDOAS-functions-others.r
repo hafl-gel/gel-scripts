@@ -50,6 +50,7 @@ linearity.func <- function(x, cfs) {
 # timezone=""
 # ncores=ncores
 write_daily <- function(files, obj, path) {
+    # browser()
     # open connection
     con <- gzfile(paste0(path, '.bin'), 'wb')
     on.exit({
@@ -61,7 +62,7 @@ write_daily <- function(files, obj, path) {
     # write files
     writeBin(files, con, endian = 'big')
     # serialize object
-    ser <- serialize(obj, NULL, FALSE)
+    ser <- qserialize(obj, preset = 'high')
     # write length of ser
     writeBin(length(ser), con, endian = 'big')
     # write list
@@ -83,7 +84,7 @@ read_daily <- function(path, files = FALSE) {
         # read length of serialized data
         N2 <- readBin(con, 'int', 1L, endian = 'big')
         # read serialized data and unserialize
-        out <- unserialize(readBin(con, 'raw', N2, endian = 'big'))
+        out <- qdeserialize(readBin(con, 'raw', N2, endian = 'big'))
     }
     # close connection
     close(con)
@@ -94,6 +95,7 @@ read_daily <- function(path, files = FALSE) {
 
 process_dailyfiles <- function(folders, path_data, doas_info, RawData, 
     path_dailyfiles = path_data) {
+    require(qs)
     # loop over folders
     lapply(folders, function(i) {
         cat(paste0("..processing daily file ", i, ".bin\n"))
@@ -104,7 +106,7 @@ process_dailyfiles <- function(folders, path_data, doas_info, RawData,
         rawdat <- rawdat_all[rawdatSize > 4000]
         if(sum(rawdatSize <= 4000)){
             cat(paste0(sum(rawdatSize <= 4000), " invalid files (< 4000 bytes)!\n"))
-            file.copy(rawdat_all[rawdatSize <= 4000], sub(".txt$", ".invalid", rawdat_all[rawdatSize <= 4000]), overwrite = TRUE)
+            file.rename(rawdat_all[rawdatSize <= 4000], sub("[.]txt$", ".invalid", rawdat_all[rawdatSize <= 4000]))
         }
         # read raw data
         if(length(rawdat)){
@@ -154,6 +156,7 @@ process_dailyfiles <- function(folders, path_data, doas_info, RawData,
             # prepare raw data as list
             out <- list(intensity = lapply(dat[-seq.int(doas_info$rawdata.structure$'Header Lines'), ], as.numeric), header = header)
             # write daily file (files, data, path)
+            # browser()
             write_daily(basename(rawdat), out, file.path(path_dailyfiles, i))
             # return list
             out
@@ -167,7 +170,7 @@ process_dailyfiles <- function(folders, path_data, doas_info, RawData,
 }
 
 check_dailyfiles <- function(rawdat_folder, skip.check.daily, force.write.daily, 
-    lf_raw_dir, path_data, doas_info, rd_list) {
+    lf_daily, path_data, doas_info, rd_list, path_dailyfiles = path_data) {
     # target daily files
     target_daily <- paste0(rawdat_folder, ".bin")
     # check existing daily files
@@ -176,23 +179,23 @@ check_dailyfiles <- function(rawdat_folder, skip.check.daily, force.write.daily,
         daily_exist <- rep(FALSE, length(target_daily))
     } else {
         # get existing daily files
-        daily_exist <- target_daily %in% lf_raw_dir
+        daily_exist <- target_daily %in% lf_daily
         # check daily files
         if(!skip.check.daily){
             cat("checking daily files...\n")
             for (i in which(daily_exist)) {
                 # read 'old' files
-                files_daily <- try(read_daily(file.path(path_data, target_daily[i]), files = TRUE), silent = TRUE)
+                files_daily <- try(read_daily(file.path(path_dailyfiles, target_daily[i]), files = TRUE), silent = TRUE)
                 # read present files
                 files_now <- list.files(file.path(path_data, rawdat_folder[i]), pattern = '[.]txt')
                 # check for changes
-                if (identical(files_daily, files_now)){
+                if (length(setdiff(files_now, files_daily)) == 0){
                     cat(paste0("..daily file ", target_daily[i], " exists and is ok...\n"))
                     # read data from daily file
-                    rd_list[[rawdat_folder[i]]] <- read_daily(file.path(path_data, target_daily[i]))
+                    rd_list[[rawdat_folder[i]]] <- read_daily(file.path(path_dailyfiles, target_daily[i]))
                 } else {
                     # delete daily file (and re-create it later)
-                    unlink(file.path(path_data, target_daily[i]))
+                    unlink(file.path(path_dailyfiles, target_daily[i]))
                     daily_exist[i] <- FALSE
                 }
             }   
@@ -200,18 +203,20 @@ check_dailyfiles <- function(rawdat_folder, skip.check.daily, force.write.daily,
             # read existing daily files
             for (i in which(daily_exist)) {
                 cat("reading daily file", target_daily[i], "...\n")
-                rd_list[[rawdat_folder[i]]] <- read_daily(file.path(path_data, target_daily[i]))
+                rd_list[[rawdat_folder[i]]] <- read_daily(file.path(path_dailyfiles, target_daily[i]))
             }     
         }
     }
     # process daily files
-    rd_list[!daily_exist] <- process_dailyfiles(rawdat_folder[!daily_exist], path_data, doas_info, rd_list)
+    rd_list[!daily_exist] <- process_dailyfiles(rawdat_folder[!daily_exist], path_data, 
+        doas_info, rd_list, path_dailyfiles)
     # return
     rd_list[!is.null(rd_list)]
 }
 
 readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.daily = FALSE, 
-    force.write.daily = FALSE, timerange = DOASinfo$timerange, timezone = "", ncores = 1) {
+    force.write.daily = FALSE, timerange = DOASinfo$timerange, timezone = "", ncores = 1,
+    path_dailyfiles = dataDir) {
 
     if(parl <- (is.list(ncores) || ncores > 1)) {
         require(parallel)
@@ -244,7 +249,14 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
             by=as.difftime(1, units="days")), "%Y%m%d") 
 
     # get existing files/folders
-    lf.raw.dir <- list.files(dataDir, pattern = '[0-9]{8}([.]bin)?$')
+    lf.raw.dir <- list.files(dataDir, pattern = '^[0-9]{8}$')
+    # get existing daily files
+    if (!dir.exists(path_dailyfiles)) {
+        cat('directory "', path_dailyfiles, '" does not exist - creating it...\n', sep = '')
+        dir.create(path_dailyfiles, recursive = TRUE)
+    }
+    lf_daily <- list.files(path_dailyfiles, pattern = '^[0-9]{8}[.]bin$')
+
     if(!length(lf.raw.dir)){
         if(!dir.exists(dirname(dataDir))){
             stop("Folder \"",dirname(dataDir),"\" does not exist!")
@@ -254,7 +266,11 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
             stop("Folder \"",dataDir,"\" does not contain any doas data!")
         }
     } else if(!any(rawdatfolder %in% lf.raw.dir)){
-        stop("No data available for specified timerange!")
+        if (rawdataOnly || force.write.daily) {
+            stop("No raw data available for specified timerange!")
+        } else if (!any(rawdatfolder %in% sub('.bin', '', lf_daily, fixed = TRUE))) {
+            stop("No data available for specified timerange!")
+        }
     }
 
     # prepare raw data output
@@ -290,7 +306,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
                 recursive = FALSE)
                             }, 
             check_fu = check_dailyfiles, rdf = rawdatfolder, rd = RawData, skip.check.daily, force.write.daily,
-            lf.raw.dir, dataDir, DOASinfo)
+            lf_daily, dataDir, DOASinfo, path_dailyfiles)
 
         # close cluster connection
         if (!cl_was_up) {
@@ -301,7 +317,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
     } else {
 
         raw_data <- check_dailyfiles(rawdatfolder, skip.check.daily, force.write.daily, 
-            lf.raw.dir, dataDir, DOASinfo, RawData)
+            lf_daily, dataDir, DOASinfo, RawData, path_dailyfiles)
 
     }
 
@@ -358,10 +374,10 @@ read_rawdata <- function(dir, data_dir = dataDir, doas_info = DOASinfo) {
         if (doas_info$DOASmodel == "S1" && 
             timerange[1] > strptime("20160101","%Y%m%d") && 
             timerange[1] < strptime("20170101", "%Y%m%d")) {
-            rawdat.et <- parse_date_time(gsub("^.*/(.*).txt", "\\1", rawdat_all),
+            rawdat.et <- parse_date_time(sub("^.*/(.*)[.]txt$", "\\1", rawdat_all),
                 c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz = tz(timerange))
         } else {
-            rawdat.et <- parse_date_time(gsub("^.*_(.*).txt", "\\1", rawdat_all), 
+            rawdat.et <- parse_date_time(sub("^.*_(.*)[.]txt$", "\\1", rawdat_all), 
                 c("%Y%m%d %H%M%OS", "%y%m%d%H%M%S"), tz = tz(timerange))
         }
         rawdat.st <- rawdat.et - median(diff(rawdat.et))
@@ -371,7 +387,8 @@ read_rawdata <- function(dir, data_dir = dataDir, doas_info = DOASinfo) {
         rawdat <- rawdat_all[rawdatSize > 4000]
         if (any(rawdatSize <= 4000)) {
             cat(paste0(sum(rawdatSize <= 4000)," invalid files (< 4000 bytes)!\n"))
-            file.copy(rawdat_all[rawdatSize <= 4000], gsub(".txt$", ".invalid", rawdat_all[rawdatSize <= 4000]))
+            file.rename(rawdat_all[rawdatSize <= 4000], 
+                sub("[.]txt$", ".invalid", rawdat_all[rawdatSize <= 4000]))
         }
         if (length(rawdat)) {
             if (doas_info$DOASmodel == "S1" && (as.numeric(dir) - 20160101) >= 0 && (as.numeric(dir) - 20170101) < 0) {

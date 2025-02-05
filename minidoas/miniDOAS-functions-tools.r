@@ -1264,7 +1264,7 @@ check_reftimes <- function(data, ref_times = NULL,
         ref_times <- find_refperiod(data, ...)
     }
     ylims <- get_limits(data[ref_times], expansion = y_expansion)
-    stats <- vector('list', length(ref_times))
+    stats <- list()
     for (i in seq_along(ref_times)) {
         ind2 <- ref_times[i]
         ind <- ind2 %+% paste0(c('-', ''), x_expansion)

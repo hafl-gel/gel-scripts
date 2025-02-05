@@ -3,7 +3,8 @@
 
 
 #### read doas data
-read_data <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', doas = sub('.*(S[1-6]).*', '\\1', folder), 
+read_data <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', 
+    doas = sub('.*(S[1-6]).*', '\\1', folder), ncores = 1,
     Serial = NULL, force.write.daily = FALSE, rawdataOnly = TRUE){
     if(length(from) > 1){
         to <- from[2]
@@ -18,7 +19,8 @@ read_data <- function(folder, from, to = NULL, tz = 'Etc/GMT-1', doas = sub('.*(
     stopifnot(to >= from)
     di <- getDOASinfo(doas, timerange = c(from, to), tzone = tz, Serial = Serial)
     structure(
-        readDOASdata(di, folder, rawdataOnly = rawdataOnly, force.write.daily = force.write.daily)
+        readDOASdata(di, folder, rawdataOnly = rawdataOnly, 
+            force.write.daily = force.write.daily, ncores = ncores)
         , class = 'rawdat'
         )
 }
@@ -1119,6 +1121,7 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
 }
 
 convert_calref <- function(obj, ref.spec = NULL, dark.spec = NULL) {
+    if (is.character(obj)) obj <- qread(obj)
     if (!inherits(obj, 'calref')) stop('conversion only from "calref" object to spec set')
     if (is.null(dark.spec)) {
         dark.spec <- .conv_calref(obj, 'nh3', dark = TRUE)
@@ -1177,6 +1180,113 @@ convert_calref <- function(obj, ref.spec = NULL, dark.spec = NULL) {
         )
     }
 }
+
+# helper function: find best reference period
+find_refperiod <- function(data, ref_duration = 20, n = 1, dn = ref_duration - 1,
+    limits = c(i_min = 5e4, d_imax = 5e3, d_nh3 = 0.5, d_so2 = 1, d_no = 1),
+    wts = list(
+        abs = c(nh3 = 10, so2 = 1, no = 1, i_max = 1e-4),
+        diff = c(nh3 = 10, so2 = 5, no = 5, i_max = 2e-3),
+        mad = c(nh3 = 20, so2 = 10, no = 10, i_max = 4e-3),
+        i_max = 6.6e4
+    ), cols = c('nh3', 'so2', 'no', 'i_max')) {
+    require(Rcpp)
+    # TODO: move cpp functions to gel-scripts!!!
+    sourceCpp('~/repos/3_Scripts/3_Eval_IDM/scripts/src/cpp-minidoas.cpp')
+    # subset data
+    data <- data[, cols]
+    # get i_max subset
+    ind_imax <- data$i_max > limits[['i_min']]
+    # get individual series
+    n_nh3 <- cont_within_range(data$nh3, ind_imax, limits[['d_nh3']], ref_duration)
+    n_so2 <- cont_within_range(data$so2, ind_imax, limits[['d_so2']], ref_duration)
+    n_no <- cont_within_range(data$no, ind_imax, limits[['d_no']], ref_duration)
+    n_imax <- cont_within_range(data$i_max, ind_imax, limits[['d_imax']], ref_duration)
+    # find joint series
+    n_all <- pmin(n_nh3, n_so2, n_no, n_imax)
+    # which are above ref_duration?
+    ind_all <- which(n_all == ref_duration - 1)
+    # get minimum of nh3, so2, no
+    mins <- apply(data[ind_imax, ], 2, min, na.rm = TRUE)
+    # calculate penalties
+    penalties <- calc_penalty(data, wts, ind_all, mins, ref_duration)
+    # return best index
+    ord <- ind_all[order(penalties)]
+    out <- character(n)
+    for (i in seq_len(n)) {
+        out[i] <- deparse_timerange(x = st(data)[ord[i]], 
+            y = et(data)[ord[i] + ref_duration - 1], sep = ' to ')
+        ord <- ord[abs(ord - ord[i]) > dn]
+        if (length(ord) == 0) break
+    }
+    out
+}
+# get limits from ibts object
+get_limits <- function(data, expansion = 1, cols = c('i_max', 'nh3', 'so2', 'no')) {
+    sapply(cols, \(x) {
+        r <- range(data[, x], na.rm = TRUE)
+        if (expansion != 1) {
+            r <- mean(r) + diff(r) * c(-1, 1) * expansion
+        }
+        r
+    }, simplify = FALSE)
+}
+# get statistics
+get_stats <- function(data, cols = c('i_max', 'nh3', 'so2', 'no')) {
+    out <- sapply(cols, \(x) {
+        ind <- is.finite(data[[x]])
+        dat <- data[ind,][[x]]
+        r <- range(dat)
+        inner_out <- c(
+            n = sum(ind),
+            avg = mean(dat),
+            min = r[1],
+            # median = median(dat),
+            max = r[2],
+            maxd = r[2] - r[1],
+            sd = sd(dat)
+        )
+        if (x == 'i_max') {
+            inner_out[-1] <- round(inner_out[-1], 0)
+        } else {
+            inner_out[-1] <- round(inner_out[-1], 2)
+        }
+    }, simplify = FALSE)
+    do.call(rbind, out)
+}
+# check these reference times visually
+check_reftimes <- function(data, ref_times = NULL, 
+    x_expansion = '10hours', y_expansion = 1.2, ...) {
+    if (is.null(ref_times)) {
+        ref_times <- find_refperiod(data, ...)
+    }
+    ylims <- get_limits(data[ref_times], expansion = y_expansion)
+    stats <- vector('list', length(ref_times))
+    for (i in seq_along(ref_times)) {
+        ind2 <- ref_times[i]
+        ind <- ind2 %+% paste0(c('-', ''), x_expansion)
+        x11(width = 14, height = 10)
+        par(mfrow = c(4, 1), mar = c(3, 4, 2, 2))
+        # imax
+        plot(data[ind, "i_max"], col = "#D9D9D9", ylim = ylims[['i_max']])
+        lines(data[ind2, "i_max"], col = "darkgrey")
+        # nh3
+        plot(data[ind, "nh3"], col = "#DCA0A0", ylim = ylims[['nh3']])
+        lines(data[ind2, "nh3"], col = "indianred")
+        # so2
+        plot(data[ind, "so2"], col = "#A2C4E5", ylim = ylims[['so2']])
+        lines(data[ind2, "so2"], col = "dodgerblue3")
+        # no
+        plot(data[ind, "no"], col = "#81BC9B", ylim = ylims[['no']])
+        lines(data[ind2, "no"], col = "seagreen")
+        # get statistics
+        stats[[ref_times[i]]] <- get_stats(data[ind2])
+        cat(ref_times[i], '\n')
+        print(stats[[ref_times[i]]])
+    }
+    structure(ref_times, stats = stats)
+}
+
 
 
 
@@ -2159,22 +2269,22 @@ print.fix_pattern <- function(x, ...) {
 #' @param rawdat     A \code{list} with entries \code{'RawData'}, \code{'Header'}, 
 #'                   \code{'DOASinfo'}, obtained from a call to \code{readDOASdata} 
 #'                   or \code{read_data}.
-#' @param index      A vector of time indices used to subset
-#' @param to         An optional time index providing the end of a time range. 
-#'                   Argument \code{index} has to be of length 1 to provide
+#' @param from       A vector of time indices used to subset
+#' @param to         An optional time vector providing the end of a time range. 
+#'                   Argument \code{from} has to be of length 1 to provide
 #'                   the start of the time range. Defaults to \code{NULL}.
 #' @param including  logical. Only used if time range is provided. Should
 #'                   data at the range edges be included?
 #' @return A subset of the initial \code{rawdat} object
-filter_time <- function(rawdat, index, to = NULL, including = TRUE) {
+filter_time <- function(rawdat, from, to = NULL, including = TRUE) {
     rd_st <- rawdat[['Header']][['st']]
     rd_et <- rawdat[['Header']][['et']]
     rd_tz <- tzone(rd_st)
-    # check from
+    # check to
     if (!is.null(to)) {
         # parse from/to
-        if (is.character(index)) {
-            index <- parse_date_time3(index, tz = rd_tz)
+        if (is.character(from)) {
+            from <- parse_date_time3(from, tz = rd_tz)
         }
         if (is.character(to)) {
             to <- parse_date_time3(to, tz = rd_tz)
@@ -2183,21 +2293,32 @@ filter_time <- function(rawdat, index, to = NULL, including = TRUE) {
         for (i in seq_along(to)) {
             # from / to
             if (including) {
-               ind <- c(ind, which(rd_et > index[i] & rd_st < to[i]))
+               ind <- c(ind, which(rd_et > from[i] & rd_st < to[i]))
             } else {
-               ind <- c(ind, which(rd_st >= index[i] & rd_et <= to[i]))
+               ind <- c(ind, which(rd_st >= from[i] & rd_et <= to[i]))
             }
         }
         # sort index
         ind <- sort(ind)
     } else {
-        # index only
-        # parse index
-        if (is.character(index)) {
-            index <- parse_date_time3(index, tz = rd_tz)
+        # from only
+        # check if timerange
+        if (is.character(from)) {
+            fromto <- lapply(from, parse_timerange, tz = rd_tz)
+            from_new <- sapply(fromto, '[[', 1)
+            to_new <- sapply(fromto, '[[', 2)
+            if (!any(is.na(from_new), is.na(to_new))) {
+                return(
+                    filter_time(rawdat, from_new, to_new, including = including)
+                )
+            }
+        }
+        # parse from
+        if (is.character(from)) {
+            from <- parse_date_time3(from, tz = rd_tz)
         }
         # find intervals
-        ind <- ibts::findI_st(as.numeric(index), as.numeric(rd_st), as.numeric(rd_et))
+        ind <- ibts::findI_st(as.numeric(from), as.numeric(rd_st), as.numeric(rd_et))
     }
     # return rawdat class
     structure(

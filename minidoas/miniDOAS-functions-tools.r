@@ -2307,10 +2307,14 @@ filter_time <- function(rawdat, from, to = NULL, including = TRUE) {
         # from only
         # check if timerange
         if (is.character(from)) {
-            fromto <- lapply(from, parse_timerange, tz = rd_tz)
-            from_new <- sapply(fromto, '[[', 1)
-            to_new <- sapply(fromto, '[[', 2)
-            if (!any(is.na(from_new), is.na(to_new))) {
+            seps <- getOption("time.separators")                                                                                                                
+            split_char <- seps[sapply(seps, grepl, from)]
+            if (length(split_char) != 0) {
+                fromto <- lapply(from, parse_timerange, tz = rd_tz)
+                from_new <- sapply(fromto, '[[', 1)
+                to_new <- sapply(fromto, '[[', 2)
+                if (is.na(from_new)) from_new <- rd_st[1]
+                if (is.na(to_new)) to_new <- rd_et[length(rd_et)]
                 return(
                     filter_time(rawdat, from_new, to_new, including = including)
                 )

@@ -50,7 +50,6 @@ linearity.func <- function(x, cfs) {
 # timezone=""
 # ncores=ncores
 write_daily <- function(files, obj, path) {
-    # browser()
     # open connection
     con <- gzfile(paste0(path, '.bin'), 'wb')
     on.exit({
@@ -156,7 +155,6 @@ process_dailyfiles <- function(folders, path_data, doas_info, RawData,
             # prepare raw data as list
             out <- list(intensity = lapply(dat[-seq.int(doas_info$rawdata.structure$'Header Lines'), ], as.numeric), header = header)
             # write daily file (files, data, path)
-            # browser()
             write_daily(basename(rawdat), out, file.path(path_dailyfiles, i))
             # return list
             out
@@ -227,6 +225,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
             on.exit(parallel::stopCluster(cl))
         }
         parallel::clusterCall(cl, library, package = 'lubridate', character.only = TRUE)
+        parallel::clusterCall(cl, library, package = 'qs', character.only = TRUE)
         # get progress bar if blsmodelr is available
         if (requireNamespace('bLSmodelR', quietly = TRUE)) {
             cluster_apply_lb <- bLSmodelR:::.clusterApplyLB
@@ -1878,8 +1877,6 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
     p2 <- eval(frmls$p2)
     p3 <- eval(frmls$p3) 
     p4 <- eval(frmls$p4)
-
-    # browser()
 
     # input <- c(list(
     #     index = 1,

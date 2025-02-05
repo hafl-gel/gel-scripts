@@ -256,17 +256,16 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
     }
     lf_daily <- list.files(path_dailyfiles, pattern = '^[0-9]{8}[.]bin$')
 
-    if(!length(lf.raw.dir)){
-        if(!dir.exists(dirname(dataDir))){
-            stop("Folder \"",dirname(dataDir),"\" does not exist!")
-        } else if(!dir.exists(dataDir)){
-            stop("Folder \"",dataDir,"\" does not exist!")
-        } else {
-            stop("Folder \"",dataDir,"\" does not contain any doas data!")
-        }
-    } else if(!any(rawdatfolder %in% lf.raw.dir)){
+    if (!length(lf.raw.dir)) {
         if (rawdataOnly || force.write.daily) {
-            stop("No raw data available for specified timerange!")
+            if(!dir.exists(dirname(dataDir))){
+                stop("Folder \"",dirname(dataDir),"\" does not exist!")
+            } else if(!dir.exists(dataDir)){
+                stop("Folder \"",dataDir,"\" does not exist!")
+            } else {
+                stop("No raw data available for specified timerange!\n",
+                "Folder \"",dataDir,"\" does not contain any doas data!")
+            }
         } else if (!any(rawdatfolder %in% sub('.bin', '', lf_daily, fixed = TRUE))) {
             stop("No data available for specified timerange!")
         }

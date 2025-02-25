@@ -3,6 +3,15 @@
 library(data.table)
 library(ibts)
 
+## main function to read sonic data
+read_sonic <- function(FilePath, sonic_type = 
+    c('windmaster', 'hs')[1], tz = 'Etc/GMT-1') {
+    switch(sonic_type[1]
+        , windmaster = read_windmaster_ascii(FilePath, tz = tz)
+        , hs = read_hs_ascii(FilePath, tz = tz)
+        , stop('Sonic type not valid')
+    )
+}
 
 #### To Do:
 # - neue readWindMaster Routine
@@ -187,3 +196,68 @@ readSonicEVS_csv <- function(FilePath, tz = "Etc/GMT-1"){
 	out
 }
 
+# HS Sonic Agroscope Wauwilermoos
+read_hs_ascii <- function(FilePath, tz = "Etc/GMT-1"){
+    # be verbose
+    cat("File:", path.expand(FilePath), "- ")
+	### read File
+    raw <- readLines(FilePath, warn = FALSE)
+    # filter out erroneous multibyte strings
+    raw <- raw[grepl('^\\d{4}-\\d{2}-\\d{2}T\\d{2}[0-9.:]+Z,([^,]+,){2}([0-9.+-]+,){4}([0-9.+-]+,){2}[^,]+$', raw, 
+        useBytes = TRUE)]
+    out <- fread(text = raw, header = FALSE, na.strings = '999.99', showProgress = FALSE, 
+        blank.lines.skip = TRUE)
+    # check if file is empty
+	if(nrow(out) == 0){
+        cat('no valid data\n')
+		return(NULL)
+	}
+    # check if first column has class POSIXct
+    if (out[, inherits(class(V1), 'POSIXct')]) {
+        out[, V1 := fast_strptime(V1, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE)]
+    }
+    # check which columns to convert columns if necessary
+    vnums <- paste0('V', 4:7)
+    is.char <- out[, sapply(.SD, is.character), .SDcols = vnums]
+    # convert to numeric
+    out[, vnums[is.char] := {
+        lapply(.SD, as.numeric)
+    }, .SDcols = vnums[is.char]]
+    # remove NA lines that come from conversion
+    out <- na.omit(out)
+    if (out[, .N == 0]) {
+        cat('no valid data\n')
+        return(NULL)
+    }
+    # be verbose and print sonic names:
+    sonic_label <- 'HS'
+    cat(paste0("data recorded by sonic-", tolower(sonic_label), "\n"))
+    # fix time etc.
+    out[, c(
+        # remove columns
+        'V1', 'V2', 'V3', 'V8', 'V9', 'V10',
+        # add columns
+        'sonic', 'Time', 'Hz'
+        ) := {
+        # get Hz (faster than as.factor(sub('[.].*', '', V1)) !
+        Hz <- round(median(tabulate(trunc(as.numeric(V1) - as.numeric(V1[1])))), -1)
+        # return list
+        list(
+            # remove columns
+            NULL, NULL, NULL, NULL, NULL, NULL,
+            # sonic
+            sonic_label,
+            # Time
+            V1,
+            # Hz
+            Hz
+            )
+    }]
+    ### set Output names and order
+    setnames(out, c("u", "v", "w", "T", "sonic", "Time","Hz"))
+    setcolorder(out,c("Time","Hz","u","v","w","T", "sonic"))
+    # check if GillBug affected sonic
+    setattr(out, 'GillBug', sonic_label %in% c('C', 'D'))
+    # return
+    out
+}

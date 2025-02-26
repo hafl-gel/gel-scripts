@@ -187,33 +187,61 @@ ht_merged_daily <- function(path_ht = NULL, path_sonic = NULL, path_merged = NUL
 }
 
 
-# read HT8700 data
+# main function to read HT8700 raw data
 read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
-	### get Date
-	bn <- basename(FilePath)
-	if(!grepl("^ht8700_", bn)){
-        stop('data filename not valid')
-	}
-    if (!any(grepl('R.utils', installed.packages()[, 'Package']))) {
-        stop('package "R.utils" must be installed to process gz files!')
-    }
     # be verbose
     cat("File:", path.expand(FilePath), "- ")
-	Date <- gsub("^ht8700_.*_([0-9]{8})_.*", "\\1", bn)
+	# get file name
+	bn <- basename(FilePath)
+    # check file name
+    if (is_old_structure <- grepl('^ht8700_', bn)) {
+        # old data structure on sonic boxes
+        data_pattern <- '^\\d{2}[0-9.:]+,([ A-Z0-9.+-]+,){18}[[ 0-9.+-]+$'
+        # possibly gzipped files -> need R.utils package
+        if (!any(grepl('R.utils', installed.packages()[, 'Package']))) {
+            stop('package "R.utils" must be installed to process gz files!')
+        }
+        # set data time zone
+        tz_data <- 'Etc/GMT-1'
+    } else if (grepl('^(py_)?fnf_01_ht8700', bn)) {
+        # new data structure on loggerbox
+        data_pattern <- '^\\d{4}-\\d{2}-\\d{2}T\\d{2}[0-9.:]+Z,([ A-Z0-9.+-]+,){18}[[ 0-9.+-]+$'
+        # set data time zone
+        tz_data <- 'UTC'
+    } else {
+        # wrong file name
+        stop('data filename not valid')
+    }
 	### read File
     raw <- readLines(FilePath, warn = FALSE)
     # filter out erroneous multibyte strings
-    raw <- raw[grepl('^\\d{2}[0-9.:]+,([ A-Z0-9.+-]+,){18}[[ 0-9.+-]+$', raw, useBytes = TRUE)]
+    raw <- raw[grepl(data_pattern, raw, useBytes = TRUE)]
+    # fix one single line
     if (length(raw) == 1) {
         raw <- c(raw, '')
     }
     # read from string
-    out <- fread(text = raw, blank.lines.skip = TRUE,
-        header = FALSE, na.strings = '999.99', showProgress = FALSE)
+    out <- fread(text = raw, blank.lines.skip = TRUE, tz = tz_data,
+        header = FALSE, na.strings = '999.99', showProgress = FALSE,
+    )
     # check empty
     if (nrow(out) == 0) {
         cat('no valid data!\n')
         return(NULL)
+    }
+    # fix time column
+    if (is_old_structure) {
+        # get date
+        Date <- gsub("^ht8700_.*_([0-9]{8})_.*", "\\1", bn)
+        # fix time
+        out[, Time := fast_strptime(paste(Date, V1), lt = FALSE, 
+            format = "%Y%m%d %H:%M:%OS", tz = tz_data)]
+    } else if (out[, is.character(V1)]) {
+        # V1 was not converted to POSIXct by fread() call
+        out[, Time := fast_strptime(V1, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE, tz = tz_data)]
+    } else {
+        # V1 should be POSIXct from fread() call
+        out[, Time := V1]
     }
     # convert column types
     char_cols <- paste0('V', c(1, 2, 17, 18, 20))
@@ -232,8 +260,6 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
         cat('file empty\n')
         return(NULL)
     }
-    # fix time etc.
-    out[, Time := fast_strptime(paste(Date, V1), lt = FALSE, format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")]
     # fix column names
     setnames(out,
         c(
@@ -264,6 +290,8 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
     # return
     out
 }
+
+# read_ht8700('~/LFE/08_gelhub/wauwilermoos/ht8700/fnf_01_ht8700_2025_02_21.csv')[]
 
 # merge sonic & ht8700
 library(Rcpp)

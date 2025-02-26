@@ -4,11 +4,10 @@ library(data.table)
 library(ibts)
 
 ## main function to read sonic data
-read_sonic <- function(FilePath, sonic_type = 
-    c('windmaster', 'hs')[1], tz = 'Etc/GMT-1') {
+read_sonic <- function(FilePath, sonic_type = c('windmaster', 'hs')[1]) {
     switch(sonic_type[1]
-        , windmaster = read_windmaster_ascii(FilePath, tz = tz)
-        , hs = read_hs_ascii(FilePath, tz = tz)
+        , windmaster = read_windmaster_ascii(FilePath)
+        , hs = read_hs_ascii(FilePath)
         , stop('Sonic type not valid')
     )
 }
@@ -197,7 +196,7 @@ readSonicEVS_csv <- function(FilePath, tz = "Etc/GMT-1"){
 }
 
 # HS Sonic Agroscope Wauwilermoos
-read_hs_ascii <- function(FilePath, tz = "Etc/GMT-1"){
+read_hs_ascii <- function(FilePath, tz = "UTC"){
     # be verbose
     cat("File:", path.expand(FilePath), "- ")
 	### read File

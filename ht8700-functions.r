@@ -244,7 +244,7 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
         out[, Time := V1]
     }
     # convert column types
-    char_cols <- paste0('V', c(1, 2, 17, 18, 20))
+    char_cols <- paste0('V', c(2, 17, 18, 20))
     num_cols <- paste0('V', 3:16)
     suppressWarnings(out[, (char_cols) := lapply(.SD, as.character), .SDcols = char_cols])
     suppressWarnings(out[, (num_cols) := lapply(.SD, as.numeric), .SDcols = num_cols])
@@ -260,10 +260,11 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
         cat('file empty\n')
         return(NULL)
     }
+    # remove V1
+    out[, V1 := NULL]
     # fix column names
     setnames(out,
         c(
-            'tstring', # column 1
             'sn', # column 2
             'nh3_ppb', # column 3
             'nh3_ugm3', # column 4
@@ -286,12 +287,12 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
             'Time' # column 21
         )
     )
+    # place Time column first
+    setcolorder(out, 'Time')
     cat('done\n')
     # return
     out
 }
-
-# read_ht8700('~/LFE/08_gelhub/wauwilermoos/ht8700/fnf_01_ht8700_2025_02_21.csv')[]
 
 # merge sonic & ht8700
 library(Rcpp)

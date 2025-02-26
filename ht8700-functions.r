@@ -279,7 +279,7 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
             'temp_mct', # column 13
             'temp_mct_housing', # column 14
             'laser_current', # column 15
-            'Ref_Road_2F', # column 16
+            'ref_road_2f', # column 16
             'alarm_lower_bit', # column 17
             'alarm_upper_bit', # column 18
             'cleaning_flag', # column 19

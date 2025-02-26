@@ -15,12 +15,12 @@ read_sonic <- function(FilePath, sonic_type = c('windmaster', 'hs')[1]) {
 #### To Do:
 # - neue readWindMaster Routine
 # - Plotting & anderes Gheu aufräumen
-read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
+read_windmaster_ascii <- function(FilePath){
 	### get Date
 	bn <- basename(FilePath)
 	if(!grepl("^data_", bn)){
 		# run old script
-		return(read_windmaster_old_ascii(FilePath, tz))
+		return(read_windmaster_old_ascii(FilePath))
 	}
     if (grepl('[.]gz$', bn)) {
         if (!any(grepl('R.utils', installed.packages()[, 'Package']))) {
@@ -114,7 +114,7 @@ read_windmaster_ascii <- function(FilePath, tz = "Etc/GMT-1"){
     out
 }
 
-read_windmaster_old_ascii <- function(FilePath, tz = "Etc/GMT-1"){
+read_windmaster_old_ascii <- function(FilePath){
 	### get Date
 	bn <- basename(FilePath)
 	Date <- gsub("^..._([0-9]{6})_.*","\\1",bn)
@@ -196,7 +196,7 @@ readSonicEVS_csv <- function(FilePath, tz = "Etc/GMT-1"){
 }
 
 # HS Sonic Agroscope Wauwilermoos
-read_hs_ascii <- function(FilePath, tz = "UTC"){
+read_hs_ascii <- function(FilePath){
     # be verbose
     cat("File:", path.expand(FilePath), "- ")
 	### read File
@@ -205,7 +205,7 @@ read_hs_ascii <- function(FilePath, tz = "UTC"){
     raw <- raw[grepl('^\\d{4}-\\d{2}-\\d{2}T\\d{2}[0-9.:]+Z,([^,]+,){2}([0-9.+-]+,){4}([0-9.+-]+,){2}[^,]+$', raw, 
         useBytes = TRUE)]
     out <- fread(text = raw, header = FALSE, na.strings = '999.99', showProgress = FALSE, 
-        blank.lines.skip = TRUE)
+        blank.lines.skip = TRUE, tz = 'UTC')
     # check if file is empty
 	if(nrow(out) == 0){
         cat('no valid data\n')
@@ -213,7 +213,7 @@ read_hs_ascii <- function(FilePath, tz = "UTC"){
 	}
     # check if first column has class POSIXct
     if (out[, inherits(class(V1), 'POSIXct')]) {
-        out[, V1 := fast_strptime(V1, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE)]
+        out[, V1 := fast_strptime(V1, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE, tz = 'UTC')]
     }
     # check which columns to convert columns if necessary
     vnums <- paste0('V', 4:7)

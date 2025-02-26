@@ -1,5 +1,5 @@
 
-
+library(Rcpp)
 library(data.table)
 library(ibts)
 
@@ -196,7 +196,7 @@ readSonicEVS_csv <- function(FilePath, tz = "Etc/GMT-1"){
 }
 
 # HS Sonic Agroscope Wauwilermoos
-read_hs_ascii <- function(FilePath){
+read_hs_ascii_old <- function(FilePath){
     # be verbose
     cat("File:", path.expand(FilePath), "- ")
 	### read File
@@ -259,4 +259,100 @@ read_hs_ascii <- function(FilePath){
     setattr(out, 'GillBug', sonic_label %in% c('C', 'D'))
     # return
     out
+}
+
+cppFunction('
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <Rcpp.h>
+Rcpp::List hs_read_cpp(String filename) {
+    // open file
+    std::ifstream input{filename};
+    if (!input.is_open()) {
+        Rcout << "Could not read file: " << filename.get_cstring() << "\\n";
+        return R_NilValue;
+    }
+    // create output
+    CharacterVector col1_time(9e5);
+    CharacterVector col4_u(9e5);
+    CharacterVector col5_v(9e5);
+    CharacterVector col6_w(9e5);
+    CharacterVector col7_T(9e5);
+    int cline = 0;
+    int n_fields = 10 - 1;
+    int field = 0;
+    std::vector<std::string> line(n_fields + 1);
+    // loop over lines
+    char c;
+    std::string s;
+    while (input.get(c)) {
+        // check for comma
+        if (c == \',\') {
+            // add s to current line vector
+            line[field] = s;
+            // increase field counter
+            field += 1;
+            // reset s
+            s.clear();
+        } else if (c == \'\\n\') {
+        // check for newline -> newline
+            // add s to current line vector
+            line[field] = s;
+            // check field counter
+            if (field == n_fields) {
+                // line ok
+                // assign to vectors
+                col1_time[cline] = line[0];
+                col4_u[cline] = line[3];
+                col5_v[cline] = line[4];
+                col6_w[cline] = line[5];
+                col7_T[cline] = line[6];
+                // else drop readings
+            }
+            // reset field counter
+            field = 0;
+            // reset s
+            s.clear();
+            // increase line counter
+            cline += 1;
+        } else if (field > n_fields) {
+            // check field counter > number of columns -> newline
+            // reset field counter
+            field = 0;
+            // drop readings
+            // reset s
+            s.clear();
+            // increase line counter
+            cline += 1;
+        } else if (field < 7 && field != 1 && field != 2) {
+            // append to string or new line
+            s += c;
+        }
+    }
+    return Rcpp::List::create(
+		_["time_string"] = col1_time,
+		_["u_string"] = col4_u,
+		_["v_string"] = col5_v,
+		_["w_string"] = col6_w,
+		_["t_string"] = col7_T
+    );
+}
+')
+
+# HS Sonic Agroscope Wauwilermoos (new function using C++)
+read_hs_ascii <- function(FilePath) {
+    # be verbose
+    cat("File:", path.expand(FilePath), "- ")
+    raw <- hs_read_cpp(normalizePath(FilePath))
+    out <- as.data.table(raw)
+    out[, Time := fast_strptime(time_string, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE)]
+    as_num <- paste(c('u', 'v', 'w', 't'), 'string', sep = '_')
+    out[, (as_num) := suppressWarnings(lapply(.SD, as.numeric)), .SDcols = as_num]
+    out <- na.omit(out)
+    cat(paste0("data recorded by HS sonic\n"))
+    out[, {
+        .(Time, Hz = round(1 / median(as.numeric(diff(Time)))), u = u_string, v = v_string, 
+            w = w_string, T = t_string, sonic = 'HS')
+    }]
 }

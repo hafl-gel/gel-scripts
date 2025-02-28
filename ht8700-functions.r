@@ -221,7 +221,7 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
         raw <- c(raw, '')
     }
     # read from string
-    out <- fread(text = raw, blank.lines.skip = TRUE, tz = tz_data,
+    out <- fread(text = raw, blank.lines.skip = TRUE,
         header = FALSE, na.strings = '999.99', showProgress = FALSE,
     )
     # check empty

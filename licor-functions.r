@@ -4,47 +4,7 @@ library(lubridate)
 library(Rcpp)
 
 
-
-col_names <- c('Time', 'DiagVal', 'CO2D', 'H2OD', 'Temp', 'Pres', 'Cooler', 'SFVin', 'H2OMF',
-    'DewPt', 'CO2SS', 'CO2AWO')
-columns <- c(1, 3, 5:14)
-
-col_classes <- c('POSIXct', 'character', 'numeric', 'character', 
-    rep('numeric', 10), 'character', 'character')
-
-# f <- '~/LFE/08_gelhub/wauwilermoos/licor/py_fnf_01_licor_2025_02_19.csv'
-f <- '~/LFE/08_gelhub/wauwilermoos/licor/py_fnf_01_licor_2025_02_20.csv'
-# f <- '~/LFE/08_gelhub/wauwilermoos/licor/py_fnf_01_licor_2025_02_24.csv'
-rm(xx, yy, bzz, czz, dzz)
-for (i in 1:10) gc()
-system.time({
-    xx <- readLines(f)
-    yy <- gsub('[,)]*[(][^ ]+ ', ',', xx)
-    bzz <- na.omit(fread(text = yy, select = columns, col.names = col_names, 
-        colClasses = col_classes, fill = TRUE))
-})
-rm(xx, yy, bzz)
-for (i in 1:10) gc()
-system.time({
-    czz <- read_licor_data(f)
-})
-rm(czz)
-
-as.data.table(licor_read_cpp(normalizePath(f)))
-
-f_test <- 'test'
-uu <- licor_read_cpp(normalizePath(f_test))
-head(as.data.table(uu), n = 8)
-
-aa <- readLines(f_test, n = 8)
-
-
-for (i in 1:10) gc()
-f <- '~/LFE/08_gelhub/wauwilermoos/sonic/py_fnf_01_sonic_2025_02_20.csv'
-system.time({
-    czz <- fread(f, fill = TRUE)
-})
-
+## C++ helper function
 cppFunction('
 #include <iostream>
 #include <fstream>
@@ -157,6 +117,7 @@ Rcpp::List licor_read_cpp(String filename) {
 }
 ')
 
+# R wrapper, main function
 read_licor_data <- function(FilePath) {
     raw_list <- licor_read_cpp(normalizePath(FilePath))
     out <- as.data.table(raw_list)

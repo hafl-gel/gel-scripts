@@ -275,10 +275,10 @@ Rcpp::List hs_read_cpp(String filename) {
     }
     // create output
     CharacterVector col1_time(9e5);
-    CharacterVector col4_u(9e5);
-    CharacterVector col5_v(9e5);
-    CharacterVector col6_w(9e5);
-    CharacterVector col7_T(9e5);
+    NumericVector col4_u(9e5);
+    NumericVector col5_v(9e5);
+    NumericVector col6_w(9e5);
+    NumericVector col7_T(9e5);
     int cline = 0;
     int n_fields = 10 - 1;
     int field = 0;
@@ -304,10 +304,10 @@ Rcpp::List hs_read_cpp(String filename) {
                 // line ok
                 // assign to vectors
                 col1_time[cline] = line[0];
-                col4_u[cline] = line[3];
-                col5_v[cline] = line[4];
-                col6_w[cline] = line[5];
-                col7_T[cline] = line[6];
+                col4_u[cline] = std::stod(line[3]);
+                col5_v[cline] = std::stod(line[4]);
+                col6_w[cline] = std::stod(line[5]);
+                col7_T[cline] = std::stod(line[6]);
                 // else drop readings
             }
             // reset field counter
@@ -316,6 +316,9 @@ Rcpp::List hs_read_cpp(String filename) {
             s.clear();
             // increase line counter
             cline += 1;
+        } else if (field < 7 && field != 1 && field != 2) {
+            // append to string or new line
+            s += c;
         } else if (field > n_fields) {
             // check field counter > number of columns -> newline
             // reset field counter
@@ -325,9 +328,6 @@ Rcpp::List hs_read_cpp(String filename) {
             s.clear();
             // increase line counter
             cline += 1;
-        } else if (field < 7 && field != 1 && field != 2) {
-            // append to string or new line
-            s += c;
         }
     }
     return Rcpp::List::create(
@@ -347,8 +347,6 @@ read_hs_ascii <- function(FilePath) {
     raw <- hs_read_cpp(normalizePath(FilePath))
     out <- as.data.table(raw)
     out[, Time := fast_strptime(time_string, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE)]
-    as_num <- paste(c('u', 'v', 'w', 't'), 'string', sep = '_')
-    out[, (as_num) := suppressWarnings(lapply(.SD, as.numeric)), .SDcols = as_num]
     out <- na.omit(out)
     cat(paste0("data recorded by HS sonic\n"))
     out[, {

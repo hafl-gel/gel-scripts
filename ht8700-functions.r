@@ -2,6 +2,7 @@
 
 library(data.table)
 library(ibts)
+library(Rcpp)
 
 select_files <- function(ht_path, sonic_path, from, to) {
     # read ht folder
@@ -188,7 +189,7 @@ ht_merged_daily <- function(path_ht = NULL, path_sonic = NULL, path_merged = NUL
 
 
 # main function to read HT8700 raw data
-read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
+read_ht8700_old <- function(FilePath, tz = "Etc/GMT-1"){
     # be verbose
     cat("File:", path.expand(FilePath), "- ")
 	# get file name
@@ -294,9 +295,171 @@ read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
     out
 }
 
-# merge sonic & ht8700
-library(Rcpp)
+# new main function to read HT8700 raw data
+read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
+    # be verbose
+    cat("File:", path.expand(FilePath), "- ")
+	# get file name
+	bn <- basename(FilePath)
+    # check file name
+    if (is_old_structure <- grepl('^ht8700_', bn)) {
+        # read with old function
+        return(read_ht8700_old(FilePath, tz = tz))
+    } else if (!grepl('^(py_)?fnf_01_ht8700', bn)) {
+        # wrong file name
+        stop('data filename not valid')
+    }
+	### read File
+    out <- as.data.table(ht8700_read_cpp(normalizePath(FilePath)))
+    # check empty
+    if (nrow(out) == 0) {
+        cat('no valid data!\n')
+        return(NULL)
+    }
+    # fix time column
+    out[, Time := fast_strptime(time_string, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE, tz = 'UTC')]
+    # remove NA lines that come from conversion
+    out <- na.omit(out)
+    # check if empty again
+    if (out[, .N == 0]) {
+        cat('file empty\n')
+        return(NULL)
+    }
+    # remove V1
+    out[, time_string := NULL]
+    # place Time column first
+    setcolorder(out, 'Time')
+    cat('done\n')
+    # return
+    out
+}
 
+# C++ helper function
+cppFunction('
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <Rcpp.h>
+Rcpp::List ht8700_read_cpp(String filename) {
+    // open file
+    std::ifstream input{filename};
+    if (!input.is_open()) {
+        Rcout << "Could not read file: " << filename.get_cstring() << "\\n";
+        return R_NilValue;
+    }
+    // create output
+    CharacterVector col1_time(9e5);
+    CharacterVector col2(9e5);
+    CharacterVector col17(9e5);
+    CharacterVector col18(9e5);
+    CharacterVector col20(9e5);
+    IntegerVector col19(9e5);
+    NumericVector col3(9e5);
+    NumericVector col4(9e5);
+    NumericVector col5(9e5);
+    NumericVector col6(9e5);
+    NumericVector col7(9e5);
+    NumericVector col8(9e5);
+    NumericVector col9(9e5);
+    NumericVector col10(9e5);
+    NumericVector col11(9e5);
+    NumericVector col12(9e5);
+    NumericVector col13(9e5);
+    NumericVector col14(9e5);
+    NumericVector col15(9e5);
+    NumericVector col16(9e5);
+    int cline = 0;
+    int n_fields = 20 - 1;
+    int field = 0;
+    std::vector<std::string> line(n_fields + 1);
+    // loop over lines
+    char c;
+    std::string s;
+    while (input.get(c)) {
+        // check for comma
+        if (c == \',\') {
+            // add s to current line vector
+            line[field] = s;
+            // increase field counter
+            field += 1;
+            // reset s
+            s.clear();
+        } else if (c == \'\\n\') {
+        // check for newline -> newline
+            // add s to current line vector
+            line[field] = s;
+            // check field counter
+            if (field == n_fields) {
+                // line ok
+                // assign to vectors
+                col1_time[cline] = line[0];
+                col2[cline] = line[1];
+                col3[cline] = std::stod(line[2]);
+                col4[cline] = std::stod(line[3]);
+                col5[cline] = std::stod(line[4]);
+                col6[cline] = std::stod(line[5]);
+                col7[cline] = std::stod(line[6]);
+                col8[cline] = std::stod(line[7]);
+                col9[cline] = std::stod(line[8]);
+                col10[cline] = std::stod(line[9]);
+                col11[cline] = std::stod(line[10]);
+                col12[cline] = std::stod(line[11]);
+                col13[cline] = std::stod(line[12]);
+                col14[cline] = std::stod(line[13]);
+                col15[cline] = std::stod(line[14]);
+                col16[cline] = std::stod(line[15]);
+                col17[cline] = line[16];
+                col18[cline] = line[17];
+                col19[cline] = std::stoi(line[18]);
+                col20[cline] = line[19];
+                // else drop readings
+            }
+            // reset field counter
+            field = 0;
+            // reset s
+            s.clear();
+            // increase line counter
+            cline += 1;
+        } else if (field <= n_fields) {
+            // append to string or new line
+            s += c;
+        } else {
+            // check field counter > number of columns -> newline
+            // reset field counter
+            field = 0;
+            // drop readings
+            // reset s
+            s.clear();
+            // increase line counter
+            cline += 1;
+        }
+    }
+    return Rcpp::List::create(
+		_["time_string"] = col1_time,
+        _["sn"] = col2,
+        _["nh3_ppb"] = col3,
+        _["nh3_ugm3"] = col4,
+        _["rh_int"] = col5,
+        _["temp_int"] = col6,
+        _["temp_amb"] = col7,
+        _["press_amb"] = col8,
+        _["oss"] = col9,
+        _["peak_pos"] = col10,
+        _["temp_leaser_chip"] = col11,
+        _["temp_leaser_housing"] = col12,
+        _["temp_mct"] = col13,
+        _["temp_mct_housing"] = col14,
+        _["laser_current"] = col15,
+        _["ref_road_2f"] = col16,
+        _["alarm_lower_bit"] = col17,
+        _["alarm_upper_bit"] = col18,
+        _["cleaning_flag"] = col19,
+        _["notused"] = col20
+    );
+}
+')
+
+# merge sonic & ht8700
 sourceCpp(code = '
 #include <Rcpp.h>
 using namespace Rcpp;

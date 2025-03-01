@@ -509,24 +509,28 @@ List match_times(NumericVector time1, NumericVector time2, double deltat)
 # merge sonic & ht8700 data based on time
 #   -> output contains the same times as 'basis'
 #   -> values from 'draw' will be repeated or dropped to match 'basis' times
-merge_data <- function(basis, draw) {
+#   -> licor data is optional and must be provided by 'draw_licor'
+merge_data <- function(basis, draw, draw_licor = NULL) {
     if (nrow(basis) == 0 || nrow(draw) == 0) {
         return(
             data.table(
-                Time = character(0), 
-                nh3_ppb = character(0),
-                nh3_ugm3 = character(0), 
-                temp_amb = character(0), 
-                press_amb = character(0), 
-                oss = character(0), 
-                u = character(0), 
-                v = character(0), 
-                w = character(0), 
-                T = character(0), 
+                Time = POSIXct(0), 
+                nh3_ppb = numeric(0),
+                nh3_ugm3 = numeric(0), 
+                h2o_mmolm3 = numeric(0),
+                co2_mmolm3 = numeric(0),
+                temp_amb = numeric(0), 
+                press_amb = numeric(0), 
+                oss = numeric(0), 
+                u = numeric(0), 
+                v = numeric(0), 
+                w = numeric(0), 
+                T = numeric(0), 
                 sonic = character(0)
             )
         )
     }
+    hier weiter !!!!
     # times
     t_basis <- basis[, as.numeric(Time)]
     t_draw <- draw[, as.numeric(Time)]

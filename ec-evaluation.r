@@ -760,11 +760,11 @@ fix_defaults <- function(x, vars) {
 }
 
 ec_ht8700 <- function(
-		sonic_directory, ht_directory
+		sonic_directory, ht_directory, licor_directory
 		, start_time = NULL
 		, end_time = NULL
 		, avg_period = '30mins'
-		, tz_times = 'Etc/GMT-1'
+		, tz_times = 'CET' # local time zone
 		, dev_north = NULL
         , declination = NULL
 		, z_ec = NULL
@@ -899,8 +899,24 @@ ec_ht8700 <- function(
 
     # get data
     # ------------------------------------------------------------------------------
-    sonic_files <- dir(sonic_directory, pattern = '^data_sonic-.')
-    ht_files <- dir(ht_directory, pattern = '^ht8700_sonic-.')
+    sonic_files <- dir(sonic_directory, pattern = '^(py_)?fnf_.*_sonic_.*')
+    if (sonic_old_format <- length(sonic_files) == 0) {
+        # old loggerbox format
+        sonic_files <- dir(sonic_directory, pattern = '^data_sonic-.')
+    }
+    sonic_files <- sort(sonic_files)
+    ht_files <- dir(ht_directory, pattern = '^(py_)?fnf_.*_ht8700_.*')
+    if (ht_old_format <- length(ht_files) == 0) {
+        # old loggerbox format
+        ht_files <- dir(ht_directory, pattern = '^ht8700_sonic-.')
+    }
+    ht_files <- sort(ht_files)
+    if (!missing(licor_directory)) {
+        licor_files <- dir(licor_directory, pattern = '^(py_)?fnf_.*_licor_.*')
+        licor_files <- sort(licor_files)
+    } else {
+        licor_files <- NULL
+    }
 
     # parse time diff
     avg_secs <- parse_time_diff(avg_period)
@@ -914,10 +930,20 @@ ec_ht8700 <- function(
 
     # fix start_time
     if (length(start_time) == 1 && start_time == 'first') {
+        if (sonic_old_format) {
+            sonic_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
+        } else {
+            sonic_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
+        }
+        if (ht_old_format) {
+            ht_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
+        } else {
+            ht_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
+        }
         start_time <- min(
-            strptime(sub('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', sonic_files[1]),
+            strptime(sub(sonic_pattern[1], sonic_pattern[2], sonic_files[1]),
                 '%Y%m%d%H%M%S', tz = tz_times),
-            strptime(sub('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', ht_files[1]),
+            strptime(sub(ht_pattern[1], ht_pattern[2], ht_files[1]),
                 '%Y%m%d%H%M%S', tz = tz_times)
             )
     } else if (!is.null(start_time)) {
@@ -928,12 +954,23 @@ ec_ht8700 <- function(
     if (is.null(end_time)) {
         end_time <- start_time + avg_secs
     } else if (length(end_time) == 1 && end_time == 'last') {
+        if (sonic_old_format) {
+            sonic_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
+        } else {
+            sonic_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
+        }
+        if (ht_old_format) {
+            ht_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
+        } else {
+            ht_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
+        }
+        # last date + 24h
         end_time <- min(
-            strptime(sub('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', tail(sonic_files, 1)),
+            strptime(sub(sonic_pattern[1], sonic_pattern[2], tail(sonic_files, 1)),
                 '%Y%m%d%H%M%S', tz = tz_times),
-            strptime(sub('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', tail(ht_files, 1)),
+            strptime(sub(ht_pattern[1], ht_pattern[2], tail(ht_files, 1)),
                 '%Y%m%d%H%M%S', tz = tz_times)
-            )
+            ) + 24 * 3600
     } else {
         end_time <- parse_date_time3(end_time, tz = tz_times)
     }
@@ -943,27 +980,114 @@ ec_ht8700 <- function(
         start_time <- end_time - avg_secs
     }
 
-    # switch to sonic/ht tzone Etc/GMT-1
-    if (tz_times != 'Etc/GMT-1') {
-        start_time <- with_tz(start_time, 'Etc/GMT-1')
-        end_time <- with_tz(end_time, 'Etc/GMT-1')
-    }
+    # # get winter time for old data format
+    # start_cet <- with_tz(start_time, 'Etc/GMT-1')
+    # end_cet <- with_tz(end_time, 'Etc/GMT-1')
+    # -> fix when reading
+    # get UTC for new data format
+    start_utc <- with_tz(start_time, 'UTC')
+    end_utc <- with_tz(end_time, 'UTC')
 
     # check & extend start/end times
-    if (length(start_time) != length(end_time)) {
+    if (length(start_utc) != length(end_utc)) {
         stop('arguments "start_time" and "end_time" must have equal lengths!')
-    } else if (length(start_time) == 1) {
-        start_time <- seq(start_time, end_time, by = avg_secs)
-        end_time <- start_time + avg_secs
+    } else if (length(start_utc) == 1) {
+        start_utc <- seq(start_utc, end_utc, by = avg_secs)
+        end_utc <- start_utc + avg_secs
     }
 
-    # create vector of start/end dates
-    end_dates <- start_dates <- unique(
-        date(c(start_time, end_time))
-    )
+    # create vector of start/end dates as integers
+    dates_utc <- as.integer(format(unique(
+        date(c(start_utc, end_utc))
+    ), '%Y%m%d'))
+    # old logging format
+    dates_cet <- as.integer(format(unique(
+        date(c(
+            with_tz(start_utc, 'Etc/GMT-1'), 
+            with_tz(end_utc, 'Etc/GMT-1')
+        ))
+    ), '%Y%m%d'))
+    # dates in tz_times (for output)
+    dates_tzt <- format(unique(
+        date(c(
+            with_tz(start_utc, tz_times), 
+            with_tz(end_utc, tz_times)
+        ))
+    ), '%Y-%m-%d')
 
     # select available daily files
-    files <- select_files(ht_directory, sonic_directory, start_dates, end_dates)
+    {
+        # check sonic files
+        if (sonic_old_format) {
+            # get dates
+            sonic_dates <- as.integer(sub('.*_(\\d{8})_\\d{6}.*', '\\1', sonic_files))
+            # use winter time
+            sonic_valid <- match(sonic_dates, dates_cet, nomatch = 0)
+        } else {
+            # select only py_*
+            sonic_files <- grep('^py', sonic_files, value = TRUE)
+            # get dates
+            sonic_dates <- as.integer(sub('.*_(\\d{4})_(\\d{2})_(\\d{2})\\.csv', '\\1\\2\\3',
+                    sonic_files))
+            # use UTC
+            sonic_valid <- match(sonic_dates, dates_utc, nomatch = 0)
+        }
+        if (all(sonic_valid == 0)) {
+            cat('No sonic files within given time range!\n')
+            return(NULL)
+        }
+
+        # check ht files
+        if (ht_old_format) {
+            # get dates
+            ht_dates <- as.integer(sub('.*_(\\d{8})_\\d{6}.*', '\\1', ht_files))
+            # use winter time
+            ht_valid <- match(ht_dates, dates_cet, nomatch = 0)
+        } else {
+            # select only py_*
+            ht_files <- grep('^py', ht_files, value = TRUE)
+            # get dates
+            ht_dates <- as.integer(sub('.*_(\\d{4})_(\\d{2})_(\\d{2})\\.csv', '\\1\\2\\3',
+                    ht_files))
+            # use UTC
+            ht_valid <- match(ht_dates, dates_utc, nomatch = 0)
+        }
+        if (all(ht_valid == 0)) {
+            cat('No HT8700 files within given time range!\n')
+            return(NULL)
+        }
+        # get intersect
+        i_valid <- setdiff(intersect(ht_valid, sonic_valid), 0)
+        if (length(i_valid) == 0) {
+            cat('No parallel measurement of HT8700 and sonic available for given time range!\n')
+            return(NULL)
+        }
+        # get files to read
+        ht_read <- ht_files[ht_valid %in% i_valid]
+        sonic_read <- sonic_files[sonic_valid %in% i_valid]
+
+        # check licor
+        if (!is.null(licor_files)) {
+            # select only py_*
+            licor_files <- grep('^py', licor_files, value = TRUE)
+            # get dates
+            licor_dates <- as.integer(sub('.*_(\\d{4})_(\\d{2})_(\\d{2})\\.csv', '\\1\\2\\3',
+                    licor_files))
+            # utc
+            licor_read <- licor_files[licor_dates %in% dates_utc[i_valid]]
+        } else {
+            licor_read <- NULL
+        }
+
+        # create files output
+        files <- list(
+            # dates in tz_times
+            dates = dates_tzt[i_valid],
+            sonic = file.path(path_sonic, sonic_read),
+            ht8700 = file.path(path_ht8700, ht_read),
+            licor = file.path(path_licor, licor_read)
+        )
+    }
 
     # create output list
     result_list <- vector(mode = 'list', length(files$dates))
@@ -977,16 +1101,21 @@ ec_ht8700 <- function(
 
     cat("\n************************************************************\n")
     cat("HT8700 EC evaluation\n")
+    if (no_licor <- length(files$licor) == 0) {
+        cat("!!! no licor data available -> H2O corrections switched off\n")
+    } else {
+        cat("-> licor data available. Fluxes will be corrected for H2O effects...\n")
+    }
     cat("************************************************************\n")
 
     # loop over dates
-    for (day in files$dates) {
+    for (day in seq_along(files$dates)) {
 
         # day <- files$dates[1]
         cat(
             '\n\n-------------------------------------------',
             '\nReading raw data for', 
-            day_nice <- sub('(\\d{4})(\\d{2})(\\d{2})', '\\3.\\2.\\1', day),
+            files$dates[[day]],
             '\n-------------------------------------------\n\n'
         )
 
@@ -994,7 +1123,8 @@ ec_ht8700 <- function(
         # ------------------------------------------------------------------------------
         cat('~~~\nReading sonic files - ')
 
-    ## hier bin ich!!! -> use Rcpp functions to read sonic & ht with from/to
+    ## hier bin ich!!! -> include licor measurements + add co2 & h2o to variables in arguments
+        # hier bin ich!!! -> add uncorrected nh3 flux + nh3 flux corrected if licor flux av.
 
         # read sonic files
         capture.output(
@@ -1026,9 +1156,25 @@ ec_ht8700 <- function(
         cat('done\nBad alarms:', na1 - na0, '\nValues below OSS:', 
             ht[, sum(oss < oss_threshold)], '\n')
 
+        # check licor data
+        licor <- NULL
+        if (!no_licor) {
+            cat('Reading LI-7500 files - ')
+            if (!is.na(files$licor[day])) {
+                # read ht files
+                capture.output(
+                    licor <- rbindlist(lapply(files$licor[[day]], read_licor_data))
+                )
+                cat('done\n')
+            } else {
+                cat('no data available for this day\n')
+            }
+        }
+
         cat('Merging files - ')
 
-        daily_data <- merge_data(sonic, ht)
+        browser()
+        daily_data <- merge_data(sonic, ht, licor)
 
         cat('done\n~~~\n')
 

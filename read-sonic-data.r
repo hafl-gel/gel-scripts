@@ -4,12 +4,15 @@ library(data.table)
 library(ibts)
 
 ## main function to read sonic data
-read_sonic <- function(FilePath, sonic_type = c('windmaster', 'hs')[1]) {
-    switch(sonic_type[1]
-        , windmaster = read_windmaster_ascii(FilePath)
-        , hs = read_hs_ascii(FilePath)
-        , stop('Sonic type not valid')
-    )
+read_sonic <- function(FilePath) {
+	bn <- basename(FilePath)
+	if (grepl("^(py_)?fnf_", bn)) {
+        # new data format -> TODO: check HS vs Windmaster
+        read_hs_ascii(FilePath)
+        # read_windmaster_ascii(FilePath)
+    } else {
+        read_windmaster_ascii(FilePath)
+    }
 }
 
 #### To Do:

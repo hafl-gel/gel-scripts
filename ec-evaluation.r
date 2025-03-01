@@ -998,7 +998,7 @@ ec_ht8700 <- function(
 
         # read sonic files
         capture.output(
-            sonic <- rbindlist(lapply(files$sonic[[day]], read_windmaster_ascii))
+            sonic <- rbindlist(lapply(files$sonic[[day]], read_sonic))
         )
 
         cat('done\nReading HT8700 files - ')

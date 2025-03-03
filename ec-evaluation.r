@@ -1038,32 +1038,34 @@ ec_ht8700 <- function(
     }
 
     # create vector of start/end dates as integers
-    dates_utc <- as.integer(format(unique(
+    dates_utc <- as.integer(format(
         date(c(start_utc, end_utc))
-    ), '%Y%m%d'))
+    , '%Y%m%d'))
     # old logging format
-    dates_cet <- as.integer(format(unique(
+    dates_cet <- as.integer(format(
         date(c(
             with_tz(start_utc, 'Etc/GMT-1'), 
             with_tz(end_utc, 'Etc/GMT-1')
         ))
-    ), '%Y%m%d'))
+    , '%Y%m%d'))
     # dates in tz_times (for output)
-    dates_tzt <- format(unique(
+    dates_tzt <- format(
         date(c(
             with_tz(start_utc, tz_times), 
             with_tz(end_utc, tz_times)
         ))
-    ), '%Y-%m-%d')
+    , '%Y-%m-%d')
 
     # select available daily files
     {
-        if (dont_read_sonic) {
+        if (dont_read_sonic || dont_read_ht || dont_read_licor) {
             cat('Implement me please! :-D\n')
             browser()
         }
         # check sonic files
         if (sonic_old_format) {
+            cat('Fix me!!! -> 1 day -> 2 files!\n')
+            browser()
             # get dates
             sonic_dates <- as.integer(sub('.*_(\\d{8})_\\d{6}.*', '\\1', sonic_files))
             # use winter time
@@ -1075,7 +1077,7 @@ ec_ht8700 <- function(
             sonic_dates <- as.integer(sub('.*_(\\d{4})_(\\d{2})_(\\d{2})\\.csv', '\\1\\2\\3',
                     sonic_files))
             # use UTC
-            sonic_valid <- match(sonic_dates, dates_utc, nomatch = 0)
+            sonic_valid <- match(sonic_dates, unique(dates_utc), nomatch = 0)
         }
         if (all(sonic_valid == 0)) {
             cat('No sonic files within given time range!\n')
@@ -1084,6 +1086,8 @@ ec_ht8700 <- function(
 
         # check ht files
         if (ht_old_format) {
+            cat('Fix me!!! -> 1 day -> 2 files!\n')
+            browser()
             # get dates
             ht_dates <- as.integer(sub('.*_(\\d{8})_\\d{6}.*', '\\1', ht_files))
             # use winter time
@@ -1095,7 +1099,7 @@ ec_ht8700 <- function(
             ht_dates <- as.integer(sub('.*_(\\d{4})_(\\d{2})_(\\d{2})\\.csv', '\\1\\2\\3',
                     ht_files))
             # use UTC
-            ht_valid <- match(ht_dates, dates_utc, nomatch = 0)
+            ht_valid <- match(ht_dates, unique(dates_utc), nomatch = 0)
         }
         if (all(ht_valid == 0)) {
             cat('No HT8700 files within given time range!\n')
@@ -1107,6 +1111,13 @@ ec_ht8700 <- function(
             cat('No parallel measurement of HT8700 and sonic available for given time range!\n')
             return(NULL)
         }
+        # get valid dates
+        dates_valid <- ht_dates[ht_valid %in% i_valid]
+        # get files per day tzt
+        # days_tzt <- sapply(unique(dates_tzt), \(d) {
+        #     i <- d == dates_tzt
+        #     browser()
+        # })
         # get files to read
         ht_read <- ht_files[ht_valid %in% i_valid]
         sonic_read <- sonic_files[sonic_valid %in% i_valid]
@@ -1168,7 +1179,6 @@ ec_ht8700 <- function(
         # ------------------------------------------------------------------------------
         cat('~~~\nReading sonic files - ')
 
-        browser()
         # TODO:
         # -> include licor measurements + add co2 & h2o to variables in arguments
         # -> add uncorrected nh3 flux + nh3 flux corrected if licor flux av.
@@ -1212,6 +1222,8 @@ ec_ht8700 <- function(
                 capture.output(
                     licor <- rbindlist(lapply(files$licor[[day]], read_licor_data))
                 )
+                # fix names
+                setnames(licor, c('CO2D', 'H2OD'), c('co2_mmolm3', 'h2o_mmolm3'))
                 cat('done\n')
             } else {
                 cat('no data available on', files$dates[[day]], '\n')
@@ -1240,10 +1252,10 @@ ec_ht8700 <- function(
 
         # get intervals:                                      
         # ------------------------------------------------------------------------------ 
-        day_date <- as.Date(strptime(day, '%Y%m%d', tz = 'Etc/GMT-1'))
-        int_index <- which(date(start_time) == day_date)
-        st_interval <- start_time[int_index]
-        et_interval <- end_time[int_index]
+        day_date <- as.Date(strptime(gsub('-', '', files$dates[[day]]), '%Y%m%d', tz = 'Etc/GMT-1'))
+        int_index <- which(date(start_utc) == day_date)
+        st_interval <- start_utc[int_index]
+        et_interval <- end_utc[int_index]
 
         # define bins & subset again
         daily_data <- daily_data[, bin := getIntervals(Time, st_interval, et_interval)][bin != 0L]
@@ -1304,7 +1316,7 @@ ec_ht8700 <- function(
 
         result_list[[day]] <- daily_data[, {
 
-            cat("\n\n~~~~~~~~\n", day_nice, ": interval ", .GRP, " of ", .NGRP, "\n", sep = '')
+            cat("\n\n~~~~~~~~\n", files$dates[[day]], ": interval ", .GRP, " of ", .NGRP, "\n", sep = '')
             # get subset:
             # --------------------------------------------------------------------------
             if (.N > n_threshold && all(sapply(mget(scalars), \(x) sum(is.finite(x))) > n_threshold)) {
@@ -1329,8 +1341,16 @@ ec_ht8700 <- function(
 
                 # check for remaining NA values
                 if (SD[, anyNA(.SD), .SDcols = c("u", "v", "w", "T", scalars)]) {
-                    cat("NA values in data. Skipping interval...")
-                    next
+                    n_before <- nrow(SD)
+                    # remove NA 
+                    SD <- na.omit(SD)
+                    # check if too many missing
+                    if (nrow(SD) > n_threshold) {
+                        cat("Removed", n_before - nrow(SD), "data...\n")
+                    } else {
+                        cat("NA values in data. Skipping interval...")
+                        next
+                    }
                 }
 
                 # calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
@@ -1426,6 +1446,8 @@ ec_ht8700 <- function(
         
                 # ogives for fixed & dynamic lags 
                 # ------------------------------------------------------------------------ 
+                browser()
+                ## hier bin ich!!! -> fix me!!!
                 Ogive_fix <- lapply(Cospec_fix, function(x) rev(cumsum(rev(x))))
                 Ogive_dyn <- lapply(Cospec_dyn, function(x) rev(cumsum(rev(x))))		
                 if (ogives_out) {

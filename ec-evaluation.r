@@ -531,13 +531,21 @@ damp_hac5 <- function(ogive, freq, freq.limits, ogive_ref){
 	}	
 	# linear regression + prediction:
 	# mod <- deming::deming(undamped_ogv~undamped_ogvref,weights=1/freq[undamped_ind])
-	mod <- deming::deming(undamped_ogv ~ undamped_ogvref)
-	cfs <- coef(mod)
+	mod <- try(deming::deming(undamped_ogv ~ undamped_ogvref), silent = TRUE)
+    if (inherits(mod, 'try-error')) {
+        cfs <- c(0, 1)
+    } else {
+        cfs <- coef(mod)
+    }
 	pred_ogv_deming <- cfs[2]*ogive_ref + cfs[1]
 
 	# robust linear regression + prediction:
-	mod2 <- deming::pbreg(undamped_ogv ~ undamped_ogvref,method=3,eps=min(abs(undamped_ogv))*1E-8)
-	cfs2 <- coef(mod2)
+	mod2 <- try(deming::pbreg(undamped_ogv ~ undamped_ogvref,method=3,eps=min(abs(undamped_ogv))*1E-8), silent = TRUE)
+    if (inherits(mod2, 'try-error')) {
+        cfs2 <- c(0, 1)
+    } else {
+        cfs2 <- coef(mod2)
+    }
 	pred_ogv_pbreg <- cfs2[2]*ogive_ref + cfs2[1]
 	
 	list(dampf_pbreg=ogive[1]/(ogive[1] - cfs2[1]),dampf_deming=ogive[1]/(ogive[1] - cfs[1]),freq.limits=freq.limits,ogive=ogive,ogive_ref_pbreg=pred_ogv_pbreg,ogive_ref_deming=pred_ogv_deming)	
@@ -1446,8 +1454,6 @@ ec_ht8700 <- function(
         
                 # ogives for fixed & dynamic lags 
                 # ------------------------------------------------------------------------ 
-                browser()
-                ## hier bin ich!!! -> fix me!!!
                 Ogive_fix <- lapply(Cospec_fix, function(x) rev(cumsum(rev(x))))
                 Ogive_dyn <- lapply(Cospec_dyn, function(x) rev(cumsum(rev(x))))		
                 if (ogives_out) {
@@ -1535,10 +1541,24 @@ ec_ht8700 <- function(
                 dyn_damping_deming <- sapply(Damping_dyn, "[[", 2)
                 if (!is.null(Damping_dyn)) names(dyn_damping_deming) <- paste("damping.deming.dyn.lag", names(Damping_dyn))
 
+
+                # HT8700: WPL & additional H2O correction
+                # LICOR -> CO2: only WPL correction
+                if (!is.null(licor_files)) {
+                    cat('Implement WPL correction HT!\n')
+                    browser()
+                    # TODO:
+                    # -> check if NH3 in ugm3 available
+                    # -> check ...
+                    # -> get A, B, C
+                    # -> get dry air mass/volume
+                    # -> get h2o mass/volume
+                    # -> 
+                }
                 
                 # write results:
                 # -------------------------------------------------------------------------- 
-                browser()
+
                 out <- c(
                     list(
                         st = st_interval[.BY[[1]]]

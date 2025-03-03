@@ -530,7 +530,6 @@ merge_data <- function(basis, draw, draw_licor = NULL) {
             )
         )
     }
-    hier weiter !!!!
     # times
     t_basis <- basis[, as.numeric(Time)]
     t_draw <- draw[, as.numeric(Time)]
@@ -541,6 +540,16 @@ merge_data <- function(basis, draw, draw_licor = NULL) {
     indices <- match_times(t_basis - t0, t_draw - t0, d_t)
     # bind together
     out <- cbind(basis[indices[[1]]], draw[indices[[2]]][, Time := NULL])
+    # append licor if present
+    if (!is.null(draw_licor)) {
+        t_basis <- out[, as.numeric(Time)]
+        t_licor <- draw_licor[, as.numeric(Time)]
+        t0 <- t_basis[1]
+        # get matching indices
+        indices <- match_times(t_basis - t0, t_licor - t0, d_t)
+        # bind together
+        out <- cbind(out[indices[[1]]], draw_licor[indices[[2]]][, Time := NULL])
+    }
     # add Hz
     out[, Hz := round(1 / d_t, -1)]
     out

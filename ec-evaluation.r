@@ -769,37 +769,37 @@ ec_ht8700 <- function(
         , declination = NULL
 		, z_ec = NULL
 		, z_canopy = NULL
-		, variables = c('u', 'v', 'w', 'T', 'nh3_ppb')
+		, variables = c('u', 'v', 'w', 'T', 'nh3_ugm3', 'h2o_mmolm3', 'co2_mmolm3')
         # detrending -> valid entries are blockAVG,linear,linear_robust,ma_xx (xx = time in seconds)
-        , detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear')
-        , hard_flag = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE, nh3_ugm3 = TRUE)
-        , hard_flag_lower = c(u = -30, v = -30, w = -10, T = 243, nh3_ppb = -100, nh3_ugm3 = -100)
-        , hard_flag_upper = c(u = 30, v = 30, w = 10, T = 333, nh3_ppb = 5000, nh3_ugm3 = 5000)
+        , detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
+        , hard_flag = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
+        , hard_flag_lower = c(u = -30, v = -30, w = -10, T = 243, nh3_ppb = -100, nh3_ugm3 = -100, h2o_mmolm3 = -100, co2_mmolm3 = -100)
+        , hard_flag_upper = c(u = 30, v = 30, w = 10, T = 333, nh3_ppb = 5000, nh3_ugm3 = 5000, h2o_mmolm3 = 5000, co2_mmolm3 = 5000)
         , hard_flag_window = '5mins'
         , hard_flag_replace = TRUE
-		, covariances = c('uxw', 'wxT', 'wxnh3_ppb')
+		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 'wxco2_mmolm3')
         # fix lag in seconds
-		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4)
+		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, wxh2o_mmolm3 = -0.2, wxco2_mmolm3 = -0.2)
         # dyn lag in seconds around lag_fix
-		, lag_dyn = c(uxw = 0.2, wxT = 0.2, wxnh3_ppb = 1.5, wxnh3_ugm3 = 1.5)
-		, damping_reference = c(wxnh3_ppb = 'wxT', wxnh3_ugm3 = 'wxT')
+		, lag_dyn = c(uxw = 0.2, wxT = 0.2, wxnh3_ppb = 1.5, wxnh3_ugm3 = 1.5, wxh2o_mmolm3 = 1.5, wxco2_mmolm3 = 1.5)
+		, damping_reference = c(wxnh3_ppb = 'wxT', wxnh3_ugm3 = 'wxT', wxh2o_mmolm3 = 'wxT', wxco2_mmolm3 = 'wxT')
         # lower & upper bounds of fitting ogives (in seconds)
-		, damping_lower = c(wxnh3_ppb = 2, wxnh3_ugm3 = 2)
-		, damping_upper = c(wxnh3_ppb = 20, wxnh3_ugm3 = 20)
+		, damping_lower = c(wxnh3_ppb = 2, wxnh3_ugm3 = 2, wxh2o_mmolm3 = 2, wxco2_mmolm3 = 2)
+		, damping_upper = c(wxnh3_ppb = 20, wxnh3_ugm3 = 20, wxh2o_mmolm3 = 20, wxco2_mmolm3 = 20)
         , subintervals = TRUE
         , subint_n = 5
-        , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear')
+        , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
         , oss_threshold = 0
         , na_alarm_code = c(1:3, 5:8, 11, 13)
         , thresh_period = 0.75
 		, create_graphs = TRUE
 		, graphs_directory = NULL
 		, add_name = ''
-        , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', T = 'K', nh3_ppb = 'ppb', nh3_ugm3 = 'ug/m3')
-        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', nh3_ppb = 'indianred', nh3_ugm3 = 'indianred')
-        , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE, nh3_ugm3 = TRUE)
-        , plotting_covar_units = c(uxw = 'm2/s2', wxT = 'K*m/s', wxnh3_ppb = 'ppb*m/s', wxnh3_ugm3 = 'ug/m2/s')
-        , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred', wxnh3_ugm3 = 'indianred')
+        , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', T = 'K', nh3_ppb = 'ppb', nh3_ugm3 = 'ug/m3', h2o_mmolm3 = 'mmol/m3', co2_mmolm3 = 'mmol/m3')
+        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', nh3_ppb = 'indianred', nh3_ugm3 = 'indianred', h2o_mmolm3 = '#63A1D6', co2_mmolm3 = '#74C974')
+        , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
+        , plotting_covar_units = c(uxw = 'm2/s2', wxT = 'K*m/s', wxnh3_ppb = 'ppb*m/s', wxnh3_ugm3 = 'ug/m2/s', wxh2o_mmolm3 = 'mmol/m2/s', wxco2_mmolm3 = 'mmol/m2/s')
+        , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred', wxnh3_ugm3 = 'indianred', wxh2o_mmolm3 = '#63A1D6', wxco2_mmolm3 = '#74C974')
 		, ogives_out = FALSE
         , as_ibts = TRUE
 	){
@@ -854,6 +854,12 @@ ec_ht8700 <- function(
         mag_dec <- \(x) declination
     }
 
+    # fix missing licor
+    if (missing(licor_directory)) {
+        variables <- variables[!grepl('h2o|co2', variables)]
+        scalar_covariances <- scalar_covariances[!grepl('h2o|co2', scalar_covariances)]
+    }
+
     # fix input (vectors of default values)
     detrending <- fix_defaults(detrending, variables)
     hard_flag <- fix_defaults(hard_flag, variables)
@@ -899,21 +905,39 @@ ec_ht8700 <- function(
 
     # get data
     # ------------------------------------------------------------------------------
-    sonic_files <- dir(sonic_directory, pattern = '^(py_)?fnf_.*_sonic_.*')
-    if (sonic_old_format <- length(sonic_files) == 0) {
-        # old loggerbox format
-        sonic_files <- dir(sonic_directory, pattern = '^data_sonic-.')
+    if (dont_read_sonic <- inherits(sonic_directory, 'data.frame')) {
+        cat('Sonic Anemometer: raw data provided...\n')
+        setDT(sonic_directory)
+        sonic_files <- NULL
+    } else {
+        sonic_files <- dir(sonic_directory, pattern = '^(py_)?fnf_.*_sonic_.*')
+        if (sonic_old_format <- length(sonic_files) == 0) {
+            # old loggerbox format
+            sonic_files <- dir(sonic_directory, pattern = '^data_sonic-.')
+        }
+        sonic_files <- sort(sonic_files)
     }
-    sonic_files <- sort(sonic_files)
-    ht_files <- dir(ht_directory, pattern = '^(py_)?fnf_.*_ht8700_.*')
-    if (ht_old_format <- length(ht_files) == 0) {
-        # old loggerbox format
-        ht_files <- dir(ht_directory, pattern = '^ht8700_sonic-.')
+    if (dont_read_ht <- inherits(ht_directory, 'data.frame')) {
+        cat('HT8700: raw data provided...\n')
+        setDT(ht_directory)
+        ht_files <- NULL
+    } else {
+        ht_files <- dir(ht_directory, pattern = '^(py_)?fnf_.*_ht8700_.*')
+        if (ht_old_format <- length(ht_files) == 0) {
+            # old loggerbox format
+            ht_files <- dir(ht_directory, pattern = '^ht8700_sonic-.')
+        }
+        ht_files <- sort(ht_files)
     }
-    ht_files <- sort(ht_files)
     if (!missing(licor_directory)) {
-        licor_files <- dir(licor_directory, pattern = '^(py_)?fnf_.*_licor_.*')
-        licor_files <- sort(licor_files)
+        if (dont_read_licor <- inherits(licor_directory, 'data.frame')) {
+            cat('LI-7500: raw data provided...\n')
+            licor_files <- NULL
+            setDT(licor_directory)
+        } else {
+            licor_files <- dir(licor_directory, pattern = '^(py_)?fnf_.*_licor_.*')
+            licor_files <- sort(licor_files)
+        }
     } else {
         licor_files <- NULL
     }
@@ -930,22 +954,29 @@ ec_ht8700 <- function(
 
     # fix start_time
     if (length(start_time) == 1 && start_time == 'first') {
-        if (sonic_old_format) {
-            sonic_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
+        if (dont_read_sonic) {
+            start_sonic <- sonic_directory[, Time[1]]
         } else {
-            sonic_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
-        }
-        if (ht_old_format) {
-            ht_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
-        } else {
-            ht_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
-        }
-        start_time <- min(
-            strptime(sub(sonic_pattern[1], sonic_pattern[2], sonic_files[1]),
-                '%Y%m%d%H%M%S', tz = tz_times),
-            strptime(sub(ht_pattern[1], ht_pattern[2], ht_files[1]),
+            if (sonic_old_format) {
+                sonic_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
+            } else {
+                sonic_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
+            }
+            start_sonic <- strptime(sub(sonic_pattern[1], sonic_pattern[2], sonic_files[1]),
                 '%Y%m%d%H%M%S', tz = tz_times)
-            )
+        }
+        if (dont_read_ht) {
+            start_ht <- ht_directory[, Time[1]]
+        } else {
+            if (ht_old_format) {
+                ht_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
+            } else {
+                ht_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
+            }
+            start_ht <- strptime(sub(ht_pattern[1], ht_pattern[2], ht_files[1]),
+                '%Y%m%d%H%M%S', tz = tz_times)
+        }
+        start_time <- min(start_sonic, start_ht)
     } else if (!is.null(start_time)) {
         start_time <- parse_date_time3(start_time, tz = tz_times)
     }
@@ -954,23 +985,33 @@ ec_ht8700 <- function(
     if (is.null(end_time)) {
         end_time <- start_time + avg_secs
     } else if (length(end_time) == 1 && end_time == 'last') {
-        if (sonic_old_format) {
-            sonic_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
+        if (dont_read_sonic) {
+            start_sonic <- sonic_directory[, Time[.N]]
         } else {
-            sonic_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
+            if (sonic_old_format) {
+                sonic_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
+            } else {
+                sonic_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
+            }
+            # last date + 24h
+            end_sonic <- strptime(sub(sonic_pattern[1], sonic_pattern[2], tail(sonic_files, 1)),
+                '%Y%m%d%H%M%S', tz = tz_times) + 24 * 3600
         }
-        if (ht_old_format) {
-            ht_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
+        if (dont_read_ht) {
+            start_ht <- ht_directory[, Time[.N]]
         } else {
-            ht_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
-        }
-        # last date + 24h
-        end_time <- min(
-            strptime(sub(sonic_pattern[1], sonic_pattern[2], tail(sonic_files, 1)),
-                '%Y%m%d%H%M%S', tz = tz_times),
-            strptime(sub(ht_pattern[1], ht_pattern[2], tail(ht_files, 1)),
+            if (ht_old_format) {
+                ht_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2')
+            } else {
+                ht_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000')
+            }
+            # last date + 24h
+            end_ht <- strptime(sub(ht_pattern[1], ht_pattern[2], tail(ht_files, 1)),
+                '%Y%m%d%H%M%S', tz = tz_times) + 24 * 3600
+            start_ht <- strptime(sub(ht_pattern[1], ht_pattern[2], ht_files[1]),
                 '%Y%m%d%H%M%S', tz = tz_times)
-            ) + 24 * 3600
+        }
+        end_time <- min(end_sonic, end_ht)
     } else {
         end_time <- parse_date_time3(end_time, tz = tz_times)
     }
@@ -1017,6 +1058,10 @@ ec_ht8700 <- function(
 
     # select available daily files
     {
+        if (dont_read_sonic) {
+            cat('Implement me please! :-D\n')
+            browser()
+        }
         # check sonic files
         if (sonic_old_format) {
             # get dates
@@ -1123,8 +1168,10 @@ ec_ht8700 <- function(
         # ------------------------------------------------------------------------------
         cat('~~~\nReading sonic files - ')
 
-    ## hier bin ich!!! -> include licor measurements + add co2 & h2o to variables in arguments
-        # hier bin ich!!! -> add uncorrected nh3 flux + nh3 flux corrected if licor flux av.
+        browser()
+        # TODO:
+        # -> include licor measurements + add co2 & h2o to variables in arguments
+        # -> add uncorrected nh3 flux + nh3 flux corrected if licor flux av.
 
         # read sonic files
         capture.output(
@@ -1167,13 +1214,12 @@ ec_ht8700 <- function(
                 )
                 cat('done\n')
             } else {
-                cat('no data available for this day\n')
+                cat('no data available on', files$dates[[day]], '\n')
             }
         }
 
         cat('Merging files - ')
 
-        browser()
         daily_data <- merge_data(sonic, ht, licor)
 
         cat('done\n~~~\n')

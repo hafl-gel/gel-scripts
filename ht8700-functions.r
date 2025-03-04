@@ -347,27 +347,28 @@ Rcpp::List ht8700_read_cpp(String filename) {
         Rcout << "Could not read file: " << filename.get_cstring() << "\\n";
         return R_NilValue;
     }
+    int max_lines = 870000;
     // create output
-    CharacterVector col1_time(9e5);
-    CharacterVector col2(9e5);
-    CharacterVector col17(9e5);
-    CharacterVector col18(9e5);
-    CharacterVector col20(9e5);
-    IntegerVector col19(9e5);
-    NumericVector col3(9e5);
-    NumericVector col4(9e5);
-    NumericVector col5(9e5);
-    NumericVector col6(9e5);
-    NumericVector col7(9e5);
-    NumericVector col8(9e5);
-    NumericVector col9(9e5);
-    NumericVector col10(9e5);
-    NumericVector col11(9e5);
-    NumericVector col12(9e5);
-    NumericVector col13(9e5);
-    NumericVector col14(9e5);
-    NumericVector col15(9e5);
-    NumericVector col16(9e5);
+    CharacterVector col1_time(max_lines);
+    CharacterVector col2(max_lines);
+    CharacterVector col17(max_lines);
+    CharacterVector col18(max_lines);
+    CharacterVector col20(max_lines);
+    IntegerVector col19(max_lines);
+    NumericVector col3(max_lines);
+    NumericVector col4(max_lines);
+    NumericVector col5(max_lines);
+    NumericVector col6(max_lines);
+    NumericVector col7(max_lines);
+    NumericVector col8(max_lines);
+    NumericVector col9(max_lines);
+    NumericVector col10(max_lines);
+    NumericVector col11(max_lines);
+    NumericVector col12(max_lines);
+    NumericVector col13(max_lines);
+    NumericVector col14(max_lines);
+    NumericVector col15(max_lines);
+    NumericVector col16(max_lines);
     int cline = 0;
     int n_fields = 20 - 1;
     int field = 0;
@@ -423,15 +424,11 @@ Rcpp::List ht8700_read_cpp(String filename) {
         } else if (field <= n_fields) {
             // append to string or new line
             s += c;
-        } else {
-            // check field counter > number of columns -> newline
-            // reset field counter
-            field = 0;
-            // drop readings
-            // reset s
-            s.clear();
-            // increase line counter
-            cline += 1;
+        } else if (field > n_fields) {
+            // scan to newline without consuming newline
+            // this might fail
+            char sp[256];
+            input.get(sp, 256, \'\\n\');
         }
     }
     return Rcpp::List::create(

@@ -118,7 +118,7 @@ Rcpp::List licor_read_cpp(String filename) {
 ')
 
 # R wrapper, main function
-read_licor_data <- function(FilePath) {
+read_licor <- function(FilePath) {
     raw_list <- licor_read_cpp(normalizePath(FilePath))
     out <- as.data.table(raw_list)
     # convert time

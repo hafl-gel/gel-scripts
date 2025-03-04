@@ -323,14 +323,10 @@ Rcpp::List hs_read_cpp(String filename) {
             // append to string or new line
             s += c;
         } else if (field > n_fields) {
-            // check field counter > number of columns -> newline
-            // reset field counter
-            field = 0;
-            // drop readings
-            // reset s
-            s.clear();
-            // increase line counter
-            cline += 1;
+            // scan to newline without consuming newline
+            // this might fail
+            char sp[256];
+            input.get(sp, 256, \'\\n\');
         }
     }
     return Rcpp::List::create(
@@ -347,7 +343,10 @@ Rcpp::List hs_read_cpp(String filename) {
 read_hs_ascii <- function(FilePath) {
     # be verbose
     cat("File:", path.expand(FilePath), "- ")
-    raw <- hs_read_cpp(normalizePath(FilePath))
+    raw <- hs_read_cpp(normalizePath(FilePath, mustWork = FALSE))
+    if (length(raw) == 0) {
+        stop('File path: "', FilePath, '" is not accessible!')
+    }
     out <- as.data.table(raw)
     out[, Time := fast_strptime(time_string, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE)]
     out <- na.omit(out)

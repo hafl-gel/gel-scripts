@@ -507,48 +507,59 @@ List match_times(NumericVector time1, NumericVector time2, double deltat)
 #   -> output contains the same times as 'basis'
 #   -> values from 'draw' will be repeated or dropped to match 'basis' times
 #   -> licor data is optional and must be provided by 'draw_licor'
-merge_data <- function(basis, draw, draw_licor = NULL) {
-    if (nrow(basis) == 0 || nrow(draw) == 0) {
-        return(
-            data.table(
-                Time = POSIXct(0), 
-                nh3_ppb = numeric(0),
-                nh3_ugm3 = numeric(0), 
-                h2o_mmolm3 = numeric(0),
-                co2_mmolm3 = numeric(0),
-                temp_amb = numeric(0), 
-                press_amb = numeric(0), 
-                oss = numeric(0), 
-                u = numeric(0), 
-                v = numeric(0), 
-                w = numeric(0), 
-                T = numeric(0), 
-                sonic = character(0)
-            )
-        )
+merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
+    # prepare output
+    n_out <- nrow(basis_sonic)
+    out <- data.table(
+        Time = POSIXct(n_out), 
+        nh3_ppb = NA_real_,
+        nh3_ugm3 = NA_real_, 
+        h2o_mmolm3 = NA_real_,
+        co2_mmolm3 = NA_real_,
+        temp_amb = NA_real_, 
+        press_amb = NA_real_, 
+        oss = NA_real_, 
+        peak_pos = NA_real_,
+        alarm_code = NA_character_,
+        Hz = NA_character_,
+        u = NA_real_, 
+        v = NA_real_, 
+        w = NA_real_, 
+        T = NA_real_, 
+        sonic = NA_character_
+    )
+    if (n_out == 0) {
+        return(out)
     }
-    # times
-    t_basis <- basis[, as.numeric(Time)]
-    t_draw <- draw[, as.numeric(Time)]
-    t0 <- t_basis[1]
-    # ~ 1/Hz
-    d_t <- median(diff(t_basis))
-    # get matching indices
-    indices <- match_times(t_basis - t0, t_draw - t0, d_t)
-    # bind together
-    out <- cbind(basis[indices[[1]]], draw[indices[[2]]][, Time := NULL])
-    # append licor if present
+    # fill sonic
+    out[, c('Time', 'Hz', 'u', 'v', 'w', 'T', 'sonic') := copy(basis_sonic)]
+    # fill ht
+    if (!is.null(draw_ht)) {
+        # times
+        t_basis <- basis_sonic[, as.numeric(Time)]
+        t_draw <- draw_ht[, as.numeric(Time)]
+        t0 <- t_basis[1]
+        # ~ 1/Hz
+        d_t <- median(diff(t_basis))
+        # get matching indices
+        indices <- match_times(t_basis - t0, t_draw - t0, d_t)
+        # fill values
+        out[indices[[1]], c('nh3_ppb', 'nh3_ugm3', 'temp_amb', 'press_amb', 'oss',
+            'peak_pos', 'alarm_code') := draw_ht[indices[[2]], .(nh3_ppb, nh3_ugm3,
+                temp_amb, press_amb, oss, peak_pos, alarm_code)]]
+    }
+    # fill licor
     if (!is.null(draw_licor)) {
-        t_basis <- out[, as.numeric(Time)]
+        t_basis <- basis_sonic[, as.numeric(Time)]
         t_licor <- draw_licor[, as.numeric(Time)]
         t0 <- t_basis[1]
         # get matching indices
         indices <- match_times(t_basis - t0, t_licor - t0, d_t)
-        # bind together
-        out <- cbind(out[indices[[1]]], draw_licor[indices[[2]]][, Time := NULL])
+        # fill values
+        out[indices[[1]], c('h2o_mmolm3', 'co2_mmolm3') := draw_licor[indices[[2]], .(
+            H2OD, CO2D)]]
     }
-    # add Hz
-    out[, Hz := round(1 / d_t, -1)]
+    # return
     out
 }
 

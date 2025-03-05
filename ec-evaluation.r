@@ -1209,7 +1209,7 @@ process_ec_fluxes <- function(
                 # copy old data
                 old_sonic <- sonic[Time >= times_utc$st[1], ]
                 # remove old date
-                dates_sonic <- setdiff(dates_utc, dates_sonic)
+                dates_sonic <- dates_utc[!(dates_utc %in% dates_sonic)]
             } else {
                 dates_sonic <- dates_utc
                 old_sonic <- NULL
@@ -1253,7 +1253,7 @@ process_ec_fluxes <- function(
                 # copy old data
                 old_ht <- ht[Time >= times_utc$st[1], ]
                 # remove old date
-                dates_ht <- setdiff(dates_utc, dates_ht)
+                dates_ht <- dates_utc[!(dates_utc %in% dates_ht)]
             } else {
                 dates_ht <- dates_utc
                 old_ht <- NULL
@@ -1344,7 +1344,7 @@ process_ec_fluxes <- function(
                 # copy old data
                 old_licor <- licor[Time >= times_utc$st[1], ]
                 # remove old date
-                dates_licor <- setdiff(dates_utc, dates_licor)
+                dates_licor <- dates_utc[!(dates_utc %in% dates_licor)]
             } else {
                 dates_licor <- dates_utc
                 old_licor <- NULL

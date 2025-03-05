@@ -1392,7 +1392,7 @@ ec_ht8700 <- function(
         # check if empty
         if (nrow(daily_data) == 0) {
             cat('No valid data available...\n')
-            return(NULL)
+            next
         }
         
         # check variables and covars and subset by columns
@@ -1494,8 +1494,8 @@ ec_ht8700 <- function(
                         SD[, {
                             x <- unlist(mget(s, ifnotfound = NA))
                             if (sum(is.finite(x)) < n_threshold) {
-                                cat('number of valid "', s, '" measurements is below',
-                                    ' threshold -> skipping its evaluation\n', sep = '')
+                                cat('=> ', s, ': number of valid measurements is below',
+                                    ' threshold -> exclude from current interval\n', sep = '')
                                 scalars <- grep(s, scalars, fixed = TRUE, invert = TRUE,
                                     value = TRUE)
                                 sind <- grep(s, covariances)
@@ -1838,7 +1838,7 @@ ec_ht8700 <- function(
                             paste0('lag_dyn_', covariances)
                         )
                         , if (!is.null(Damping_fix)) {
-                            list(
+                            c(
                                 setNames(
                                     fix_damping_pbreg[scalar_covariances_only],
                                     paste0('damping_fix_pbreg_', scalar_covariances_only)
@@ -1850,7 +1850,7 @@ ec_ht8700 <- function(
                             )
                         }
                         , if (!is.null(Damping_dyn)) {
-                            list(
+                            c(
                                 setNames(
                                     dyn_damping_pbreg[scalar_covariances_only],
                                     paste0('damping_dyn_pbreg_', scalar_covariances_only)
@@ -1937,15 +1937,7 @@ ec_ht8700 <- function(
     # remove bin column
     results[, bin := NULL]
 
-    # rename covariances
-    nms <- names(results)
-    for (cov_nm in covariances) {
-        nms_old <- grep(cov_nm, nms, fixed = TRUE, value = TRUE)
-        cov_sub <- sub('(.+)x(.+)', "<\\1'\\2'>", cov_nm)
-        nms_new <- sub(cov_nm, cov_sub, nms_old, fixed = TRUE)
-        setnames(results, nms_old, nms_new)
-    }
-
+    # convert to ibts
     if (as_ibts) {
         results <- as.ibts(results)
     }

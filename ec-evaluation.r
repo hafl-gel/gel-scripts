@@ -763,7 +763,7 @@ fix_defaults <- function(x, vars) {
     x[vars]
 }
 
-ec_ht8700 <- function(
+process_ec_fluxes <- function(
 		sonic_directory
         , ht_directory = NULL
         , licor_directory = NULL

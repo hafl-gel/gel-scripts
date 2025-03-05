@@ -557,7 +557,7 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
         out[indices[[1]], (ht_vars) := draw_ht[indices[[2]], ht_orig, with = FALSE]]
     } else {
         # check if original names
-        if (grepl('^oss$', names(basis_sonic))) {
+        if ('oss' %in% names(basis_sonic)) {
             # check alarm codes
             if (!('alarm_code' %in% names(basis_sonic))) {
                 basis_sonic[, alarm_code := get_alarms(.SD)]
@@ -565,7 +565,7 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
             # re-add ht data
             out <- cbind(out, basis_sonic[, ht_orig, with = FALSE])
             setnames(out, ht_orig, ht_vars)
-        } else if (grepl('^ht_oss$', names(basis_sonic))) {
+        } else if ('ht_oss' %in% names(basis_sonic)) {
             # re-add ht data
             out <- cbind(out, basis_sonic[, ht_vars, with = FALSE])
         }
@@ -584,11 +584,11 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
                 with = FALSE]]
     } else {
         # check if original names
-        if (grepl('^CO2D$', names(basis_sonic))) {
+        if ('CO2D' %in% names(basis_sonic)) {
             # re-add licor data
             out <- cbind(out, basis_sonic[, licor_orig, with = FALSE])
             setnames(out, licor_orig, licor_vars)
-        } else if (grepl('^co2_mmolm3$', names(basis_sonic))) {
+        } else if ('co2_mmolm3' %in% names(basis_sonic)) {
             # re-add licor data
             out <- cbind(out, basis_sonic[, licor_vars, with = FALSE])
         }

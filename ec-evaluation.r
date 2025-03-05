@@ -1297,19 +1297,24 @@ ec_ht8700 <- function(
         if (ht_provided && ht_with_sonic) {
             cat('Checking oss and alarm codes - ')
             # add alarm code
-            if (!('alarm_code' %in% names(sonic))) {
+            if ('ht_alarm_code' %in% names(sonic)) {
+                # rename all ht_* variables
+                ht_vars <- grep('ht_', names(sonic), value = TRUE)
+                setnames(sonic, ht_vars, sub('ht_', '', ht_vars, fixed = TRUE))
+            } else if (!('alarm_code' %in% names(sonic))) {
                 sonic[, alarm_code := get_alarms(.SD)]
             }
             # create regex pattern
             na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'), collapse = '|')
             # check alarms and set nh3 NA
-            na0 <- sonic[, sum(is.na(nh3_ppb))]
+            nh3_vars <- grep('nh3', names(sonic), value = TRUE)
+            na0 <- sonic[, sum(is.na(get(nh3_vars[1])))]
             sonic[grepl(na_alarm_pattern, alarm_code),
-                paste0('nh3_', c('ppb', 'ugm3')) := NA_real_]
-            na1 <- sonic[, sum(is.na(nh3_ppb))]
+                (nh3_vars) := NA_real_]
+            na1 <- sonic[, sum(is.na(get(nh3_vars[1])))]
             # check oss
             sonic[oss < oss_threshold,
-                paste0('nh3_', c('ppb', 'ugm3')) := NA_real_]
+                (nh3_vars) := NA_real_]
             cat('done\nBad alarms:', na1 - na0, '\nValues below OSS:', 
                 sonic[, sum(oss < oss_threshold)], '\n')
         } else if (ht_provided && !is.null(ht)) {
@@ -1321,13 +1326,14 @@ ec_ht8700 <- function(
             # create regex pattern
             na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'), collapse = '|')
             # check alarms and set nh3 NA
-            na0 <- ht[, sum(is.na(nh3_ppb))]
+            nh3_vars <- grep('nh3', names(sonic), value = TRUE)
+            na0 <- ht[, sum(is.na(get(nh3_vars[1])))]
             ht[grepl(na_alarm_pattern, alarm_code),
-                paste0('nh3_', c('ppb', 'ugm3')) := NA_real_]
-            na1 <- ht[, sum(is.na(nh3_ppb))]
+                (nh3_vars) := NA_real_]
+            na1 <- ht[, sum(is.na(get(nh3_vars[1])))]
             # check oss
             ht[oss < oss_threshold,
-                paste0('nh3_', c('ppb', 'ugm3')) := NA_real_]
+                (nh3_vars) := NA_real_]
             cat('done\nBad alarms:', na1 - na0, '\nValues below OSS:', 
                 ht[, sum(oss < oss_threshold)], '\n')
         }

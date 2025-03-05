@@ -746,6 +746,113 @@ plot_damping <- function(ogive_damp,freq,ylab=NULL,xlim=NULL,ylim=NULL,cx=1.5,cx
 	legend(pos,legend=c("damped","scaled reference (pbreg)","scaled reference (deming)",sprintf("damping (pbreg): %1.1f%%",(1 - dampf_pbreg)*100),sprintf("damping (deming): %1.1f%%",(1 - dampf_deming)*100)),col=c(col,"lightgrey","darkgrey",NA,NA),bty="n",lty=1,lwd=2,cex=cx.leg)
 }
 
+# wpl function
+correct_wpl <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'), 
+    dynamic_lag = TRUE, return_extra_cols = FALSE, water = 'h2o_mmolm3', 
+    temperature = 'li_temp_amb', pressure = 'li_press_amb',
+    coefs = list(ht8700 = c(A = 1, B = 1, C = 1), licor = c(A = 1, B = 1, C = 1))) {
+    # switch to data.table
+    if (is_ibts <- is.ibts(ec_dat)) {
+        ec_dat <- as.data.table(ec_dat)
+    }
+    out <- copy(ec_dat)
+    dynfix <- ifelse(dynamic_lag, 'dyn_', 'fix_')
+    cat('using', ifelse(dynamic_lag, 'dynamic', 'fixed'), 'lag fluxes\n')
+    # get pressure in Pa
+    f_press <- switch(pressure
+        , li_press_amb = 1e3
+        , ht_press_amb = 1e2
+        , stop('unknown pressure variable: ', pressure)
+    )
+    out[, p_pa := get(pressure) * f_press]
+    # get temperature in K
+    o_temp <- switch(temperature
+        , li_temp_amb = 
+        , ht_temp_amb = 273.15
+        , T_sonic = 0
+        , stop('unknown temperature variable: ', temperature)
+    )
+    out[, t_k := get(temperature) + o_temp]
+    # dry air molar mass (g/mol)
+    M_dry <- 28.965
+    # molar gas constant
+    R <- 8.31446
+    # get dry air density in g/m3 (p*V=m/M*R*T->m/V=p*M/R/T)
+    out[, rho_dry := p_pa * M_dry / R / t_k]
+    # h2o molar mass (g/mol)
+    M_h2o <- 18.015
+    # get h2o density/flux in g/m3
+    f_h2o <- switch(water
+        , h2o_mmolm3 = M_h2o * 1e-3
+        , stop('only h2o_mmolm3 accepted by now')
+    )
+    # density
+    out[, rho_h2o := get(paste0('avg_', water)) * f_h2o]
+    # flux
+    out[, flux_h2o := get(paste0('flux_', dynfix, 'wx', water)) * f_h2o]
+    # get nh3 density/flux in g/m3
+    if (nh3_ppb <- 'nh3_ppb' %in% fluxes) {
+        stop('nh3_ppb is not implemented yet...')
+    }
+    if (nh3_ugm3 <- 'nh3_ugm3' %in% fluxes) {
+        f_nh3 <- 1e-6
+        # density
+        out[, rho_nh3 := avg_nh3_ugm3 * f_nh3]
+        # raw flux
+        out[, flux_nh3_raw := get(paste0('flux_', dynfix, 'wxnh3_ugm3')) * f_nh3]
+        # corrected flux
+        out[, flux_nh3_gm2s := coefs$ht8700['A'] * (
+            # first term
+            flux_nh3_raw +
+            # second term
+            coefs$ht8700['B'] * rho_nh3 / rho_dry * flux_h2o +
+            # third term
+            coefs$ht8700['C'] * (1 + M_dry / M_h2o * rho_h2o / rho_dry) * 
+                rho_nh3 / t_k * cov_wT
+            )]
+        # get wpl factor
+        out[, flux_nh3_wpl_factor := flux_nh3_gm2s / flux_nh3_raw]
+        # convert back to ug/m3
+        out[, flux_wpl_nh3 := flux_nh3_gm2s / f_nh3]
+    }
+    # get co2 density/flux in g/m3
+    if (co2_mmolm3 <- 'co2_mmolm3' %in% fluxes) {
+        M_co2 <- 44.01
+        f_co2 <- M_co2 * 1e-3
+        # density
+        out[, rho_co2 := avg_co2_mmolm3 * f_co2]
+        # raw flux
+        out[, flux_co2_raw := get(paste0('flux_', dynfix, 'wxco2_mmolm3')) * f_co2]
+        # corrected flux
+        out[, flux_co2_gm2s := coefs$licor['A'] * (
+            # first term
+            flux_co2_raw +
+            # second term
+            coefs$licor['B'] * rho_co2 / rho_dry * flux_h2o +
+            # third term
+            coefs$licor['C'] * (1 + M_dry / M_h2o * rho_h2o / rho_dry) * 
+                rho_co2 / t_k * cov_wT
+            )]
+        # get wpl factor
+        out[, flux_co2_wpl_factor := flux_co2_gm2s / flux_co2_raw]
+        # convert back to mmol/m3
+        out[, flux_wpl_co2 := flux_co2_gm2s / f_co2]
+    }
+    if (!return_extra_cols) {
+        out <- out[, .SD, .SDcols = c(
+            names(ec_dat)
+            , if (nh3_ugm3) 'flux_wpl_nh3'
+            , if (co2_mmolm3) 'flux_wpl_co2'
+            )]
+    }
+    # switch back to ibts
+    if (is_ibts) {
+        out <- as.ibts(out)
+    }
+    out
+}
+
+# helper function for process_ec_fluxes()
 fix_defaults <- function(x, vars) {
     # find vars not in x
     missing_vars <- vars[!(vars %in% names(x))]
@@ -763,6 +870,7 @@ fix_defaults <- function(x, vars) {
     x[vars]
 }
 
+## main flux processing function
 process_ec_fluxes <- function(
 		sonic_directory
         , ht_directory = NULL

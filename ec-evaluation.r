@@ -1274,7 +1274,7 @@ process_ec_fluxes <- function(
             # # convert to UTC
             # ht[, Time := with_tz(Time, 'UTC')]
             # bind together
-            ht <- rbind(ht, old_ht)
+            ht <- rbind(ht, old_ht[, names(ht), with = FALSE])
             if (is.null(ht)) {
                 cat('No HT8700 data for current day.\n')
             } else {
@@ -1366,7 +1366,7 @@ process_ec_fluxes <- function(
             # # convert to UTC
             # licor[, Time := with_tz(Time, 'UTC')]
             # bind together
-            licor <- rbind(licor, old_licor)
+            licor <- rbind(licor, old_licor[, names(licor), with = FALSE])
             if (is.null(licor)) {
                 cat('No LI-7500 data for current day.\n')
             } else {

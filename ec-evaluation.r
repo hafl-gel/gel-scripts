@@ -556,9 +556,9 @@ split_index <- function(index_length,n_subint){
 wind_statistics <- function(wind,z_canopy,z_sonic){
 	Cov_sonic <- cov(list2DF(wind[1:4]))
 	Var_sonic <- diag(Cov_sonic)
-	names(Var_sonic) <- c("<u'u'>","<v'v'>","<w'w'>","<T'T'>")
+	names(Var_sonic) <- c('var_u', 'var_v', 'var_w', 'var_T')
 	Cov_sonic <- Cov_sonic[cbind(c("uprot","uprot","uprot","vprot","vprot","wprot"),c("vprot","wprot","Tdet","wprot","Tdet","Tdet"))]
-	names(Cov_sonic) <- c("<u'v'>","<u'w'>","<u'T'>","<v'w'>","<v'T'>","<w'T'>")
+	names(Cov_sonic) <- c('cov_uv', 'cov_uw', 'cov_uT', 'cov_vw', 'cov_vT', 'cov_wT')
 	suppressWarnings(Ustar <- c(sqrt(-Cov_sonic["<u'w'>"]),use.names = FALSE))
 	T_K <- mean(wind$Tmdet + wind$Tdet)
 	U <- mean(wind$umrot + wind$uprot)

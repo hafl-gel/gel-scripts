@@ -1219,10 +1219,6 @@ ec_ht8700 <- function(
                 gsub('-', '_', dates_sonic, fixed = TRUE)
                 , sonic_files, value = TRUE)
             if (length(sonic_read)) {
-                if (any(grepl('\\.(qs|rds)$', sonic_read))) {
-                    cat('TODO: Fix reading rds/qs sonic files!!\n')
-                    browser()
-                }
                 # read new sonic files
                 capture.output(
                     sonic <- rbindlist(lapply(file.path(sonic_directory, sonic_read), 
@@ -1267,10 +1263,6 @@ ec_ht8700 <- function(
                 gsub('-', '_', dates_ht, fixed = TRUE)
                 , ht_files, value = TRUE)
             if (length(ht_read)) {
-                if (any(grepl('\\.(qs|rds)$', ht_read))) {
-                    cat('TODO: Fix reading rds/qs ht files!!\n')
-                    browser()
-                }
                 # read new ht files
                 capture.output(
                     ht <- rbindlist(lapply(file.path(ht_directory, ht_read), read_ht8700))
@@ -1362,10 +1354,6 @@ ec_ht8700 <- function(
                 gsub('-', '_', dates_licor, fixed = TRUE)
                 , licor_files, value = TRUE)
             if (length(licor_read)) {
-                if (any(grepl('\\.(qs|rds)$', licor_read))) {
-                    cat('TODO: Fix reading rds/qs licor files!!\n')
-                    browser()
-                }
                 # read new licor files
                 capture.output(
                     licor <- rbindlist(lapply(file.path(licor_directory, licor_read), 

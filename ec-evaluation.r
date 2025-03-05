@@ -425,19 +425,11 @@ rotate_detrend <- function(u,v,w,T,phi=NULL,method=c(u="blockAVG",v="blockAVG",w
 	vd <- trend(-u*sin(thetam) + v*cos(thetam),method["v"],Hz_ts)
 	wd <- trend(-u1*sin(phi) + w*cos(phi),method["w"],Hz_ts)		
 	Td <- trend(T,method["T"],Hz_ts)
-	# Yamartino 1984:
-	n <- length(u)
-	theta_i <- atan2(v,u)
-	delta_i <- abs(theta_i - thetam)
-	delta_i <- ifelse((thetam - pi) < theta_i & theta_i < thetam,-delta_i,delta_i)
-	sd_wd <- sqrt(sum(delta_i^2)/n - (sum(delta_i)/n)^2) / pi * 180
-
 	out <- list(
 		uprot=ud$residuals
 		,vprot=vd$residuals
 		,wprot=wd$residuals
 		,Tdet=Td$residuals
-		# ,wd=if(c.system=="Windmaster") (180 - thetam / pi * 180)%%360 else if(c.system=="ART.EC1") ((180 / pi) * -thetam + 150 + 147)%%360
 		,wd=switch(c.system
 			,"Windmaster" = (180 - thetam / pi * 180) %% 360 
 			,"ART.EC1" = ((180 / pi) * -thetam + 150 + 147) %% 360
@@ -446,7 +438,6 @@ rotate_detrend <- function(u,v,w,T,phi=NULL,method=c(u="blockAVG",v="blockAVG",w
 			# # old (coordinate) system
 			# ,"Licor" = (180 + thetam / pi * 180) %% 360 
 			)
-		,sd_wd=sd_wd
 		,phi=phi
 		,umrot=ud$fitted
 		,vmrot=vd$fitted
@@ -580,7 +571,7 @@ wind_statistics <- function(wind,z_canopy,z_sonic){
 		d <- NA
 		z0 <- NA
 	}
-	c(Var_sonic,Cov_sonic,Ustar=Ustar,L=L,z_sonic=z_sonic,z_canopy=z_canopy,d=d,z0=z0,WD=wind$wd,"sd(WD)"=wind$sd_wd,phi=wind$phi,U_sonic=U,T_sonic=T_K,U_trend=mean(wind$umrot),T_trend=mean(wind$Tmdet))
+	c(Var_sonic,Cov_sonic,Ustar=Ustar,L=L,z_sonic=z_sonic,z_canopy=z_canopy,d=d,Zo=z0,WD=wind$wd,"sd(WD)"=wind$sd_wd,phi=wind$phi,U_sonic=U,T_sonic=T_K,U_trend=mean(wind$umrot),T_trend=mean(wind$Tmdet))
 }
 
 
@@ -1745,33 +1736,6 @@ ec_ht8700 <- function(
                 if (!is.null(Damping_dyn)) names(dyn_damping_deming) <- paste("damping.deming.dyn.lag", names(Damping_dyn))
 
 
-                # HT8700: WPL & additional H2O correction
-                # LICOR -> CO2: only WPL correction
-                if (licor_provided && 'h2o_mmolm3' %in% scalars) {
-                    cat('Implement WPL correction HT!\n')
-                    browser()
-                    # get h2o mass/volume in mg/m3
-                    rho_h2o <- scalar_means['mean(h2o_mmolm3)'] * 18
-                    # get dry air mass/volume in mg/m3
-                    # pV=nRT=m/MRT -> m/V=p*MRT, M=28.964
-                    ## hier bin ich!!! -> pass through Temp & Pres from licor
-                    # TODO:
-                    # -> check if NH3 in ugm3 available
-                    # -> check if NH3 in ppb available
-                    # -> check if CO2 available
-                    # -> check ...
-                    # -> get A, B, C
-                    # -> A, B, C for licor are all 1! -> only WPL correction
-                    # -> get dry air mass/volume
-                    # 1. CO2
-                    # 2. NH3 if provided
-                } else {
-                    if (licor_provided) {
-                        cat('No H2O data available -> not applying WPL correction!\n')
-                        # add wpl NA flux to output
-                    }
-                }
-                
                 # write results:
                 # -------------------------------------------------------------------------- 
 

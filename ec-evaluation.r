@@ -1326,7 +1326,7 @@ ec_ht8700 <- function(
             # create regex pattern
             na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'), collapse = '|')
             # check alarms and set nh3 NA
-            nh3_vars <- grep('nh3', names(sonic), value = TRUE)
+            nh3_vars <- grep('nh3', names(ht), value = TRUE)
             na0 <- ht[, sum(is.na(get(nh3_vars[1])))]
             ht[grepl(na_alarm_pattern, alarm_code),
                 (nh3_vars) := NA_real_]

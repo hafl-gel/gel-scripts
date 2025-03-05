@@ -562,16 +562,21 @@ wind_statistics <- function(wind,z_canopy,z_sonic){
 	suppressWarnings(Ustar <- c(sqrt(-Cov_sonic["<u'w'>"]),use.names = FALSE))
 	T_K <- mean(wind$Tmdet + wind$Tdet)
 	U <- mean(wind$umrot + wind$uprot)
-	L <- c(-Ustar^3 * T_K / (0.4 * 9.80620 * Cov_sonic["<w'T'>"]),use.names = FALSE)
-	if(!is.na(z_canopy)){
+	L <- c(-Ustar ^ 3 * T_K / (0.4 * 9.80620 * Cov_sonic["<w'T'>"]), use.names = FALSE)
+	if (!is.na(z_canopy)) {
 		d <- 2/3 * z_canopy
-		suppressWarnings(z0 <- optimize(function(x,ustar,L,z,d,U)abs(U - calcU(ustar, x, L, z-d)),c(0,z_sonic*1.1),ustar=Ustar,L=L,U=U,z=z_sonic,d=d)$minimum)
-		if(z0>=z_sonic)z0 <- NA
+		suppressWarnings(z0 <- optimize(function(x, ustar, L, z, d, U) 
+                abs(U - calcU(ustar, x, L, z - d)), c(0, z_sonic * 1.1), 
+                ustar = Ustar, L = L, U = U, z = z_sonic, d = d)$minimum
+        )
+		if (z0 == z_sonic * 1.1) z0 <- NA
 	} else {
 		d <- NA
 		z0 <- NA
 	}
-	c(Var_sonic,Cov_sonic,Ustar=Ustar,L=L,z_sonic=z_sonic,z_canopy=z_canopy,d=d,Zo=z0,WD=wind$wd,"sd(WD)"=wind$sd_wd,phi=wind$phi,U_sonic=U,T_sonic=T_K,U_trend=mean(wind$umrot),T_trend=mean(wind$Tmdet))
+	c(Var_sonic, Cov_sonic, Ustar = Ustar, L = L, z_sonic = z_sonic, z_canopy = z_canopy, 
+        d = d, Zo = z0, WD = wind$wd, phi = wind$phi, U_sonic = U, T_sonic = T_K
+    )
 }
 
 
@@ -759,7 +764,9 @@ fix_defaults <- function(x, vars) {
 }
 
 ec_ht8700 <- function(
-		sonic_directory, ht_directory, licor_directory
+		sonic_directory
+        , ht_directory = NULL
+        , licor_directory = NULL
 		, start_time = NULL
 		, end_time = NULL
 		, avg_period = '30mins'
@@ -768,14 +775,13 @@ ec_ht8700 <- function(
         , declination = NULL
 		, z_ec = NULL
 		, z_canopy = NULL
-		, variables = c('u', 'v', 'w', 'T', 'nh3_ugm3', 'h2o_mmolm3', 'co2_mmolm3')
         # detrending -> valid entries are blockAVG,linear,linear_robust,ma_xx (xx = time in seconds)
         , detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
-        , hard_flag = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
-        , hard_flag_lower = c(u = -30, v = -30, w = -10, T = 243, nh3_ppb = -100, nh3_ugm3 = -100, h2o_mmolm3 = -100, co2_mmolm3 = -100)
-        , hard_flag_upper = c(u = 30, v = 30, w = 10, T = 333, nh3_ppb = 5000, nh3_ugm3 = 5000, h2o_mmolm3 = 5000, co2_mmolm3 = 5000)
-        , hard_flag_window = '5mins'
-        , hard_flag_replace = FALSE
+        , hard_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
+        , hard_limits_lower = c(u = -30, v = -30, w = -10, T = 243, nh3_ppb = -100, nh3_ugm3 = -100, h2o_mmolm3 = -100, co2_mmolm3 = -100)
+        , hard_limits_upper = c(u = 30, v = 30, w = 10, T = 333, nh3_ppb = 5000, nh3_ugm3 = 5000, h2o_mmolm3 = 5000, co2_mmolm3 = 5000)
+        , hard_limits_window = '5mins'
+        , hard_limits_replace = FALSE
 		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 'wxco2_mmolm3')
         # fix lag in seconds
 		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, wxh2o_mmolm3 = -0.2, wxco2_mmolm3 = -0.2)
@@ -823,12 +829,49 @@ ec_ht8700 <- function(
             '" does not exist!')
     }
 
-    hf_method <- if (hard_flag_replace) 'repl' else 'norepl'
-    scalars <- variables %w/o% c("u","v","w","T")
+    # check sonic function
+    if (!exists('read_sonic', mode = "function")) {
+        stop("function 'read_sonic' doesn't exist -> please source gel script",
+        " read-sonic-data.r")
+    }
+
+    # check data for nh3, co2 & h2o
+    if (is.data.table(sonic_directory)) {
+        if (any(grepl('nh3', names(sonic_directory)))) {
+            ht_directory <- 'data provided with sonic'
+        }
+        if (any(grepl('h2o', names(sonic_directory)))) {
+            licor_directory <- 'data provided with sonic'
+        }
+    }
+
+    # get scalars and fix missing instruments
+    scalars <- sub('wx', '', grep('wx[^T].+', covariances, value = TRUE))
+    # fix missing ht8700
+    if (is.null(ht_directory)) {
+        scalars <- grep('nh3', scalars, value = TRUE, invert = TRUE)
+        covariances <- grep('nh3', covariances, value = TRUE, invert = TRUE)
+    } else if (!exists('read_ht8700', mode = "function")) {
+        stop("function 'read_ht8700' doesn't exist -> please source gel script",
+        " ht8700-functions.r")
+    }
+    # fix missing licor
+    if (is.null(licor_directory)) {
+        scalars <- grep('h2o|co2', scalars, value = TRUE, invert = TRUE)
+        covariances <- grep('h2o|co2', covariances, value = TRUE, invert = TRUE)
+    } else if (!exists('read_licor', mode = "function")) {
+        stop("function 'read_licor' doesn't exist -> please source gel script",
+        " licor-functions.r")
+    }
+
+    # prepare variables etc.
+    variables <- c('u', 'v', 'w', 'T', scalars)
+    scalar_covariances <- grepl('wx[^T].+', covariances)
+    names(scalar_covariances) <- covariances
+    covariances_plotnames <- make.names(sub("x", "", covariances))
+    names(covariances_plotnames) <- covariances
     covariances_variables <- strsplit(covariances, "x")
-    covariances_plotnames <- make.names(gsub("x", "", covariances))
-    scalar_covariances <- as.numeric(grepl("(^ux|xu$)", covariances)) + as.numeric(grepl("(^wx|xw$)", covariances)) + as.numeric(grepl("(^Tx|xT$)", covariances)) < 2
-    names(scalar_covariances) <- names(covariances_plotnames) <- covariances
+    hl_method <- if (hard_limits_replace) 'repl' else 'norepl'
     if (is.null(z_ec) || !is.numeric(z_ec)) {
         stop('argument "z_ec" must be provided as numeric value (height in m a.g.l)!')
     }
@@ -853,17 +896,11 @@ ec_ht8700 <- function(
         mag_dec <- \(x) declination
     }
 
-    # fix missing licor
-    if (missing(licor_directory)) {
-        variables <- variables[!grepl('h2o|co2', variables)]
-        scalar_covariances <- scalar_covariances[!grepl('h2o|co2', scalar_covariances)]
-    }
-
     # fix input (vectors of default values)
     detrending <- fix_defaults(detrending, variables)
-    hard_flag <- fix_defaults(hard_flag, variables)
-    hard_flag_lower <- fix_defaults(hard_flag_lower, variables)
-    hard_flag_upper <- fix_defaults(hard_flag_upper, variables)
+    hard_limits <- fix_defaults(hard_limits, variables)
+    hard_limits_lower <- fix_defaults(hard_limits_lower, variables)
+    hard_limits_upper <- fix_defaults(hard_limits_upper, variables)
     lag_fix <- fix_defaults(lag_fix, covariances)
     lag_dyn <- fix_defaults(lag_dyn, covariances)
     damping_reference <- fix_defaults(damping_reference, covariances[scalar_covariances])
@@ -876,34 +913,20 @@ ec_ht8700 <- function(
     plotting_covar_units <- fix_defaults(plotting_covar_units, covariances)
     plotting_covar_colors <- fix_defaults(plotting_covar_colors, covariances)
 
-    lim_range <- rbind(lower = hard_flag_lower, top = hard_flag_upper)
+    lim_range <- rbind(lower = hard_limits_lower, top = hard_limits_upper)
     damp_region <- mapply(c, damping_lower, damping_upper, SIMPLIFY = FALSE)
 
     # get flux variables and lag times:                                      
     # ------------------------------------------------------------------------------ 
     flux_variables <- unique(unlist(strsplit(covariances, split = "x")))
 
-    # check if covar vars are given in variables
-    if (length(vmiss <- setdiff(flux_variables, variables)) > 0) {
-        stop('Covariance variable(s) ', paste(vmiss, collapse = ', '), 
-            ' must be defined with argument "variables"!')
-    }
-
     # ------------------------------------------------------------------------------
-
-    # check functions:                                      
-    # ------------------------------------------------------------------------------ 
-    if (!exists('read_windmaster_ascii', mode = "function")) {
-        stop("function 'read_windmaster_ascii' doesn't exist -> please source gel script",
-        " read-sonic-data.r")
-    }
-    if (!exists('read_ht8700', mode = "function")) {
-        stop("function 'read_ht8700' doesn't exist -> please source gel script",
-        " read-sonic-data.r")
-    }
 
     # get data
     # ------------------------------------------------------------------------------
+
+    cat("\n************************************************************\n")
+    cat("HT8700/LI-COR EC evaluation\n")
 
     # mandatory sonic data
     if (sonic_has_data <- inherits(sonic_directory, 'data.table')) {
@@ -958,16 +981,18 @@ ec_ht8700 <- function(
     }
 
     # optional ht8700 data
-    if (ht_provided <- !missing(ht_directory)) {
+    ht_with_sonic <- FALSE
+    if (ht_provided <- !is.null(ht_directory)) {
         if (ht_has_data <- inherits(ht_directory, 'data.table')) {
-            cat('HT8700: raw data provided...\n')
+            cat('HT8700: raw data provided in input...\n')
             setDT(ht_directory)
             # set time zone to UTC
             ht_directory[, Time := with_tz(Time, 'UTC')]
             # get start & end
             start_ht <- ht_directory[, Time[1]]
             end_ht <- ht_directory[, Time[.N]]
-        } else {
+        } else if (!(ht_with_sonic <- ht_directory == 'data provided with sonic')) {
+            cat('HT8700: data provided...\n')
             # get files
             ht_files <- dir(ht_directory, pattern = '^(py_)?fnf_.*_ht8700_.*')
             if (ht_old_format <- length(ht_files) == 0) {
@@ -1003,13 +1028,16 @@ ec_ht8700 <- function(
             # get end (last date + 24h)
             end_ht <- strptime(sub(ht_pattern[1], ht_pattern[4], tail(ht_files, 1)),
                 '%Y%m%d%H%M%S', tz = ht_pattern[3]) + 24 * 3600
+        } else if (ht_with_sonic) {
+            cat('HT8700: raw data provided with sonic input...\n')
         }
     }
 
     # optional licor data
-    if (licor_provided <- !missing(licor_directory)) {
+    licor_with_sonic <- FALSE
+    if (licor_provided <- !is.null(licor_directory)) {
         if (licor_has_data <- inherits(licor_directory, 'data.table')) {
-            cat('LI-7500: raw data provided...\n')
+            cat('LI-7500: raw data provided in input...\n')
             licor_files <- NULL
             setDT(licor_directory)
             # set time zone to UTC
@@ -1017,7 +1045,8 @@ ec_ht8700 <- function(
             # get start & end
             start_licor <- licor_directory[, Time[1]]
             end_licor <- licor_directory[, Time[.N]]
-        } else {
+        } else if (!(licor_with_sonic <- licor_directory == 'data provided with sonic')) {
+            cat('LI-7500: data provided...\n')
             licor_files <- dir(licor_directory, pattern = '^(py_)?fnf_.*_licor_.*')
             if (length(licor_files) == 0) {
                 stop('No licor data available in "', licor_directory, '"!')
@@ -1042,6 +1071,8 @@ ec_ht8700 <- function(
             # get end (last date + 24h)
             end_licor <- strptime(sub(licor_pattern[1], licor_pattern[2], tail(licor_files, 1)),
                 '%Y%m%d%H%M%S', tz = licor_pattern[3]) + 24 * 3600
+        } else if (licor_with_sonic) {
+            cat('LI-7500: raw data provided with sonic input...\n')
         }
     } else {
         # check if ht available
@@ -1049,6 +1080,8 @@ ec_ht8700 <- function(
             stop('neither ht8700 nor licor data or directory has been provided -> cannot process fluxes without concentration data!')
         }
     }
+
+    cat("************************************************************\n")
 
     # parse time diff
     avg_secs <- parse_time_diff(avg_period)
@@ -1125,37 +1158,23 @@ ec_ht8700 <- function(
         names(Cospec_fix_Out) <- names(Cospec_dyn_Out) <- names(Covars_Out) <- names(Ogive_fix_Out) <- names(Ogive_dyn_Out) <- dates
     }
 
-    cat("\n************************************************************\n")
-    cat("HT8700/LI-COR EC evaluation\n")
-    if (!licor_provided) {
-        cat("!!! no licor data available -> H2O corrections switched off\n")
-        scalars <- grep('h2o|co2', scalars, invert = TRUE, value = TRUE)
-        sind <- grep('h2o|co2', names(scalar_covariances))
-        if (length(sind)) {
-            covariances_variables <- covariances_variables[-sind]
-            covariances_plotnames <- covariances_plotnames[-sind]
-            scalar_covariances <- scalar_covariances[-sind]
-        }
-    } else {
-        cat("-> licor data available. Fluxes will be corrected for H2O effects...\n")
-    }
-    if (!ht_provided) {
-        cat("!!! no ht8700 data available\n")
-        scalars <- grep('nh3', scalars, invert = TRUE, value = TRUE)
-        sind <- grep('nh3', names(scalar_covariances))
-        if (length(sind)) {
-            covariances_variables <- covariances_variables[-sind]
-            covariances_plotnames <- covariances_plotnames[-sind]
-            scalar_covariances <- scalar_covariances[-sind]
-        }
-    }
-    cat("************************************************************\n")
-
     # copy scalars etc. to fix missing
     input_scalars <- scalars
+    input_covariances <- covariances
     input_covariances_variables <- covariances_variables
     input_covariances_plotnames <- covariances_plotnames
     input_scalar_covariances <- scalar_covariances
+
+    # prepare output
+    scalar_means <- setNames(
+        rep(NA_real_, length(scalars)),
+        scalars
+    )
+    scalar_sd <- setNames(
+        rep(NA_real_, length(scalars)),
+        scalars
+    )
+    scalar_covariances_only <- covariances[scalar_covariances]
 
     # loop over dates
     for (day in seq_along(dates)) {
@@ -1176,15 +1195,6 @@ ec_ht8700 <- function(
 
         # reading data file:                                      
         # ------------------------------------------------------------------------------
-
-        # TODO:
-        # -> include licor measurements + add co2 & h2o to variables in arguments
-        # -> add uncorrected nh3 flux + nh3 flux corrected if licor flux av.
-    # TODO:
-    # -> keep last data for UTC/CET/CEST shift
-    # -> read/check new data
-    # -> check which instruments ok
-    # -> run eval accordingly
 
         # get sonic data
         if (sonic_has_data) {
@@ -1209,6 +1219,10 @@ ec_ht8700 <- function(
                 gsub('-', '_', dates_sonic, fixed = TRUE)
                 , sonic_files, value = TRUE)
             if (length(sonic_read)) {
+                if (any(grepl('\\.(qs|rds)$', sonic_read))) {
+                    cat('TODO: Fix reading rds/qs sonic files!!\n')
+                    browser()
+                }
                 # read new sonic files
                 capture.output(
                     sonic <- rbindlist(lapply(file.path(sonic_directory, sonic_read), 
@@ -1230,13 +1244,13 @@ ec_ht8700 <- function(
         cat('done\n')
 
         # get ht8700 data
-        if (ht_has_data) {
+        if (ht_provided && ht_has_data) {
             cat('Subsetting HT8700 data - ')
             # copy
             ht <- ht_directory[Time >= times_utc$st[1] &
                 Time < tail(times_utc$et, 1), ]
             cat('done\n')
-        } else if (ht_provided) {
+        } else if (ht_provided && !ht_with_sonic) {
             cat('Reading HT8700 files - ')
             # get data from old files
             if (day > 1) {
@@ -1253,6 +1267,10 @@ ec_ht8700 <- function(
                 gsub('-', '_', dates_ht, fixed = TRUE)
                 , ht_files, value = TRUE)
             if (length(ht_read)) {
+                if (any(grepl('\\.(qs|rds)$', ht_read))) {
+                    cat('TODO: Fix reading rds/qs ht files!!\n')
+                    browser()
+                }
                 # read new ht files
                 capture.output(
                     ht <- rbindlist(lapply(file.path(ht_directory, ht_read), read_ht8700))
@@ -1276,10 +1294,30 @@ ec_ht8700 <- function(
         }
 
         # check HT8700 quality: alarm codes & OSS
-        if (ht_provided && !is.null(ht)) {
+        if (ht_provided && ht_with_sonic) {
             cat('Checking oss and alarm codes - ')
             # add alarm code
-            ht[, alarm_code := get_alarms(.SD)]
+            if (!('alarm_code' %in% names(sonic))) {
+                sonic[, alarm_code := get_alarms(.SD)]
+            }
+            # create regex pattern
+            na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'), collapse = '|')
+            # check alarms and set nh3 NA
+            na0 <- sonic[, sum(is.na(nh3_ppb))]
+            sonic[grepl(na_alarm_pattern, alarm_code),
+                paste0('nh3_', c('ppb', 'ugm3')) := NA_real_]
+            na1 <- sonic[, sum(is.na(nh3_ppb))]
+            # check oss
+            sonic[oss < oss_threshold,
+                paste0('nh3_', c('ppb', 'ugm3')) := NA_real_]
+            cat('done\nBad alarms:', na1 - na0, '\nValues below OSS:', 
+                sonic[, sum(oss < oss_threshold)], '\n')
+        } else if (ht_provided && !is.null(ht)) {
+            cat('Checking oss and alarm codes - ')
+            # add alarm code
+            if (!('alarm_code' %in% names(ht))) {
+                ht[, alarm_code := get_alarms(.SD)]
+            }
             # create regex pattern
             na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'), collapse = '|')
             # check alarms and set nh3 NA
@@ -1295,13 +1333,13 @@ ec_ht8700 <- function(
         }
 
         # get licor data
-        if (licor_has_data) {
+        if (licor_provided && licor_has_data) {
             cat('Subsetting LI-7500 data - ')
             # copy
             licor <- licor_directory[Time >= times_utc$st[1] &
                 Time < tail(times_utc$et, 1), ]
             cat('done\n')
-        } else if (licor_provided) {
+        } else if (licor_provided && !licor_with_sonic) {
             cat('Reading LI-7500 files - ')
             # get data from old files
             if (day > 1) {
@@ -1318,6 +1356,10 @@ ec_ht8700 <- function(
                 gsub('-', '_', dates_licor, fixed = TRUE)
                 , licor_files, value = TRUE)
             if (length(licor_read)) {
+                if (any(grepl('\\.(qs|rds)$', licor_read))) {
+                    cat('TODO: Fix reading rds/qs licor files!!\n')
+                    browser()
+                }
                 # read new licor files
                 capture.output(
                     licor <- rbindlist(lapply(file.path(licor_directory, licor_read), 
@@ -1352,13 +1394,15 @@ ec_ht8700 <- function(
             cat('No valid data available...\n')
             return(NULL)
         }
-
+        
         # check variables and covars and subset by columns
         if (!all(cn_check <- variables %in% names(daily_data))) {
-            stop("cannot find variable(s): ", paste(variables[!cn_check], collapse = ", "), "\nAvailable column names are: ", paste(names(daily_data), collapse = ", "))
-        } else {
-            daily_data <- daily_data[, .SD, .SDcols = unique(
-                c(variables, 'Time', 'temp_amb', 'press_amb', 'oss', 'alarm_code'))]
+            stop(
+                "cannot find variable(s): ", 
+                paste(variables[!cn_check], collapse = ", "),
+                "\nAvailable column names are: ", 
+                paste(names(daily_data), collapse = ", ")
+            )
         }
 
         # get intervals:                                      
@@ -1393,40 +1437,39 @@ ec_ht8700 <- function(
         }
 
         # be verbose
-        cat("\n~~~\nCalculation will include",
-            daily_data[, uniqueN(bin)]
-            ,"intervals between", 
-            format(st_interval[1], format = "%Y-%m-%d %H:%M"), "and", 
-            format(et_interval[length(et_interval)], 
-                format = "%Y-%m-%d %H:%M", usetz = TRUE), 
-            "on a", avg_period, "min basis\n~~~\n\n")
+        daily_data[, {
+            cat("\n~~~\nCalculation will include",
+                uniqueN(bin)
+                ,"intervals between", 
+                format(Time[1], format = "%Y-%m-%d %H:%M"), "and", 
+                format(Time[.N], 
+                    format = "%Y-%m-%d %H:%M", usetz = TRUE), 
+                "on a", avg_period, "min basis\n~~~\n\n")
+        }]
 
         # --------------------- read fix lags from lag_lookuptable ---------------------
         # TODO: only if necessary/wanted
 
         # loop over individual intervals:
         # ------------------------------------------------------------------------------ 
-        Hz <- daily_data[, {
+        .Hz <- daily_data[, {
             d_t <- diff(as.numeric(Time))
             round(1 / median(d_t, na.rm = TRUE), -1)
         }]
-        if (Hz < 10) {
+        if (.Hz < 10) {
             cat('Frequency is lower than 10 Hz! Skipping evaluation!\n')
             next
         }
-        n_period <- avg_secs * Hz
+        n_period <- avg_secs * .Hz
         n_threshold <- thresh_period * n_period
 
         # fix and dyn lags:                                      
         # ------------------------------------------------------------------------------ 
-        fix_lag <- round(lag_fix * Hz)
+        fix_lag <- round(lag_fix * .Hz)
         dyn_lag <- rbind(
-            lower = round((lag_fix - lag_dyn) * Hz)
-            , upper = round((lag_fix + lag_dyn) * Hz)
+            lower = round((lag_fix - lag_dyn) * .Hz)
+            , upper = round((lag_fix + lag_dyn) * .Hz)
         )
-
-        # omit NA in sonic & scalars
-        daily_data <- na.omit(daily_data, cols = c('u', 'v', 'w', 'T'))
 
         # loop over bins
         result_list[[day]] <- daily_data[, {
@@ -1436,17 +1479,16 @@ ec_ht8700 <- function(
             # --------------------------------------------------------------------------
             if (.N > n_threshold) {
 
-                # fix scalars etc.
-                scalars <- input_scalars
-                covariances_variables <- input_covariances_variables
-                covariances_plotnames <- input_covariances_plotnames
-                scalar_covariances <- input_scalar_covariances
-
                 # ugly copy because of inability to change .SD values
                 SD <- copy(.SD)
 
-                # omit NA values
-                if (SD[,anyNA(.SD), .SDcols = scalars]) {
+                # check NA values in scalars
+                scalars <- input_scalars
+                covariances <- input_covariances
+                covariances_variables <- input_covariances_variables
+                covariances_plotnames <- input_covariances_plotnames
+                scalar_covariances <- input_scalar_covariances
+                if (SD[, anyNA(.SD), .SDcols = scalars]) {
                     # loop over scalars & check
                     for (s in scalars) {
                         SD[, {
@@ -1456,8 +1498,9 @@ ec_ht8700 <- function(
                                     ' threshold -> skipping its evaluation\n', sep = '')
                                 scalars <- grep(s, scalars, fixed = TRUE, invert = TRUE,
                                     value = TRUE)
-                                sind <- grep(s, names(scalar_covariances))
+                                sind <- grep(s, covariances)
                                 if (length(sind)) {
+                                    covariances <- covariances[-sind]
                                     covariances_variables <- covariances_variables[-sind]
                                     covariances_plotnames <- covariances_plotnames[-sind]
                                     scalar_covariances <- scalar_covariances[-sind]
@@ -1470,22 +1513,22 @@ ec_ht8700 <- function(
                 # times, frequencies etc.
                 # --------------------------------------------------------------------------
                 Int_Start <- Time[1]
-                Int_End <- tail(Time, 1) + 1 / Hz
+                Int_End <- tail(Time, 1) + 1 / .Hz
                 Int_Time <- as.numeric(Int_End - Int_Start, units = "secs")
-                freq <- Hz * seq(floor(n_period / 2)) / floor(n_period / 2)
+                freq <- .Hz * seq(floor(n_period / 2)) / floor(n_period / 2)
                 # TODO (maybe for later): include NA where d_t>2*mean, remove entries where d_t < 0.5*mean
 
-                # raw data quality control I, i.e. hard flags = physical range
+                # raw data quality control I, i.e. hard limits = physical range
                 # --------------------------------------------------------------------------
-                cat("~~~\nchecking hard flags...\n")
-                if (any(hard_flag)) {
-                    SD[, variables[hard_flag] := H.flags(mget(variables[hard_flag]), Time, Hz, lim_range[, variables[hard_flag], drop = FALSE], hard_flag_window, hf_method)]
+                cat("~~~\nchecking hard limits...\n")
+                if (any(hard_limits)) {
+                    SD[, variables[hard_limits] := H.flags(mget(variables[hard_limits]), Time, .Hz, lim_range[, variables[hard_limits], drop = FALSE], hard_limits_window, hl_method)]
                 } 
 
                 # calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
                 # -------------------------------------------------------------------------- 
                 cat("~~~\nrotating and deterending sonic data...\n")
-                wind <- SD[, I(rotate_detrend(u, v, w, T, method = detrending[c("u", "v", "w", "T")], Hz_ts = Hz))]
+                wind <- SD[, I(rotate_detrend(u, v, w, T, method = detrending[c("u", "v", "w", "T")], Hz_ts = .Hz))]
                 SD[, c("u", "v", "w", "T") := wind[c("uprot", "vprot", "wprot", "Tdet")]]
 
                 # calculate some turbulence parameters and collect some wind parameters
@@ -1498,28 +1541,21 @@ ec_ht8700 <- function(
                 # switch to list with different lengths
                 # only for scalar fluxes!
                 # -> check na.action for omitted indices
-                scalar_list <- SD[, I(lapply(.SD, na.omit)), .SDcols = scalars]
+                if (length(scalars)) {
+                    scalar_list <- SD[, I(lapply(.SD, na.omit)), .SDcols = scalars]
 
                 # detrend scalars
                 # -------------------------------------------------------------------------- 
-                if (length(scalars)) {
                     cat("~~~\ndetrending scalars...\n")
-                    detrended_scalars <- mapply(trend, y = scalar_list, method = detrending[scalars], MoreArgs = list(Hz_ts = Hz), SIMPLIFY = FALSE)
-                } else {
-                    detrended_scalars <- NULL
-                }
+                    detrended_scalars <- mapply(trend, y = scalar_list, method = 
+                        detrending[scalars], MoreArgs = list(Hz_ts = .Hz), SIMPLIFY = FALSE)
 
                 # calculate scalar averages and sd:
                 # -------------------------------------------------------------------------- 
-                if (length(scalars)) {
-                    scalar_means <- sapply(detrended_scalars, function(x) mean(x[["fitted"]] + x[["residuals"]]))
-                    scalar_means_trend <- sapply(detrended_scalars, function(x) mean(x[["fitted"]]))
-                    scalar_sd <- sapply(detrended_scalars, function(x) sd(x[["residuals"]]))
-                    names(scalar_means) <- paste0("mean(", names(scalar_means), ")") 
-                    names(scalar_means_trend) <- paste0("mean(trend.", names(scalar_means_trend), ")") 
-                    names(scalar_sd) <- paste0("sd(", names(scalar_sd), ")") 
+                    scalar_means[scalars] <- sapply(scalar_list, mean)
+                    scalar_sd[scalars] <- sapply(scalar_list, sd)
                 } else {
-                    scalar_sd <- scalar_means_trend <- scalar_means <- NULL
+                    detrended_scalars <- NULL
                 }
 
                 # start of flux relevant data manipulation
@@ -1546,26 +1582,28 @@ ec_ht8700 <- function(
                     # get Re
                     re <- Re(fft(Conj(ffts[[i[2]]]) * ffts[[i[1]]], inverse = TRUE))
                     # get missing
-                    n_missing <- n_period - N
-                    if (n_missing %% 2) {
-                        n1 <- rep(NA_real_, (n_missing + 1) / 2)
-                        n2 <- rep(NA_real_, (n_missing - 1) / 2)
-                    } else {
-                        n1 <- n2 <- rep(NA_real_, n_missing / 2)
-                    }
                     # subset
                     if (N %% 2) {
-                        c(
-                            n1,
-                            re[c(((N + 1) / 2 + 1):N, 1:((N + 1) / 2))] * N / (N - 1),
-                            n2
-                        )
+                        out <- re[c(((N + 1) / 2 + 1):N, 1:((N + 1) / 2))] * N / (N - 1)
                     } else {
-                        c(
-                            n1,
-                            re[c((N / 2 + 1):N, 1:(N / 2))] * N / (N - 1),
-                            n2
-                        )
+                        out <- re[c((N / 2 + 1):N, 1:(N / 2))] * N / (N - 1)
+                    }
+                    n_missing <- n_period - N
+                    if (sign(n_missing) >= 0) {
+                        if (n_missing %% 2) {
+                            n1 <- rep(NA_real_, (n_missing + 1) / 2)
+                            n2 <- rep(NA_real_, (n_missing - 1) / 2)
+                        } else {
+                            n1 <- n2 <- rep(NA_real_, n_missing / 2)
+                        }
+                        c(n1, out, n2)
+                    } else {
+                        if (-n_missing %% 2) {
+                            ind <- ((1 - n_missing) / 2 + 1):(N - (-n_missing - 1) / 2)
+                        } else {
+                            ind <- (1 - n_missing / 2):(N + n_missing / 2)
+                        }
+                        out[ind]
                     }
                 }, ffts = FFTs)
                 names(Covars) <- covariances
@@ -1607,7 +1645,11 @@ ec_ht8700 <- function(
                             (N - 1) * 2
                         # get missing
                         n_missing <- n_period / 2 - length(re)
-                        c(re, rep(NA_real_, n_missing))
+                        if (sign(n_missing) >= 0) {
+                            c(re, rep(NA_real_, n_missing))
+                        } else {
+                            re[seq_len(n_period / 2)]
+                        }
                     }, i = covariances_variables, lag = fix_lag, 
                     MoreArgs = list(ffts = FFTs), SIMPLIFY = FALSE)
                 names(Cospec_fix) <- covariances
@@ -1630,7 +1672,11 @@ ec_ht8700 <- function(
                             (N - 1) * 2
                         # get missing
                         n_missing <- n_period / 2 - length(re)
-                        c(re, rep(NA_real_, n_missing))
+                        if (sign(n_missing) >= 0) {
+                            c(re, rep(NA_real_, n_missing))
+                        } else {
+                            re[seq_len(n_period / 2)]
+                        }
                     }, i = covariances_variables, lag = dyn_lag_max[2, ],
                     MoreArgs = list(ffts = FFTs), SIMPLIFY = FALSE)
                 names(Cospec_dyn) <- covariances
@@ -1652,7 +1698,7 @@ ec_ht8700 <- function(
                     Cospec_dyn_Out[[day]][[.GRP]] <- c(list(freq = freq), Cospec_dyn)
                     Ogive_fix_Out[[day]][[.GRP]] <- c(list(freq = freq), Ogive_fix)
                     Ogive_dyn_Out[[day]][[.GRP]] <- c(list(freq = freq), Ogive_dyn)
-                    Covars_Out[[day]][[.GRP]] <- c(list(Hz = Hz), Covars)
+                    Covars_Out[[day]][[.GRP]] <- c(list(Hz = .Hz), Covars)
                 }
 
 
@@ -1670,8 +1716,8 @@ ec_ht8700 <- function(
                     Damping_dyn <- Damping_fix <- NULL
                 }
 
+                ##### ~~~> sub-intervals switched off
                 if (FALSE) {
-                    # ---> sub-intervals switched off
                     # sub-int: sub-interval calculations (switch do data.frame since code already exists (I'm lazy))
                     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
                     cat("~~~\nsub-intervals (subint_n = ", subint_n, ")\n", sep = '')
@@ -1682,7 +1728,7 @@ ec_ht8700 <- function(
                     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
                     sub_wind <- lapply(sub_Data, function(x) 
                         rotate_detrend(x[, "u"], x[, "v"], x[, "w"], x[, "T"], 
-                            method = subint_detrending[c("u", "v", "w", "T")], Hz_ts = Hz))
+                            method = subint_detrending[c("u", "v", "w", "T")], Hz_ts = .Hz))
                     for(sub in seq_along(sub_wind)){
                         sub_Data[[sub]][,c("u","v","w","T")] <- sub_wind[[sub]][c("uprot","vprot","wprot","Tdet")]
                     }
@@ -1693,7 +1739,7 @@ ec_ht8700 <- function(
                         sub_detrended_scalars <- lapply(sub_Data, 
                             function(x) mapply(trend, y = x[, scalars, drop = FALSE], 
                                 method = subint_detrending[scalars], 
-                                MoreArgs = list(Hz_ts = Hz), SIMPLIFY = FALSE))
+                                MoreArgs = list(Hz_ts = .Hz), SIMPLIFY = FALSE))
                         for (sub in seq_along(sub_wind)) {
                             sub_Data[[sub]][, scalars] <- lapply(sub_detrended_scalars[[sub]], "[[", "residuals")
                         }
@@ -1719,22 +1765,21 @@ ec_ht8700 <- function(
 
                 ### some output and namings
                 fix_lag_out <- fix_lag
-                names(fix_lag_out) <- paste("fix.lag", names(fix_lag_out))
                 dyn_lag_out <- dyn_lag_max["tau", ]
-                names(dyn_lag_out) <- paste("dyn.lag", names(dyn_lag_out))
                 flux_fix_lag <- sapply(Ogive_fix, "[", 1)
-                names(flux_fix_lag) <- paste("flux.fix.lag", names(flux_fix_lag))
                 flux_dyn_lag <- sapply(Ogive_dyn, "[", 1)
-                names(flux_dyn_lag) <- paste("flux.dyn.lag", names(flux_dyn_lag))
                 fix_damping_pbreg <- sapply(Damping_fix, "[[", 1)
-                if (!is.null(Damping_fix)) names(fix_damping_pbreg) <- paste("damping.pbreg.fix.lag", names(Damping_fix))
                 dyn_damping_pbreg <- sapply(Damping_dyn, "[[", 1)
-                if (!is.null(Damping_dyn)) names(dyn_damping_pbreg) <- paste("damping.pbreg.dyn.lag", names(Damping_dyn))
                 fix_damping_deming <- sapply(Damping_fix, "[[", 2)
-                if (!is.null(Damping_fix)) names(fix_damping_deming) <- paste("damping.deming.fix.lag", names(Damping_fix))
                 dyn_damping_deming <- sapply(Damping_dyn, "[[", 2)
-                if (!is.null(Damping_dyn)) names(dyn_damping_deming) <- paste("damping.deming.dyn.lag", names(Damping_dyn))
-
+                if (!is.null(Damping_fix)) {
+                    names(fix_damping_pbreg) <- names(Damping_fix)
+                    names(fix_damping_deming) <- names(Damping_fix)
+                }
+                if (!is.null(Damping_dyn)) {
+                    names(dyn_damping_pbreg) <- names(Damping_dyn)
+                    names(dyn_damping_deming) <- names(Damping_dyn)
+                }
 
                 # write results:
                 # -------------------------------------------------------------------------- 
@@ -1746,37 +1791,83 @@ ec_ht8700 <- function(
                         , Data_Start = with_tz(Int_Start, tz_user)
                         , Data_End = with_tz(Int_End, tz_user)
                         , tzone = tz_user
-                        , "Int_Length (min)" = round(Int_Time / 60, 4)
-                        , N = .N
+                        , duration_minutes = round(Int_Time / 60, 4)
+                        , n_values = .N
                         #, SubInts =  subint_n
-                        , temp_amb = mean(temp_amb, na.rm = TRUE)
-                        , press_amb = mean(press_amb, na.rm = TRUE)
-                        , oss = mean(oss, na.rm = TRUE)
-                        , alarm_codes = paste(unique(unlist(strsplit(
-                                        unique(alarm_code[!is.na(alarm_code)])
-                                        , split = ','))), collapse = ',')
-                    ),
-                    as.list(c(
+                    )
+                    , if (ht_provided) {
+                        list(
+                            ht_temp_amb = mean(ht_temp_amb, na.rm = TRUE)
+                            , ht_press_amb = mean(ht_press_amb, na.rm = TRUE)
+                            , ht_oss = mean(ht_oss, na.rm = TRUE)
+                            , ht_alarm_codes = paste(unique(unlist(strsplit(
+                                            unique(ht_alarm_code[!is.na(ht_alarm_code)])
+                                            , split = ','))), collapse = ',')
+                        )
+                    }
+                    , if (licor_provided) {
+                        list(
+                            li_temp_amb = mean(li_temp_amb, na.rm = TRUE)
+                            , li_press_amb = mean(li_press_amb, na.rm = TRUE)
+                            , li_co2ss = mean(li_co2ss, na.rm = TRUE)
+                        )
+                    }
+                    , as.list(c(
                         wind_stats
-                        , scalar_means
-                        , scalar_means_trend
-                        , scalar_sd
+                        # scalar avg & sd
+                        , setNames(scalar_means[input_scalars], paste0('avg_', input_scalars))
+                        , setNames(scalar_sd[input_scalars], paste0('sd_', input_scalars))
+                        # fluxes
+                        , setNames(
+                            flux_fix_lag[covariances],
+                            paste0('flux_fix_', covariances)
+                        )
+                        , setNames(
+                            flux_dyn_lag[covariances],
+                            paste0('flux_dyn_', covariances)
+                        )
                         # , sub_cov_means
                         # , sub_cov_sd
                         # fix/dyn lag as seconds
-                        , fix_lag_out / Hz
-                        , dyn_lag_out / Hz
-                        , flux_fix_lag
-                        , flux_dyn_lag
-                        , fix_damping_pbreg
-                        , dyn_damping_pbreg
-                        , fix_damping_deming
-                        , dyn_damping_deming
+                        , setNames(
+                            fix_lag_out[covariances] / .Hz, 
+                            paste0('lag_fix_', covariances)
+                        )
+                        , setNames(
+                            dyn_lag_out[covariances] / .Hz, 
+                            paste0('lag_dyn_', covariances)
+                        )
+                        , if (!is.null(Damping_fix)) {
+                            list(
+                                setNames(
+                                    fix_damping_pbreg[scalar_covariances_only],
+                                    paste0('damping_fix_pbreg_', scalar_covariances_only)
+                                ),
+                                setNames(
+                                    fix_damping_deming[scalar_covariances_only],
+                                    paste0('damping_fix_deming_', scalar_covariances_only)
+                                )
+                            )
+                        }
+                        , if (!is.null(Damping_dyn)) {
+                            list(
+                                setNames(
+                                    dyn_damping_pbreg[scalar_covariances_only],
+                                    paste0('damping_dyn_pbreg_', scalar_covariances_only)
+                                ),
+                                setNames(
+                                    dyn_damping_deming[scalar_covariances_only],
+                                    paste0('damping_dyn_deming_', scalar_covariances_only)
+                                )
+                            )
+                        }
                         ))
                 )				
 
 
                 if (create_graphs) {
+                    cat('TODO: fix graphs with new proceedure!\n')
+                    browser()
                     if (!dir.exists(path_folder)) {
                         dir.create(path_folder, recursive = FALSE)
                     }

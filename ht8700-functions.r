@@ -512,29 +512,39 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
     n_out <- nrow(basis_sonic)
     out <- data.table(
         Time = POSIXct(n_out), 
-        nh3_ppb = NA_real_,
-        nh3_ugm3 = NA_real_, 
-        h2o_mmolm3 = NA_real_,
-        co2_mmolm3 = NA_real_,
-        temp_amb = NA_real_, 
-        press_amb = NA_real_, 
-        oss = NA_real_, 
-        peak_pos = NA_real_,
-        alarm_code = NA_character_,
         Hz = NA_character_,
         u = NA_real_, 
         v = NA_real_, 
         w = NA_real_, 
         T = NA_real_, 
-        sonic = NA_character_
+        sonic = NA_character_,
+        nh3_ppb = NA_real_,
+        nh3_ugm3 = NA_real_, 
+        ht_temp_amb = NA_real_, 
+        ht_press_amb = NA_real_, 
+        ht_oss = NA_real_, 
+        ht_peak_pos = NA_real_,
+        ht_alarm_code = NA_character_,
+        h2o_mmolm3 = NA_real_,
+        co2_mmolm3 = NA_real_,
+        li_temp_amb = NA_real_,
+        li_press_amb = NA_real_,
+        li_co2ss = NA_real_
     )
     if (n_out == 0) {
         return(out)
     }
     # fill sonic
-    out[, c('Time', 'Hz', 'u', 'v', 'w', 'T', 'sonic') := copy(basis_sonic)]
+    sonic_vars <- names(out)[1:7]
+    out[, (sonic_vars) := copy(basis_sonic[, sonic_vars, with = FALSE])]
     # fill ht
+    ht_vars <- names(out)[8:14]
+    ht_orig <- c('nh3_ppb', 'nh3_ugm3', 'temp_amb', 'press_amb', 'oss', 'peak_pos', 'alarm_code')
     if (!is.null(draw_ht)) {
+        # check alarm codes
+        if (!('alarm_code' %in% names(draw_ht))) {
+            draw_ht[, alarm_code := get_alarms(.SD)]
+        }
         # times
         t_basis <- basis_sonic[, as.numeric(Time)]
         t_draw <- draw_ht[, as.numeric(Time)]
@@ -544,11 +554,25 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
         # get matching indices
         indices <- match_times(t_basis - t0, t_draw - t0, d_t)
         # fill values
-        out[indices[[1]], c('nh3_ppb', 'nh3_ugm3', 'temp_amb', 'press_amb', 'oss',
-            'peak_pos', 'alarm_code') := draw_ht[indices[[2]], .(nh3_ppb, nh3_ugm3,
-                temp_amb, press_amb, oss, peak_pos, alarm_code)]]
+        out[indices[[1]], (ht_vars) := draw_ht[indices[[2]], ht_orig, with = FALSE]]
+    } else {
+        # check if original names
+        if (grepl('^oss$', names(basis_sonic))) {
+            # check alarm codes
+            if (!('alarm_code' %in% names(basis_sonic))) {
+                basis_sonic[, alarm_code := get_alarms(.SD)]
+            }
+            # re-add ht data
+            out <- cbind(out, basis_sonic[, ht_orig, with = FALSE])
+            setnames(out, ht_orig, ht_vars)
+        } else if (grepl('^ht_oss$', names(basis_sonic))) {
+            # re-add ht data
+            out <- cbind(out, basis_sonic[, ht_vars, with = FALSE])
+        }
     }
     # fill licor
+    licor_vars <- names(out)[15:19]
+    licor_orig <- c('H2OD', 'CO2D', 'Temp', 'Pres', 'CO2SS')
     if (!is.null(draw_licor)) {
         t_basis <- basis_sonic[, as.numeric(Time)]
         t_licor <- draw_licor[, as.numeric(Time)]
@@ -556,8 +580,18 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
         # get matching indices
         indices <- match_times(t_basis - t0, t_licor - t0, d_t)
         # fill values
-        out[indices[[1]], c('h2o_mmolm3', 'co2_mmolm3') := draw_licor[indices[[2]], .(
-            H2OD, CO2D)]]
+        out[indices[[1]], (licor_vars) := draw_licor[indices[[2]], licor_orig, 
+                with = FALSE]]
+    } else {
+        # check if original names
+        if (grepl('^CO2D$', names(basis_sonic))) {
+            # re-add licor data
+            out <- cbind(out, basis_sonic[, licor_orig, with = FALSE])
+            setnames(out, licor_orig, licor_vars)
+        } else if (grepl('^co2_mmolm3$', names(basis_sonic))) {
+            # re-add licor data
+            out <- cbind(out, basis_sonic[, licor_vars, with = FALSE])
+        }
     }
     # return
     out

@@ -6,7 +6,16 @@ library(ibts)
 ## main function to read sonic data
 read_sonic <- function(FilePath) {
 	bn <- basename(FilePath)
-	if (grepl("^(py_)?fnf_", bn)) {
+    # check if provided as qs or rds
+    if (grepl('[.]qs$', bn)) {
+        if (!require(qs)) {
+            stop('data is provided as *.qs file -> install qs library',
+                ' running "install.packages("qs")"')
+        }
+        qs::qread(FilePath)
+    } else if (grepl('[.]rds$', bn)) {
+        readRDS(FilePath)
+    } else if (grepl("^(py_)?fnf_", bn)) {
         # new data format -> TODO: check HS vs Windmaster
         read_hs_ascii(FilePath)
         # read_windmaster_ascii(FilePath)

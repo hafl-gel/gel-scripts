@@ -119,6 +119,18 @@ Rcpp::List licor_read_cpp(String filename) {
 
 # R wrapper, main function
 read_licor <- function(FilePath) {
+	# get file name
+	bn <- basename(FilePath)
+    # check file name
+    if (grepl('[.]qs$', bn)) {
+        if (!require(qs)) {
+            stop('data is provided as *.qs file -> install qs library',
+                ' running "install.packages("qs")"')
+        }
+        return(qs::qread(FilePath))
+    } else if (grepl('[.]rds$', bn)) {
+        return(readRDS(FilePath))
+    }
     raw_list <- licor_read_cpp(normalizePath(FilePath))
     out <- as.data.table(raw_list)
     # convert time

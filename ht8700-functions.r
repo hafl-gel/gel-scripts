@@ -296,15 +296,23 @@ read_ht8700_old <- function(FilePath, tz = "Etc/GMT-1"){
 }
 
 # new main function to read HT8700 raw data
-read_ht8700 <- function(FilePath, tz = "Etc/GMT-1"){
+read_ht8700 <- function(FilePath) {
     # be verbose
     cat("File:", path.expand(FilePath), "- ")
 	# get file name
 	bn <- basename(FilePath)
     # check file name
-    if (is_old_structure <- grepl('^ht8700_', bn)) {
+    if (grepl('[.]qs$', bn)) {
+        if (!require(qs)) {
+            stop('data is provided as *.qs file -> install qs library',
+                ' running "install.packages("qs")"')
+        }
+        return(qs::qread(FilePath))
+    } else if (grepl('[.]rds$', bn)) {
+        return(readRDS(FilePath))
+    } else if (is_old_structure <- grepl('^ht8700_', bn)) {
         # read with old function
-        return(read_ht8700_old(FilePath, tz = tz))
+        return(read_ht8700_old(FilePath, tz = 'Etc/GMT-1'))
     } else if (!grepl('^(py_)?fnf_01_ht8700', bn)) {
         # wrong file name
         stop('data filename not valid')

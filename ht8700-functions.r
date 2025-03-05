@@ -563,12 +563,13 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
                 basis_sonic[, alarm_code := get_alarms(.SD)]
             }
             # re-add ht data
-            out <- cbind(out, basis_sonic[, ht_orig, with = FALSE])
-            setnames(out, ht_orig, ht_vars)
+            add <- basis_sonic[, ht_orig, with = FALSE]
+            setnames(add, ht_orig, ht_vars)
         } else if ('ht_oss' %in% names(basis_sonic)) {
             # re-add ht data
-            out <- cbind(out, basis_sonic[, ht_vars, with = FALSE])
+            add <- basis_sonic[, ht_vars, with = FALSE]
         }
+        out[, (ht_vars) := copy(add)]
     }
     # fill licor
     licor_vars <- names(out)[15:19]
@@ -586,12 +587,13 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
         # check if original names
         if ('CO2D' %in% names(basis_sonic)) {
             # re-add licor data
-            out <- cbind(out, basis_sonic[, licor_orig, with = FALSE])
-            setnames(out, licor_orig, licor_vars)
+            add <- basis_sonic[, licor_orig, with = FALSE]
+            setnames(add, licor_orig, licor_vars)
         } else if ('co2_mmolm3' %in% names(basis_sonic)) {
             # re-add licor data
-            out <- cbind(out, basis_sonic[, licor_vars, with = FALSE])
+            add <- basis_sonic[, licor_vars, with = FALSE]
         }
+        out[, (licor_vars) := copy(add)]
     }
     # return
     out

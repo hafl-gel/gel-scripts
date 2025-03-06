@@ -608,13 +608,21 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
 	dat3 <- list2DF(wind[c("umrot","vmrot","wmrot","Tmdet")])
 	names(dat3) <- c("u","v","w","T")
 	if(!is.null(scal)){
-		dat3 <- cbind(dat3,lapply(scal,"[[","fitted"))
+		dat3 <- cbind(dat3, lapply(scal, \(x) {
+                if (is.null(isna <- na.action(x$residuals))) {
+                    x$fitted
+                } else {
+                    out <- rep(NA_real_, nrow(dat3))
+                    out[-isna] <- x$fitted
+                    out
+                }
+            })
+        )
 	}
 	dat3 <- dat3[,selection]
 	### melt and add trends:
-	dat4 <- reshape2::melt(dat3,id=NULL,value.name="trend")
-	dat2[,"trend"] <- dat4[,"trend"]
-
+	dat4 <- reshape2::melt(dat3, id = NULL, value.name = "trend")
+	dat2[, "trend"] <- dat4[, "trend"]
 	myxscale.component <- function(...) {
 		ans <- xscale.components.default(...)
 		ans$top <- ans$bottom
@@ -1976,11 +1984,13 @@ process_ec_fluxes <- function(
 
 
                 if (create_graphs) {
-                    cat('TODO: fix graphs with new proceedure!\n')
-                    browser()
                     if (!dir.exists(path_folder)) {
                         dir.create(path_folder, recursive = FALSE)
                     }
+                    # get end of interval time in UTC
+                    eoi_utc <- st_interval[day]
+                    # get date in correct format
+                    date_formatted <- gsub('-', '', dates[day], fixed = TRUE)
                     # plotting:
                     # -------------------------------------------------------------------------- 
                     # -------------------------------------------------------------------------- 
@@ -1990,8 +2000,8 @@ process_ec_fluxes <- function(
                     # plot and save (rotated) data time series with raw-data trends...
                     # ------------------------------------------------------------------------
                     ## TODO: -> fix tz!!! -> use UTC but indicate in name!!!
-                    time2 <- format(Int_End, format = "%H%M%S")
-                    plotname <- paste("timeseries", day, time2, sep="-") 
+                    time2 <- format(eoi_utc, format = "%H%M")
+                    plotname <- paste("timeseries", date_formatted, time2, sep="-") 
                     ts_vars <- names(plot_timeseries)[plot_timeseries]
                     jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), width = 600, height = (sum(plot_timeseries)) * 100, quality = 60)
                         ts_plot <- plot.tseries(
@@ -2005,13 +2015,13 @@ process_ec_fluxes <- function(
                     # ------------------------------------------------------------------------
                     for(i in covariances){
                         # i <- "w'TDL CH4'"
-                        plotname <- paste("plots", day, time2, covariances_plotnames[i], sep = "-")
+                        plotname <- paste("plots", date_formatted, time2, covariances_plotnames[i], sep = "-")
                         # fix ylab
                         ylab <- sub('(.+)x(.+)', "<\\1'\\2'>", i)
                         jpeg(file=paste0(path_folder, '/', plotname,".jpg"),width=1350, height=900, quality=60)
                             par(mfrow=c(2,3))
                             # ----------------------- Covariance -------------------------------------
-                            plot_covfunc(Covars[[i]],Int_Time,dyn_lag_max[,i],fix_lag[i],ylab=ylab, xlim = c(-50,50), cx=1.5, cxmt=1.25, cl=plotting_covar_colors[i])
+                            plot_covfunc(Covars[[i]],n_period / .Hz,dyn_lag_max[,i],fix_lag[i],ylab=ylab, xlim = c(-50,50), cx=1.5, cxmt=1.25, cl=plotting_covar_colors[i])
                             # ---------------------- Co-Spec/Ogive fix lag -----------------------------------
                             plot_cospec_ogive(Ogive_fix[[i]],Cospec_fix[[i]],freq,ylab=paste0("ogive (fix lag) of ",ylab),cx=1.5,col=plotting_covar_colors[i])
                             # ---------------------- Co-Spec/Ogive dyn lag -----------------------------------
@@ -2022,7 +2032,7 @@ process_ec_fluxes <- function(
                                 plot_damping(Damping_dyn[[i]],freq,ylab=paste0("ogive (dyn lag) of ",i),cx=1.5,col=plotting_covar_colors[i])
                             }
                             title(paste0(ylab, " flux ", 
-                                format(Int_Start, format = "(%H:%M:%S"), " - ", format(Int_End, format = "%H:%M:%S)"), 
+                                format(Int_Start, format = "(%H:%M:%S"), " - ", format(eoi_utc, format = "%H:%M:%S)"), 
                                 if (scalar_covariances[i]) {
                                     reflab <- sub('(.+)x(.+)', "<\\1'\\2'>", damping_reference[i])
                                     paste0(" - damping reference flux: ", reflab)
@@ -2448,14 +2458,12 @@ evalREddy <- function(
 					Time <- Data_int[,1]
 					Int_Start <- Time[1]
 					Int_End <- Time[length(Time)] + Data_int[length(Time),2]/1000
-					Int_Time <- as.numeric(Int_End - Int_Start,units="secs")
 					d_t <- diff(as.numeric(Time))
 					Hz <- round(1/summary(d_t)[['Median']])
                     if (Hz < 10) {
                         cat('Frequency is lower than 10 Hz! Skipping interval.\n')
                         next
                     }
-					# freq <- seq(floor(Int_length/2))*2/Int_Time
 					freq <- Hz * seq(floor(Int_length / 2)) / floor(Int_length / 2)
 					# for later: include NA where d_t>2*mean, remove entries where d_t < 0.5*mean
 

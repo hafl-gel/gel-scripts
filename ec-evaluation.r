@@ -881,7 +881,7 @@ process_ec_fluxes <- function(
 		, start_time = NULL
 		, end_time = NULL
 		, avg_period = '30mins'
-		, tz_user = 'CET' # local time zone
+		, tz_user = 'UTC'
 		, dev_north = NULL
         , declination = NULL
 		, z_ec = NULL
@@ -1989,6 +1989,7 @@ process_ec_fluxes <- function(
                     # -------------------------------------------------------------------------- 
                     # plot and save (rotated) data time series with raw-data trends...
                     # ------------------------------------------------------------------------
+                    ## TODO: -> fix tz!!! -> use UTC but indicate in name!!!
                     time2 <- format(Int_End, format = "%H%M%S")
                     plotname <- paste("timeseries", day, time2, sep="-") 
                     ts_vars <- names(plot_timeseries)[plot_timeseries]
@@ -2046,6 +2047,12 @@ process_ec_fluxes <- function(
 
     # remove bin column
     results[, bin := NULL]
+
+    # fix time zone
+    results[, ':='(
+        st = with_tz(st, tz_user),
+        et = with_tz(et, tz_user)
+    )]
 
     # convert to ibts
     if (as_ibts) {

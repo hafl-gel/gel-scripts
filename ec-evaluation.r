@@ -1295,6 +1295,21 @@ process_ec_fluxes <- function(
     )
     scalar_covariances_only <- covariances[scalar_covariances]
 
+    # create result folder (folder name includes first input-filename) and set this directory as working directory                                      
+    # ------------------------------------------------------------------------------ 
+    if (is.null(graphs_directory) || isFALSE(graphs_directory)) {
+        create_graphs <- FALSE
+    } else {					
+        tstamp <- format(Sys.time(), "%Y%m%d_%H%M")
+        if (add_name != "") {
+            folder <- paste0("EC-flux-processing-", add_name, "-eval", tstamp, "-avg", avg_period)
+        } else {
+            folder <- paste0("EC-flux-processing-eval", tstamp, "-avg", avg_period)
+        }
+        path_folder <- file.path(graphs_directory, folder)
+    }
+
+
     # loop over dates
     for (day in seq_along(dates)) {
 
@@ -1542,20 +1557,6 @@ process_ec_fluxes <- function(
             next
         }
         
-        # create result folder (folder name includes first input-filename) and set this directory as working directory                                      
-        # ------------------------------------------------------------------------------ 
-        if (is.null(graphs_directory) || isFALSE(graphs_directory)) {
-            create_graphs <- FALSE
-        } else {					
-            tstamp <- format(Sys.time(), "%Y%m%d_%H%M")
-            if (add_name != "") {
-                folder <- paste0("EC-fluxes-", dates[day], "-", add_name, "-eval", tstamp, "-avg", avg_period)
-            } else {
-                folder <- paste0("EC-fluxes-", dates[day], "-eval", tstamp, "-avg", avg_period)
-            }
-            path_folder <- file.path(graphs_directory, folder)
-        }
-
         # be verbose
         daily_data[, {
             cat("\n~~~\nCalculation will include",
@@ -1987,8 +1988,8 @@ process_ec_fluxes <- function(
                     if (!dir.exists(path_folder)) {
                         dir.create(path_folder, recursive = FALSE)
                     }
-                    # get end of interval time in UTC
-                    eoi_utc <- st_interval[day]
+                    # get end of current interval time in UTC
+                    eoi_utc <- st_interval[.GRP]
                     # get date in correct format
                     date_formatted <- gsub('-', '', dates[day], fixed = TRUE)
                     # plotting:

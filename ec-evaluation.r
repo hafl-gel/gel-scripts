@@ -415,34 +415,37 @@ trend <- function(y,method=c("blockAVG","linear","linear_robust","ma_360"),Hz_ts
 }
 
 
-rotate_detrend <- function(u,v,w,T,phi=NULL,method=c(u="blockAVG",v="blockAVG",w="blockAVG",T="linear"),c.system="Windmaster",Hz_ts=10){
-	thetam <- atan2(.Internal(mean(v)),.Internal(mean(u)))
-	u1 <- u*cos(thetam) + v*sin(thetam)
-	if(is.null(phi)){
-		phi <- atan2(.Internal(mean(w)),.Internal(mean(u1)))
+rotate_detrend <- function(u, v, w, T, phi = NULL, 
+    method = c(u = "blockAVG", v = "blockAVG", w = "blockAVG", T = "linear"), 
+    c.system = "Windmaster", Hz_ts = 10) {
+	thetam <- atan2(.Internal(mean(v)), .Internal(mean(u)))
+	u1 <- u * cos(thetam) + v * sin(thetam)
+	if (is.null(phi)) {
+		phi <- atan2(.Internal(mean(w)), .Internal(mean(u1)))
 	}
-	ud <- trend(u1*cos(phi) + w*sin(phi),method["u"],Hz_ts)
-	vd <- trend(-u*sin(thetam) + v*cos(thetam),method["v"],Hz_ts)
-	wd <- trend(-u1*sin(phi) + w*cos(phi),method["w"],Hz_ts)		
-	Td <- trend(T,method["T"],Hz_ts)
+	ud <- trend(u1 * cos(phi) + w * sin(phi), method["u"], Hz_ts)
+	vd <- trend(-u * sin(thetam) + v * cos(thetam), method["v"], Hz_ts)
+	wd <- trend(-u1 * sin(phi) + w * cos(phi), method["w"], Hz_ts)		
+	Td <- trend(T, method["T"], Hz_ts)
 	out <- list(
-		uprot=ud$residuals
-		,vprot=vd$residuals
-		,wprot=wd$residuals
-		,Tdet=Td$residuals
-		,wd=switch(c.system
-			,"Windmaster" = (180 - thetam / pi * 180) %% 360 
-			,"ART.EC1" = ((180 / pi) * -thetam + 150 + 147) %% 360
+		uprot = ud$residuals
+		, vprot = vd$residuals
+		, wprot = wd$residuals
+		, Tdet = Td$residuals
+		, wd = switch(c.system
+			, "Windmaster" = (180 - thetam / pi * 180) %% 360 
+            , "HS-Wauwilermoos" = (150 - thetam / pi * 180) %% 360
+			, "ART.EC1" = ((180 / pi) * -thetam + 150 + 147) %% 360
 			# new (coordinate) system
-			,"Licor" = (270 - thetam/pi*180) %% 360
+			, "Licor" = (270 - thetam / pi * 180) %% 360
 			# # old (coordinate) system
 			# ,"Licor" = (180 + thetam / pi * 180) %% 360 
 			)
-		,phi=phi
-		,umrot=ud$fitted
-		,vmrot=vd$fitted
-		,wmrot=wd$fitted
-		,Tmdet=Td$fitted
+		, phi = phi
+		, umrot = ud$fitted
+		, vmrot = vd$fitted
+		, wmrot = wd$fitted
+		, Tmdet = Td$fitted
 		)	
 	return(out)
 }
@@ -1506,6 +1509,13 @@ process_ec_fluxes <- function(
                 paste(names(daily_data), collapse = ", ")
             )
         }
+        
+        # define coordinate system
+        if (daily_data[, sonic[1] == 'HS']) {
+            coord.system <-  'HS-Wauwilermoos'
+        } else {
+            coord.system <-  'Windmaster'
+        }
 
         # get intervals:                                      
         # ------------------------------------------------------------------------------ 
@@ -1630,7 +1640,9 @@ process_ec_fluxes <- function(
                 # calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
                 # -------------------------------------------------------------------------- 
                 cat("~~~\nrotating and deterending sonic data...\n")
-                wind <- SD[, I(rotate_detrend(u, v, w, T, method = detrending[c("u", "v", "w", "T")], Hz_ts = .Hz))]
+                cat("     -> coordinate system:", coord.system, "\n")
+                wind <- SD[, I(rotate_detrend(u, v, w, T, c.sytem = coord.system,
+                        method = detrending[c("u", "v", "w", "T")], Hz_ts = .Hz))]
                 SD[, c("u", "v", "w", "T") := wind[c("uprot", "vprot", "wprot", "Tdet")]]
 
                 # calculate some turbulence parameters and collect some wind parameters

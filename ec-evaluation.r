@@ -1549,9 +1549,9 @@ process_ec_fluxes <- function(
         } else {					
             tstamp <- format(Sys.time(), "%Y%m%d_%H%M")
             if (add_name != "") {
-                folder <- paste0("HT8700-EC-", dates[day], "-", add_name, "-eval", tstamp, "-avg", avg_period)
+                folder <- paste0("EC-fluxes-", dates[day], "-", add_name, "-eval", tstamp, "-avg", avg_period)
             } else {
-                folder <- paste0("HT8700-EC-", dates[day], "-eval", tstamp, "-avg", avg_period)
+                folder <- paste0("EC-fluxes-", dates[day], "-eval", tstamp, "-avg", avg_period)
             }
             path_folder <- file.path(graphs_directory, folder)
         }

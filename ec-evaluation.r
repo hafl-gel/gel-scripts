@@ -569,7 +569,7 @@ wind_statistics <- function(wind,z_canopy,z_sonic){
                 abs(U - calcU(ustar, x, L, z - d)), c(0, z_sonic * 1.1), 
                 ustar = Ustar, L = L, U = U, z = z_sonic, d = d)$minimum
         )
-		if (z0 == z_sonic * 1.1) z0 <- NA
+		if (z0 >= z_sonic * 1.09) z0 <- NA
 	} else {
 		d <- NA
 		z0 <- NA
@@ -1034,7 +1034,7 @@ process_ec_fluxes <- function(
     # ------------------------------------------------------------------------------
 
     cat("\n************************************************************\n")
-    cat("HT8700/LI-COR EC evaluation\n")
+    cat("HT8700/LI-COR EC flux processing\n")
 
     # mandatory sonic data
     if (sonic_has_data <- inherits(sonic_directory, 'data.table')) {
@@ -1559,7 +1559,7 @@ process_ec_fluxes <- function(
             round(1 / median(d_t, na.rm = TRUE), -1)
         }]
         if (.Hz < 10) {
-            cat('Frequency is lower than 10 Hz! Skipping evaluation!\n')
+            cat('Frequency is lower than 10 Hz! Skipping processing fluxes!\n')
             next
         }
         n_period <- avg_secs * .Hz
@@ -1890,10 +1890,6 @@ process_ec_fluxes <- function(
                     list(
                         st = st_interval[.BY[[1]]]
                         , et = et_interval[.BY[[1]]]
-                        , Data_Start = with_tz(Int_Start, tz_user)
-                        , Data_End = with_tz(Int_End, tz_user)
-                        , tzone = tz_user
-                        , duration_minutes = round(Int_Time / 60, 4)
                         , n_values = .N
                         #, SubInts =  subint_n
                     )
@@ -2240,7 +2236,7 @@ evalREddy <- function(
 			# reading data file:                                      
 			# ------------------------------------------------------------------------------
 			cat("\n************************************************************\n")
-            cat("REddy EC evaluation\n")
+            cat("EC flux processing\n")
 			cat("************************************************************\n")
             cat('\nReading raw data from file "', dfname, '"\n', sep = '')
 			# browser() 

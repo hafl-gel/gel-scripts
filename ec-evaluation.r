@@ -1641,7 +1641,7 @@ process_ec_fluxes <- function(
                 # -------------------------------------------------------------------------- 
                 cat("~~~\nrotating and deterending sonic data...\n")
                 cat("     -> coordinate system:", coord.system, "\n")
-                wind <- SD[, I(rotate_detrend(u, v, w, T, c.sytem = coord.system,
+                wind <- SD[, I(rotate_detrend(u, v, w, T, c.system = coord.system,
                         method = detrending[c("u", "v", "w", "T")], Hz_ts = .Hz))]
                 SD[, c("u", "v", "w", "T") := wind[c("uprot", "vprot", "wprot", "Tdet")]]
 

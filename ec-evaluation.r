@@ -559,10 +559,10 @@ wind_statistics <- function(wind,z_canopy,z_sonic){
 	names(Var_sonic) <- c('var_u', 'var_v', 'var_w', 'var_T')
 	Cov_sonic <- Cov_sonic[cbind(c("uprot","uprot","uprot","vprot","vprot","wprot"),c("vprot","wprot","Tdet","wprot","Tdet","Tdet"))]
 	names(Cov_sonic) <- c('cov_uv', 'cov_uw', 'cov_uT', 'cov_vw', 'cov_vT', 'cov_wT')
-	suppressWarnings(Ustar <- c(sqrt(-Cov_sonic["<u'w'>"]),use.names = FALSE))
+	suppressWarnings(Ustar <- c(sqrt(-Cov_sonic["cov_uw"]),use.names = FALSE))
 	T_K <- mean(wind$Tmdet + wind$Tdet)
 	U <- mean(wind$umrot + wind$uprot)
-	L <- c(-Ustar ^ 3 * T_K / (0.4 * 9.80620 * Cov_sonic["<w'T'>"]), use.names = FALSE)
+	L <- c(-Ustar ^ 3 * T_K / (0.4 * 9.80620 * Cov_sonic["cov_wT"]), use.names = FALSE)
 	if (!is.na(z_canopy)) {
 		d <- 2/3 * z_canopy
 		suppressWarnings(z0 <- optimize(function(x, ustar, L, z, d, U) 

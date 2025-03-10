@@ -1283,16 +1283,12 @@ process_ec_fluxes <- function(
     input_covariances_variables <- covariances_variables
     input_covariances_plotnames <- covariances_plotnames
     input_scalar_covariances <- scalar_covariances
+    input_flux_variables <- flux_variables
+    input_plot_timeseries <- plot_timeseries
+    input_damping_reference <- damping_reference
+    input_damp_region <- damp_region
 
-    # prepare output
-    scalar_means <- setNames(
-        rep(NA_real_, length(scalars)),
-        scalars
-    )
-    scalar_sd <- setNames(
-        rep(NA_real_, length(scalars)),
-        scalars
-    )
+    # scalar covariances
     scalar_covariances_only <- covariances[scalar_covariances]
 
     # create result folder (folder name includes first input-filename) and set this directory as working directory                                      
@@ -1339,7 +1335,7 @@ process_ec_fluxes <- function(
         } else {
             cat('~~~\nReading sonic files - ')
             # get data from old files
-            if (day > 1) {
+            if (day > 1 && !is.null(sonic)) {
                 # copy old data
                 old_sonic <- sonic[Time >= times_utc$st[1], ]
                 # remove old date
@@ -1383,7 +1379,7 @@ process_ec_fluxes <- function(
         } else if (ht_provided && !ht_with_sonic) {
             cat('Reading HT8700 files - ')
             # get data from old files
-            if (day > 1) {
+            if (day > 1 && !is.null(ht)) {
                 # copy old data
                 old_ht <- ht[Time >= times_utc$st[1], ]
                 # remove old date
@@ -1474,7 +1470,7 @@ process_ec_fluxes <- function(
         } else if (licor_provided && !licor_with_sonic) {
             cat('Reading LI-7500 files - ')
             # get data from old files
-            if (day > 1) {
+            if (day > 1 && !is.null(licor)) {
                 # copy old data
                 old_licor <- licor[Time >= times_utc$st[1], ]
                 # remove old date
@@ -1586,8 +1582,8 @@ process_ec_fluxes <- function(
 
         # fix and dyn lags:                                      
         # ------------------------------------------------------------------------------ 
-        fix_lag <- round(lag_fix * .Hz)
-        dyn_lag <- rbind(
+        input_fix_lag <- round(lag_fix * .Hz)
+        input_dyn_lag <- rbind(
             lower = round((lag_fix - lag_dyn) * .Hz)
             , upper = round((lag_fix + lag_dyn) * .Hz)
         )
@@ -1603,34 +1599,6 @@ process_ec_fluxes <- function(
                 # ugly copy because of inability to change .SD values
                 SD <- copy(.SD)
 
-                # check NA values in scalars
-                scalars <- input_scalars
-                covariances <- input_covariances
-                covariances_variables <- input_covariances_variables
-                covariances_plotnames <- input_covariances_plotnames
-                scalar_covariances <- input_scalar_covariances
-                if (SD[, anyNA(.SD), .SDcols = scalars]) {
-                    # loop over scalars & check
-                    for (s in scalars) {
-                        SD[, {
-                            x <- unlist(mget(s, ifnotfound = NA))
-                            if (sum(is.finite(x)) < n_threshold) {
-                                cat('=> ', s, ': number of valid measurements is below',
-                                    ' threshold -> exclude from current interval\n', sep = '')
-                                scalars <- grep(s, scalars, fixed = TRUE, invert = TRUE,
-                                    value = TRUE)
-                                sind <- grep(s, covariances)
-                                if (length(sind)) {
-                                    covariances <- covariances[-sind]
-                                    covariances_variables <- covariances_variables[-sind]
-                                    covariances_plotnames <- covariances_plotnames[-sind]
-                                    scalar_covariances <- scalar_covariances[-sind]
-                                }
-                            }
-                        }]
-                    }
-                }
-
                 # times, frequencies etc.
                 # --------------------------------------------------------------------------
                 Int_Start <- Time[1]
@@ -1645,6 +1613,44 @@ process_ec_fluxes <- function(
                 if (any(hard_limits)) {
                     SD[, variables[hard_limits] := H.flags(mget(variables[hard_limits]), Time, .Hz, lim_range[, variables[hard_limits], drop = FALSE], hard_limits_window, hl_method)]
                 } 
+
+                # check NA values in scalars
+                scalars <- input_scalars
+                covariances <- input_covariances
+                covariances_variables <- input_covariances_variables
+                covariances_plotnames <- input_covariances_plotnames
+                scalar_covariances <- input_scalar_covariances
+                flux_variables <- input_flux_variables
+                plot_timeseries <- input_plot_timeseries
+                fix_lag <- input_fix_lag
+                dyn_lag <- input_dyn_lag
+                damping_reference <- input_damping_reference
+                damp_region <- input_damp_region
+                if (SD[, anyNA(.SD), .SDcols = scalars]) {
+                    # loop over scalars & check
+                    for (s in scalars) {
+                        x <- SD[, unlist(mget(s, ifnotfound = NA))]
+                        if (sum(is.finite(x)) < n_threshold) {
+                            cat('=> ', s, ': number of valid measurements is below',
+                                ' threshold -> exclude from current interval\n', sep = '')
+                            scalars <- scalars[!(scalars %in% s)]
+                            flux_variables <- flux_variables[!(flux_variables %in% s)]
+                            plot_timeseries <- plot_timeseries[!(names(plot_timeseries) %in% s)]
+                            sind <- grep(s, covariances)
+                            if (length(sind)) {
+                                damping_reference <- damping_reference[!(names(damping_reference) %in% covariances[sind])]
+                                damp_region <- damp_region[!(names(damp_region) %in% covariances[sind])]
+                                covariances <- covariances[-sind]
+                                fix_lag <- fix_lag[-sind]
+                                dyn_lag <- dyn_lag[, -sind, drop = FALSE]
+                                covariances_variables <- covariances_variables[-sind]
+                                covariances_plotnames <- covariances_plotnames[-sind]
+                                scalar_covariances <- scalar_covariances[-sind]
+                            }
+                        }
+                    }
+                }
+
 
                 # calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
                 # -------------------------------------------------------------------------- 
@@ -1664,6 +1670,15 @@ process_ec_fluxes <- function(
                 # switch to list with different lengths
                 # only for scalar fluxes!
                 # -> check na.action for omitted indices
+                detrended_scalars <- NULL
+                scalar_means <- setNames(
+                    rep(NA_real_, length(scalars)),
+                    scalars
+                )
+                scalar_sd <- setNames(
+                    rep(NA_real_, length(scalars)),
+                    scalars
+                )
                 if (length(scalars)) {
                     scalar_list <- SD[, I(lapply(.SD, na.omit)), .SDcols = scalars]
 
@@ -1678,7 +1693,8 @@ process_ec_fluxes <- function(
                     scalar_means[scalars] <- sapply(scalar_list, mean)
                     scalar_sd[scalars] <- sapply(scalar_list, sd)
                 } else {
-                    detrended_scalars <- NULL
+                    cat('No scalars available -> skipping interval!\n')
+                    next
                 }
 
                 # start of flux relevant data manipulation
@@ -1938,23 +1954,23 @@ process_ec_fluxes <- function(
                         , setNames(scalar_sd[input_scalars], paste0('sd_', input_scalars))
                         # fluxes
                         , setNames(
-                            flux_fix_lag[covariances],
-                            paste0('flux_fix_', covariances)
+                            flux_fix_lag[input_covariances],
+                            paste0('flux_fix_', input_covariances)
                         )
                         , setNames(
-                            flux_dyn_lag[covariances],
-                            paste0('flux_dyn_', covariances)
+                            flux_dyn_lag[input_covariances],
+                            paste0('flux_dyn_', input_covariances)
                         )
                         # , sub_cov_means
                         # , sub_cov_sd
                         # fix/dyn lag as seconds
                         , setNames(
-                            fix_lag_out[covariances] / .Hz, 
-                            paste0('lag_fix_', covariances)
+                            fix_lag_out[input_covariances] / .Hz, 
+                            paste0('lag_fix_', input_covariances)
                         )
                         , setNames(
-                            dyn_lag_out[covariances] / .Hz, 
-                            paste0('lag_dyn_', covariances)
+                            dyn_lag_out[input_covariances] / .Hz, 
+                            paste0('lag_dyn_', input_covariances)
                         )
                         , if (!is.null(Damping_fix)) {
                             c(

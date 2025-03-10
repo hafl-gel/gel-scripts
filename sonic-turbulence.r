@@ -197,7 +197,10 @@ detrend <- function(u,v,w,T,method=c(u="blockAVG",v="blockAVG",w="blockAVG",T="l
 		)	
 }
 
-rotate_twoaxis <- function(u,v,w,T,phi=NULL,c.system="Windmaster"){
+rot2ax <- function(u, v, w, phi = NULL, c.system = 'Windmaster') {
+    rotate_twoaxis(u, v, w, , phi = phi, c.system = c.system, wd_sd = FALSE)
+}
+rotate_twoaxis <- function(u, v, w, T, phi = NULL, c.system = "Windmaster", wd_sd = TRUE) {
 	thetam <- atan2(.Internal(mean(v)),.Internal(mean(u)))
 	# Yamartino 1984:
 	n <- length(u)
@@ -213,15 +216,19 @@ rotate_twoaxis <- function(u,v,w,T,phi=NULL,c.system="Windmaster"){
 		phi <- atan2(.Internal(mean(w)),.Internal(mean(u1)))
 	}
     # TODO: remove sd_wd, but calc sd(WD) for subints!!
-	list(
+	out <- list(
 		phi = phi
 		,wd = if(tolower(c.system) %in% "windmaster") (180 - thetam / pi * 180)%%360 else if(tolower(c.system) %in% "art.ec1") ((180 / pi) * -thetam + 150 + 147)%%360
-		,sd_wd = sd_wd
+		, if (wd_sd) sd_wd = sd_wd else NULL
 		,uprot = u1*cos(phi) + w*sin(phi)
 		,vprot = -u*sin(thetam) + v*cos(thetam)
 		,wprot = -u1*sin(phi) + w*cos(phi)
-		)	
-
+		)
+    if (wd_sd) {
+        out
+    } else {
+        out[c(1:2, 4:6)]
+    }
 }
 
 

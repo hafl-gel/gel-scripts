@@ -1707,6 +1707,46 @@ process_ec_fluxes <- function(
                 # get fft (keep list format)
                 FFTs <- SD[, I(lapply(.SD, \(x) fft(na.omit(x)) / .N)), .SDcols = flux_variables]
 
+                # ### testing auto-covariances
+                # AutoCovars <- lapply(names(FFTs), \(i) {
+                #     # check scalars
+                #     if (i %in% scalars && !is.null(na_ind <- na.action(FFTs[[i]]))) {
+                #         # fix lengths
+                #         FFTs[[i]] <- FFTs[[i]][-na_ind]
+                #         # get N
+                #         N <- length(FFTs[[i]])
+                #     } else {
+                #         N <- .N
+                #     }
+                #     # get Re
+                #     re <- Re(fft(Conj(FFTs[[i]]) * FFTs[[i]], inverse = TRUE))
+                #     # get missing
+                #     # subset
+                #     if (N %% 2) {
+                #         out <- re[c(((N + 1) / 2 + 1):N, 1:((N + 1) / 2))] * N / (N - 1)
+                #     } else {
+                #         out <- re[c((N / 2 + 1):N, 1:(N / 2))] * N / (N - 1)
+                #     }
+                #     n_missing <- n_period - N
+                #     if (sign(n_missing) >= 0) {
+                #         if (n_missing %% 2) {
+                #             n1 <- rep(NA_real_, (n_missing + 1) / 2)
+                #             n2 <- rep(NA_real_, (n_missing - 1) / 2)
+                #         } else {
+                #             n1 <- n2 <- rep(NA_real_, n_missing / 2)
+                #         }
+                #         c(n1, out, n2)
+                #     } else {
+                #         if (-n_missing %% 2) {
+                #             ind <- ((1 - n_missing) / 2 + 1):(N - (-n_missing - 1) / 2)
+                #         } else {
+                #             ind <- (1 - n_missing / 2):(N + n_missing / 2)
+                #         }
+                #         out[ind]
+                #     }
+                # })
+                # names(AutoCovars) <- paste(flux_variables, flux_variables, sep = 'x')
+
                 # calculate covariances with fix lag time:
                 # -------------------------------------------------------------------------- 
                 cat("\t- covariances\n")
@@ -1775,6 +1815,14 @@ process_ec_fluxes <- function(
                 avg_cov_hi <- sapply(Covars, \(x) mean(x[hi_range]))
                 re_rmse <- sqrt(0.5 * (sd_cov_lo ^ 2 + avg_cov_lo ^ 2 +
                         sd_cov_hi ^ 2 + avg_cov_hi ^ 2))
+                # ## auto-covariances
+                # sd_acov_lo <- sapply(AutoCovars, \(x) sd(x[lo_range]))
+                # # avg_acov_lo <- sapply(AutoCovars, \(x) mean(x[lo_range]))
+                # sd_acov_hi <- sapply(AutoCovars, \(x) sd(x[hi_range]))
+                # # avg_acov_hi <- sapply(AutoCovars, \(x) mean(x[hi_range]))
+                # # re_rmse_acov <- sqrt(0.5 * (sd_acov_lo ^ 2 + avg_acov_lo ^ 2 +
+                # #         sd_acov_hi ^ 2 + avg_acov_hi ^ 2))
+                # re_rmse_acov <- sqrt(0.5 * (sd_acov_lo ^ 2 + sd_acov_hi ^ 2))
 
                 # covariance function values +/- tau.off.sec of fix lag
                 # ------------------------------------------------------------------------

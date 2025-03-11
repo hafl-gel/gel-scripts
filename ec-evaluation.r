@@ -906,6 +906,8 @@ process_ec_fluxes <- function(
 		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, wxh2o_mmolm3 = -0.2, wxco2_mmolm3 = -0.2)
         # dyn lag in seconds around lag_fix
 		, lag_dyn = c(uxw = 0.2, wxT = 0.2, wxnh3_ppb = 1.5, wxnh3_ugm3 = 1.5, wxh2o_mmolm3 = 1.5, wxco2_mmolm3 = 1.5)
+        # re_rmse window
+        , gamma_time_window = c(2.5, 5)
 		, damping_reference = c(wxnh3_ppb = 'wxT', wxnh3_ugm3 = 'wxT', wxh2o_mmolm3 = 'wxT', wxco2_mmolm3 = 'wxT')
         # lower & upper bounds of fitting ogives (in seconds)
 		, damping_lower = c(wxnh3_ppb = 2, wxnh3_ugm3 = 2, wxh2o_mmolm3 = 2, wxco2_mmolm3 = 2)
@@ -1756,7 +1758,23 @@ process_ec_fluxes <- function(
 
                 # covariance function's standard deviation and mean values left and right of fix lag
                 # ------------------------------------------------------------------------
-                # not implemented...
+                # RE_RMSE (Eq. 9 in Langford et al. 2015)
+                # -> ranges lo/hi (-/+180 to -/+150 secs? => define range as argument)
+                # gamma_time_window <- c(2.5, 5)
+                n <- length(Covars[[1]])
+                m <- ifelse(n %% 2, (n + 1) / 2, n / 2 + 1)
+                lo_range <- m - rev(gamma_time_window) * 60 * .Hz
+                hi_range <- m + gamma_time_window * 60 * .Hz
+                # -> sd_cov_low
+                sd_cov_lo <- sapply(Covars, \(x) sd(x[lo_range]))
+                # -> avg_cov_low
+                avg_cov_lo <- sapply(Covars, \(x) mean(x[lo_range]))
+                # -> sd_cov_hi
+                sd_cov_hi <- sapply(Covars, \(x) sd(x[hi_range]))
+                # -> avg_cov_hi
+                avg_cov_hi <- sapply(Covars, \(x) mean(x[hi_range]))
+                re_rmse <- sqrt(0.5 * (sd_cov_lo ^ 2 + avg_cov_lo ^ 2 +
+                        sd_cov_hi ^ 2 + avg_cov_hi ^ 2))
 
                 # covariance function values +/- tau.off.sec of fix lag
                 # ------------------------------------------------------------------------
@@ -1856,51 +1874,51 @@ process_ec_fluxes <- function(
                 }
 
                 ##### ~~~> sub-intervals switched off
-                if (FALSE) {
-                    # sub-int: sub-interval calculations (switch do data.frame since code already exists (I'm lazy))
-                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                    cat("~~~\nsub-intervals (subint_n = ", subint_n, ")\n", sep = '')
-                    sub_indices <- split_index(.N, subint_n)
-                    sub_Data <- lapply(sub_indices, function(i, x) x[i, ], x = as.data.frame(SD))
+                # if (FALSE) {
+                #     # sub-int: sub-interval calculations (switch do data.frame since code already exists (I'm lazy))
+                #     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+                #     cat("~~~\nsub-intervals (subint_n = ", subint_n, ")\n", sep = '')
+                #     sub_indices <- split_index(.N, subint_n)
+                #     sub_Data <- lapply(sub_indices, function(i, x) x[i, ], x = as.data.frame(SD))
 
-                    # sub-int: calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
-                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                    sub_wind <- lapply(sub_Data, function(x) 
-                        rotate_detrend(x[, "u"], x[, "v"], x[, "w"], x[, "T"], 
-                            method = subint_detrending[c("u", "v", "w", "T")], Hz_ts = .Hz))
-                    for(sub in seq_along(sub_wind)){
-                        sub_Data[[sub]][,c("u","v","w","T")] <- sub_wind[[sub]][c("uprot","vprot","wprot","Tdet")]
-                    }
+                #     # sub-int: calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
+                #     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+                #     sub_wind <- lapply(sub_Data, function(x) 
+                #         rotate_detrend(x[, "u"], x[, "v"], x[, "w"], x[, "T"], 
+                #             method = subint_detrending[c("u", "v", "w", "T")], Hz_ts = .Hz))
+                #     for(sub in seq_along(sub_wind)){
+                #         sub_Data[[sub]][,c("u","v","w","T")] <- sub_wind[[sub]][c("uprot","vprot","wprot","Tdet")]
+                #     }
 
-                    # sub-int: detrend scalars
-                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                    if (length(scalars)) {
-                        sub_detrended_scalars <- lapply(sub_Data, 
-                            function(x) mapply(trend, y = x[, scalars, drop = FALSE], 
-                                method = subint_detrending[scalars], 
-                                MoreArgs = list(Hz_ts = .Hz), SIMPLIFY = FALSE))
-                        for (sub in seq_along(sub_wind)) {
-                            sub_Data[[sub]][, scalars] <- lapply(sub_detrended_scalars[[sub]], "[[", "residuals")
-                        }
-                    }
+                #     # sub-int: detrend scalars
+                #     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+                #     if (length(scalars)) {
+                #         sub_detrended_scalars <- lapply(sub_Data, 
+                #             function(x) mapply(trend, y = x[, scalars, drop = FALSE], 
+                #                 method = subint_detrending[scalars], 
+                #                 MoreArgs = list(Hz_ts = .Hz), SIMPLIFY = FALSE))
+                #         for (sub in seq_along(sub_wind)) {
+                #             sub_Data[[sub]][, scalars] <- lapply(sub_detrended_scalars[[sub]], "[[", "residuals")
+                #         }
+                #     }
 
-                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+                #     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
                     
-                    # extract covariances etc.:
-                    # ------------------------------------------------------------------------ 
-                    # sub-int: calculate covariances of sub-intervals
-                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                    sub_covs <- sapply(sub_wind, function(x) cov(list2DF(x[1:4]))[
-                        cbind(
-                            c("uprot", "vprot", "wprot", "Tdet", "uprot", "uprot", "uprot", "vprot", "vprot", "wprot"), 
-                            c("uprot", "vprot", "wprot", "Tdet", "vprot", "wprot", "Tdet", "wprot", "Tdet", "Tdet")
-                            )]
-                    )
-                    sub_cov_means <- apply(sub_covs, 1, mean)
-                    sub_cov_sd <- apply(sub_covs, 1, sd)
-                    names(sub_cov_means) <- paste0("mean(sub.int.", c("<u'u'>", "<v'v'>", "<w'w'>", "<T'T'>", "<u'v'>", "<u'w'>", "<u'T'>", "<v'w'>", "<v'T'>", "<w'T'>"), ")")
-                    names(sub_cov_sd) <- paste0("sd(sub.int.", c("<u'u'>", "<v'v'>", "<w'w'>", "<T'T'>", "<u'v'>", "<u'w'>", "<u'T'>", "<v'w'>", "<v'T'>", "<w'T'>"), ")")
-                }
+                #     # extract covariances etc.:
+                #     # ------------------------------------------------------------------------ 
+                #     # sub-int: calculate covariances of sub-intervals
+                #     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+                #     sub_covs <- sapply(sub_wind, function(x) cov(list2DF(x[1:4]))[
+                #         cbind(
+                #             c("uprot", "vprot", "wprot", "Tdet", "uprot", "uprot", "uprot", "vprot", "vprot", "wprot"), 
+                #             c("uprot", "vprot", "wprot", "Tdet", "vprot", "wprot", "Tdet", "wprot", "Tdet", "Tdet")
+                #             )]
+                #     )
+                #     sub_cov_means <- apply(sub_covs, 1, mean)
+                #     sub_cov_sd <- apply(sub_covs, 1, sd)
+                #     names(sub_cov_means) <- paste0("mean(sub.int.", c("<u'u'>", "<v'v'>", "<w'w'>", "<T'T'>", "<u'v'>", "<u'w'>", "<u'T'>", "<v'w'>", "<v'T'>", "<w'T'>"), ")")
+                #     names(sub_cov_sd) <- paste0("sd(sub.int.", c("<u'u'>", "<v'v'>", "<w'w'>", "<T'T'>", "<u'v'>", "<u'w'>", "<u'T'>", "<v'w'>", "<v'T'>", "<w'T'>"), ")")
+                # }
 
                 ### some output and namings
                 fix_lag_out <- fix_lag
@@ -1971,6 +1989,10 @@ process_ec_fluxes <- function(
                         , setNames(
                             dyn_lag_out[input_covariances] / .Hz, 
                             paste0('lag_dyn_', input_covariances)
+                        )
+                        , setNames(
+                            re_rmse[input_covariances],
+                            paste0('re_rmse_', input_covariances)
                         )
                         , if (!is.null(Damping_fix)) {
                             c(

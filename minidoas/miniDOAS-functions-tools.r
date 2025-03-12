@@ -221,6 +221,11 @@ get_specs <- function(folder, from, to = NULL, tz = 'Etc/GMT-1',
     if(!inherits(folder, 'rawdat')){
         folder <- read_data(folder, from, to, tz, doas, Serial)
     } else {
+        if (is.null(to) && is.character(from) && length(from) == 1) {
+            to <- parse_timerange(from, tz = tz)
+            from <- to[1]
+            to <- to[2]
+        }
         # convert from/to to POSIXct
         from <- parse_date_time3(from, tz = tz)
         to <- parse_date_time3(to, tz = tz)
@@ -744,6 +749,11 @@ avg_spec <- function(folder, from = NULL, to = NULL, tz = 'Etc/GMT-1',
     correct.straylight = TRUE, correct.linearity = TRUE, dark = NULL) {
     if(inherits(folder, 'rawdat')){
         if (!is.null(from)) {
+            if (is.null(to) && is.character(from) && length(from) == 1) {
+                to <- parse_timerange(from, tz = tz)
+                from <- to[1]
+                to <- to[2]
+            }
             # convert from/to to POSIXct
             from <- parse_date_time3(from, tz = tz)
             to <- parse_date_time3(to, tz = tz)

@@ -122,7 +122,7 @@ cppFunction('
 #include <zlib.h>
 #include <string>
 #include <Rcpp.h>
-Rcpp::List licor_read_cpp(String filename) {
+Rcpp::List licor_read_cpp_gzip(String filename) {
     // open file
     gzFile input = gzopen(filename.get_cstring(), "rb");
     if (input == NULL) {
@@ -245,7 +245,11 @@ read_licor <- function(FilePath) {
     } else if (grepl('[.]rds$', bn)) {
         return(readRDS(FilePath))
     }
-    raw_list <- licor_read_cpp(normalizePath(FilePath))
+    if (grepl('[.]gz$', bn)) {
+        raw_list <- licor_read_cpp_gzip(normalizePath(FilePath))
+    } else {
+        raw_list <- licor_read_cpp(normalizePath(FilePath))
+    }
     out <- as.data.table(raw_list)
     # convert time
     out[, Time := fast_strptime(time_string, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE)]

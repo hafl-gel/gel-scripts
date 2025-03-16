@@ -318,12 +318,12 @@ read_ht8700 <- function(FilePath) {
         stop('data filename not valid')
     }
 	### read File
-    if (grepl('[.]csv$', bn)) {
-        # uncompressed data
-        out <- as.data.table(ht8700_read_cpp(normalizePath(FilePath)))
-    } else {
+    if (grepl('[.]gz$', bn)) {
         # gzip-ped data
         out <- as.data.table(ht8700_read_cpp_gzip(normalizePath(FilePath)))
+    } else {
+        # uncompressed data
+        out <- as.data.table(ht8700_read_cpp(normalizePath(FilePath)))
     }
     # check empty
     if (nrow(out) == 0) {

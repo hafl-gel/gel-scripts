@@ -208,7 +208,7 @@ Rcpp::List licor_read_cpp(String filename) {
                 s += c;
             }
         }
-        // else scan to newline without consuming newline
+        // else ignore all characters up to newline
     }
     // close properly
     if (gzclose(input) != Z_OK) {

@@ -375,15 +375,7 @@ Rcpp::List hs_read_cpp_gzip(String filename) {
     char c;
     std::string s;
     while (gzread(input, &c, 1) > 0) {
-        // check for comma
-        if (c == \',\') {
-            // add s to current line vector
-            line[field] = s;
-            // increase field counter
-            field += 1;
-            // reset s
-            s.clear();
-        } else if (c == \'\\n\') {
+        if (c == \'\\n\') {
         // check for newline -> newline
             // add s to current line vector
             line[field] = s;
@@ -404,15 +396,21 @@ Rcpp::List hs_read_cpp_gzip(String filename) {
             s.clear();
             // increase line counter
             cline += 1;
-        } else if (field < 7 && field != 1 && field != 2) {
-            // append to string or new line
-            s += c;
-        } else if (field > n_fields) {
-            // scan to newline without consuming newline
-            // this might fail
-            char sp[256];
-            input.get(sp, 256, \'\\n\');
+        } else if (field <= n_fields) {
+            // check for comma
+            if (c == \',\') {
+                // add s to current line vector
+                line[field] = s;
+                // increase field counter
+                field += 1;
+                // reset s
+                s.clear();
+            } else if (field < 7 && field != 1 && field != 2) {
+                // append to string or new line
+                s += c;
+            }
         }
+        // else ignore all characters up to newline
     }
     // close properly
     if (gzclose(input) != Z_OK) {

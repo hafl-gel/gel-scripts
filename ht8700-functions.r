@@ -897,8 +897,8 @@ read_local <- function(path, hash_only = FALSE) {
 }
 
 
-### try gzip in C++
-# thanks to https://github.com/eddelbuettel/bh/issues/106#issuecomment-2724741475
+### function to read gzip-ped data in C++
+# thanks to directions given in https://github.com/eddelbuettel/bh/issues/106#issuecomment-2724741475
 cppFunction('
 #include <zlib.h>
 #include <string>
@@ -1021,6 +1021,4 @@ Rcpp::List ht8700_read_cpp_gzip(String filename) {
     );
 }
 ')
-
-#xx <- ht8700_read_cpp_gzip('/home/christoph/LFE/02_Daten/7-ht8700/ht-1/ht8700_sonic-a_20240723_000000.gz')
 

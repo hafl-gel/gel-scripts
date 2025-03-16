@@ -273,6 +273,7 @@ read_hs_ascii_old <- function(FilePath){
     out
 }
 
+# C++ helper function for HS data
 cppFunction('
 #include <iostream>
 #include <fstream>
@@ -348,6 +349,7 @@ Rcpp::List hs_read_cpp(String filename) {
 }
 ')
 
+# C++ helper function for gzipped HS data
 cppFunction('
 #include <zlib.h>
 #include <string>

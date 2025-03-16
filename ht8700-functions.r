@@ -470,6 +470,132 @@ Rcpp::List ht8700_read_cpp(String filename) {
 }
 ')
 
+### function to read gzip-ped data in C++
+# thanks to directions given in https://github.com/eddelbuettel/bh/issues/106#issuecomment-2724741475
+cppFunction('
+#include <zlib.h>
+#include <string>
+#include <Rcpp.h>
+Rcpp::List ht8700_read_cpp_gzip(String filename) {
+    // open file
+    gzFile input = gzopen(filename.get_cstring(), "rb");
+    if (input == NULL) {
+        Rcout << "Could not read file: " << filename.get_cstring() << "\\n";
+        return R_NilValue;
+    }
+    int max_lines = 870000;
+    // create output
+    CharacterVector col1_time(max_lines);
+    CharacterVector col2(max_lines);
+    CharacterVector col17(max_lines);
+    CharacterVector col18(max_lines);
+    CharacterVector col20(max_lines);
+    IntegerVector col19(max_lines);
+    NumericVector col3(max_lines);
+    NumericVector col4(max_lines);
+    NumericVector col5(max_lines);
+    NumericVector col6(max_lines);
+    NumericVector col7(max_lines);
+    NumericVector col8(max_lines);
+    NumericVector col9(max_lines);
+    NumericVector col10(max_lines);
+    NumericVector col11(max_lines);
+    NumericVector col12(max_lines);
+    NumericVector col13(max_lines);
+    NumericVector col14(max_lines);
+    NumericVector col15(max_lines);
+    NumericVector col16(max_lines);
+    int cline = 0;
+    int n_fields = 20 - 1;
+    int field = 0;
+    std::vector<std::string> line(n_fields + 1);
+    // loop over lines
+    char c;
+    std::string s;
+    while (gzread(input, &c, 1) > 0) {
+        if (c == \'\\n\') {
+        // check for newline -> newline
+            // add s to current line vector
+            line[field] = s;
+            // check field counter
+            if (field == n_fields) {
+                // line ok
+                // assign to vectors
+                col1_time[cline] = line[0];
+                col2[cline] = line[1];
+                col3[cline] = std::stod(line[2]);
+                col4[cline] = std::stod(line[3]);
+                col5[cline] = std::stod(line[4]);
+                col6[cline] = std::stod(line[5]);
+                col7[cline] = std::stod(line[6]);
+                col8[cline] = std::stod(line[7]);
+                col9[cline] = std::stod(line[8]);
+                col10[cline] = std::stod(line[9]);
+                col11[cline] = std::stod(line[10]);
+                col12[cline] = std::stod(line[11]);
+                col13[cline] = std::stod(line[12]);
+                col14[cline] = std::stod(line[13]);
+                col15[cline] = std::stod(line[14]);
+                col16[cline] = std::stod(line[15]);
+                col17[cline] = line[16];
+                col18[cline] = line[17];
+                col19[cline] = std::stoi(line[18]);
+                col20[cline] = line[19];
+                // else drop readings
+            }
+            // reset field counter
+            field = 0;
+            // reset s
+            s.clear();
+            // increase line counter
+            cline += 1;
+        } else if (field <= n_fields) {
+            // check for comma
+            if (c == \',\') {
+                // add s to current line vector
+                line[field] = s;
+                // increase field counter
+                field += 1;
+                // reset s
+                s.clear();
+            } else {
+                // append to string or new line
+                s += c;
+            }
+        }
+        // else advance until newline or eof
+    }
+    // close properly
+    if (gzclose(input) != Z_OK) {
+        Rcpp::Rcout << "Failed to close file\\n";
+        return R_NilValue;
+    }
+    return Rcpp::List::create(
+		_["time_string"] = col1_time,
+        _["sn"] = col2,
+        _["nh3_ppb"] = col3,
+        _["nh3_ugm3"] = col4,
+        _["rh_int"] = col5,
+        _["temp_int"] = col6,
+        _["temp_amb"] = col7,
+        _["press_amb"] = col8,
+        _["oss"] = col9,
+        _["peak_pos"] = col10,
+        _["temp_leaser_chip"] = col11,
+        _["temp_leaser_housing"] = col12,
+        _["temp_mct"] = col13,
+        _["temp_mct_housing"] = col14,
+        _["laser_current"] = col15,
+        _["ref_road_2f"] = col16,
+        _["alarm_lower_bit"] = col17,
+        _["alarm_upper_bit"] = col18,
+        _["cleaning_flag"] = col19,
+        _["notused"] = col20
+    );
+}
+')
+
+
 # merge sonic & ht8700
 sourceCpp(code = '
 #include <Rcpp.h>
@@ -902,129 +1028,4 @@ read_local <- function(path, hash_only = FALSE) {
     alloc.col(qs::qdeserialize(out_ser))
 }
 
-
-### function to read gzip-ped data in C++
-# thanks to directions given in https://github.com/eddelbuettel/bh/issues/106#issuecomment-2724741475
-cppFunction('
-#include <zlib.h>
-#include <string>
-#include <Rcpp.h>
-Rcpp::List ht8700_read_cpp_gzip(String filename) {
-    // open file
-    gzFile input = gzopen(filename.get_cstring(), "rb");
-    if (input == NULL) {
-        Rcout << "Could not read file: " << filename.get_cstring() << "\\n";
-        return R_NilValue;
-    }
-    int max_lines = 870000;
-    // create output
-    CharacterVector col1_time(max_lines);
-    CharacterVector col2(max_lines);
-    CharacterVector col17(max_lines);
-    CharacterVector col18(max_lines);
-    CharacterVector col20(max_lines);
-    IntegerVector col19(max_lines);
-    NumericVector col3(max_lines);
-    NumericVector col4(max_lines);
-    NumericVector col5(max_lines);
-    NumericVector col6(max_lines);
-    NumericVector col7(max_lines);
-    NumericVector col8(max_lines);
-    NumericVector col9(max_lines);
-    NumericVector col10(max_lines);
-    NumericVector col11(max_lines);
-    NumericVector col12(max_lines);
-    NumericVector col13(max_lines);
-    NumericVector col14(max_lines);
-    NumericVector col15(max_lines);
-    NumericVector col16(max_lines);
-    int cline = 0;
-    int n_fields = 20 - 1;
-    int field = 0;
-    std::vector<std::string> line(n_fields + 1);
-    // loop over lines
-    char c;
-    std::string s;
-    while (gzread(input, &c, 1) > 0) {
-        if (c == \'\\n\') {
-        // check for newline -> newline
-            // add s to current line vector
-            line[field] = s;
-            // check field counter
-            if (field == n_fields) {
-                // line ok
-                // assign to vectors
-                col1_time[cline] = line[0];
-                col2[cline] = line[1];
-                col3[cline] = std::stod(line[2]);
-                col4[cline] = std::stod(line[3]);
-                col5[cline] = std::stod(line[4]);
-                col6[cline] = std::stod(line[5]);
-                col7[cline] = std::stod(line[6]);
-                col8[cline] = std::stod(line[7]);
-                col9[cline] = std::stod(line[8]);
-                col10[cline] = std::stod(line[9]);
-                col11[cline] = std::stod(line[10]);
-                col12[cline] = std::stod(line[11]);
-                col13[cline] = std::stod(line[12]);
-                col14[cline] = std::stod(line[13]);
-                col15[cline] = std::stod(line[14]);
-                col16[cline] = std::stod(line[15]);
-                col17[cline] = line[16];
-                col18[cline] = line[17];
-                col19[cline] = std::stoi(line[18]);
-                col20[cline] = line[19];
-                // else drop readings
-            }
-            // reset field counter
-            field = 0;
-            // reset s
-            s.clear();
-            // increase line counter
-            cline += 1;
-        } else if (field <= n_fields) {
-            // check for comma
-            if (c == \',\') {
-                // add s to current line vector
-                line[field] = s;
-                // increase field counter
-                field += 1;
-                // reset s
-                s.clear();
-            } else {
-                // append to string or new line
-                s += c;
-            }
-        }
-        // else advance until newline or eof
-    }
-    // close properly
-    if (gzclose(input) != Z_OK) {
-        Rcpp::Rcout << "Failed to close file\\n";
-        return R_NilValue;
-    }
-    return Rcpp::List::create(
-		_["time_string"] = col1_time,
-        _["sn"] = col2,
-        _["nh3_ppb"] = col3,
-        _["nh3_ugm3"] = col4,
-        _["rh_int"] = col5,
-        _["temp_int"] = col6,
-        _["temp_amb"] = col7,
-        _["press_amb"] = col8,
-        _["oss"] = col9,
-        _["peak_pos"] = col10,
-        _["temp_leaser_chip"] = col11,
-        _["temp_leaser_housing"] = col12,
-        _["temp_mct"] = col13,
-        _["temp_mct_housing"] = col14,
-        _["laser_current"] = col15,
-        _["ref_road_2f"] = col16,
-        _["alarm_lower_bit"] = col17,
-        _["alarm_upper_bit"] = col18,
-        _["cleaning_flag"] = col19,
-        _["notused"] = col20
-    );
-}
-')
 

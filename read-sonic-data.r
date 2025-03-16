@@ -431,7 +431,13 @@ Rcpp::List hs_read_cpp_gzip(String filename) {
 read_hs_ascii <- function(FilePath) {
     # be verbose
     cat("File:", path.expand(FilePath), "- ")
-    raw <- hs_read_cpp(normalizePath(FilePath, mustWork = FALSE))
+    if (grepl('[.]csv$', basename(FilePath)) {
+        # uncompressed
+        raw <- hs_read_cpp(normalizePath(FilePath, mustWork = FALSE))
+    } else {
+        # gzipped data
+        raw <- hs_read_cpp_gzip(normalizePath(FilePath, mustWork = FALSE))
+    }
     if (length(raw) == 0) {
         stop('File path: "', FilePath, '" is not accessible!')
     }

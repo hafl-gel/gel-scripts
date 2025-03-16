@@ -152,29 +152,7 @@ Rcpp::List licor_read_cpp(String filename) {
     std::string s;
     bool append = true;
     while (gzread(input, &c, 1) > 0) {
-        // check for comma (first col)
-        if (c == \',\') {
-            // add s to current line vector
-            line[field] = s;
-            // increase field counter
-            field += 1;
-            // stop appending
-            append = false;
-        } else if (c == \')\') {
-        // match end of field
-            // add s to current line vector
-            line[field] = s;
-            // stop appending
-            append = false;
-        } else if (c == \' \') {
-        // match start of field
-            // increase field counter
-            field += 1;
-            // start appending
-            append = true;
-            // reset s
-            s.clear();
-        } else if (c == \'\\n\') {
+        if (c == \'\\n\') {
         // check for newline -> newline
             // check field counter
             if (field == n_fields) {
@@ -202,15 +180,35 @@ Rcpp::List licor_read_cpp(String filename) {
             append = true;
             // increase line counter
             cline += 1;
-        } else if (field > n_fields) {
-            // scan to newline without consuming newline
-            // this might fail
-            char sp[256];
-            input.get(sp, 256, \'\\n\');
-        } else if (append) {
-            // append to string or new line
-            s += c;
+        } else if (field <= n_fields) {
+            // check for comma (first col)
+            if (c == \',\') {
+                // add s to current line vector
+                line[field] = s;
+                // increase field counter
+                field += 1;
+                // stop appending
+                append = false;
+            } else if (c == \')\') {
+            // match end of field
+                // add s to current line vector
+                line[field] = s;
+                // stop appending
+                append = false;
+            } else if (c == \' \') {
+            // match start of field
+                // increase field counter
+                field += 1;
+                // start appending
+                append = true;
+                // reset s
+                s.clear();
+            } else if (append) {
+                // append to string or new line
+                s += c;
+            }
         }
+        // else scan to newline without consuming newline
     }
     // close properly
     if (gzclose(input) != Z_OK) {

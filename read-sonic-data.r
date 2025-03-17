@@ -431,7 +431,7 @@ Rcpp::List hs_read_cpp_gzip(String filename) {
 read_hs_ascii <- function(FilePath) {
     # be verbose
     cat("File:", path.expand(FilePath), "- ")
-    if (grepl('[.]gz$', basename(FilePath)) {
+    if (grepl('[.]gz$', basename(FilePath))) {
         # gzipped data
         raw <- hs_read_cpp_gzip(normalizePath(FilePath, mustWork = FALSE))
     } else {

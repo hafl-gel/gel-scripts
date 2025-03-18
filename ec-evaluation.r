@@ -1079,6 +1079,13 @@ process_ec_fluxes <- function(
             setdiff(sonic_files[!i_py], sub('^py_', '', sonic_files[i_py])),
             sonic_files[i_py]
         )
+        # prioritize gz files
+        i_gz <- grepl('\\.gz$', sonic_files)
+        # remove duplicated non-py
+        sonic_files <- c(
+            setdiff(sonic_files[!i_gz], sub('\\.gz$', '.csv', sonic_files[i_gz])),
+            sonic_files[i_gz]
+        )
         # get date
         sonic_dates <- sub('^(py_)?fnf_01_sonic_', '', sonic_files)
         # sort by date
@@ -1133,6 +1140,13 @@ process_ec_fluxes <- function(
                 setdiff(ht_files[!i_py], sub('^py_', '', ht_files[i_py])),
                 ht_files[i_py]
             )
+            # prioritize gz files
+            i_gz <- grepl('\\.gz$', ht_files)
+            # remove duplicated non-py
+            ht_files <- c(
+                setdiff(ht_files[!i_gz], sub('\\.gz$', '.csv', ht_files[i_gz])),
+                ht_files[i_gz]
+            )
             # get date
             ht_dates <- sub('^(py_)?fnf_01_ht8700_', '', ht_files)
             # sort by date
@@ -1179,6 +1193,13 @@ process_ec_fluxes <- function(
             licor_files <- c(
                 setdiff(licor_files[!i_py], sub('^py_', '', licor_files[i_py])),
                 licor_files[i_py]
+            )
+            # prioritize gz files
+            i_gz <- grepl('\\.gz$', licor_files)
+            # remove duplicated non-py
+            licor_files <- c(
+                setdiff(licor_files[!i_gz], sub('\\.gz$', '.csv', licor_files[i_gz])),
+                licor_files[i_gz]
             )
             # get date
             licor_dates <- sub('^(py_)?fnf_01_licor_', '', licor_files)

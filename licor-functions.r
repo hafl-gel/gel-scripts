@@ -118,15 +118,21 @@ Rcpp::List licor_read_cpp(String filename) {
 ')
 
 ## C++ helper function for gzipped licor data
-cppFunction('
+if (Sys.info()['sysname'] == 'Windows') {
+    old_pkg_libs <- Sys.getenv('PKG_LIBS')
+    # help the linker to include zlib through the environment variable PKG_LIBS
+    Sys.setenv(PKG_LIBS = "-lz")       # Adjust the path to zlib library directory
+}
+sourceCpp(code = '
 #include <zlib.h>
 #include <string>
 #include <Rcpp.h>
-Rcpp::List licor_read_cpp_gzip(String filename) {
+// [[Rcpp::export]]
+Rcpp::List licor_read_cpp_gzip(Rcpp::String filename) {
     // open file
     gzFile input = gzopen(filename.get_cstring(), "rb");
     if (input == NULL) {
-        Rcout << "Could not read file: " << filename.get_cstring() << "\\n";
+        Rcpp::Rcout << "Could not read file: " << filename.get_cstring() << "\\n";
         return R_NilValue;
     }
     // create output
@@ -216,21 +222,26 @@ Rcpp::List licor_read_cpp_gzip(String filename) {
         return R_NilValue;
     }
     return Rcpp::List::create(
-		_["time_string"] = col1_time,
-        _["DiagVal"] = col4_DiagVal,
-        _["CO2D"] = col6_CO2D,
-        _["H2OD"] = col7_H2OD,
-        _["Temp"] = col8_Temp,
-        _["Pres"] = col9_Pres,
-        _["Cooler"] = col10_Cooler,
-        _["SFVin"] = col11_SFVin,
-        _["H2OMF"] = col12_H2OMF,
-        _["DewPt"] = col13_DewPt,
-        _["CO2SS"] = col14_CO2SS,
-        _["CO2AWO"] = col15_CO2AWO
+		Rcpp::_["time_string"] = col1_time,
+        Rcpp::_["DiagVal"] = col4_DiagVal,
+        Rcpp::_["CO2D"] = col6_CO2D,
+        Rcpp::_["H2OD"] = col7_H2OD,
+        Rcpp::_["Temp"] = col8_Temp,
+        Rcpp::_["Pres"] = col9_Pres,
+        Rcpp::_["Cooler"] = col10_Cooler,
+        Rcpp::_["SFVin"] = col11_SFVin,
+        Rcpp::_["H2OMF"] = col12_H2OMF,
+        Rcpp::_["DewPt"] = col13_DewPt,
+        Rcpp::_["CO2SS"] = col14_CO2SS,
+        Rcpp::_["CO2AWO"] = col15_CO2AWO
     );
 }
 ')
+if (Sys.info()['sysname'] == 'Windows') {
+    # reset env var
+    Sys.setenv(PKG_LIBS = old_pkg_libs)
+}
+
 # R wrapper, main function
 read_licor <- function(FilePath) {
 	# get file name

@@ -472,39 +472,45 @@ Rcpp::List ht8700_read_cpp(String filename) {
 
 ### function to read gzip-ped data in C++
 # thanks to directions given in https://github.com/eddelbuettel/bh/issues/106#issuecomment-2724741475
-cppFunction('
+if (Sys.info()['sysname'] == 'Windows') {
+    old_pkg_libs <- Sys.getenv('PKG_LIBS')
+    # help the linker to include zlib through the environment variable PKG_LIBS
+    Sys.setenv(PKG_LIBS = "-lz")       # Adjust the path to zlib library directory
+}
+sourceCpp(code = '
 #include <zlib.h>
 #include <string>
 #include <Rcpp.h>
-Rcpp::List ht8700_read_cpp_gzip(String filename) {
+// [[Rcpp::export]]
+Rcpp::List ht8700_read_cpp_gzip(Rcpp::String filename) {
     // open file
     gzFile input = gzopen(filename.get_cstring(), "rb");
     if (input == NULL) {
-        Rcout << "Could not read file: " << filename.get_cstring() << "\\n";
+        Rcpp::Rcout << "Could not read file: " << filename.get_cstring() << "\\n";
         return R_NilValue;
     }
     int max_lines = 870000;
     // create output
-    CharacterVector col1_time(max_lines);
-    CharacterVector col2(max_lines);
-    CharacterVector col17(max_lines);
-    CharacterVector col18(max_lines);
-    CharacterVector col20(max_lines);
-    IntegerVector col19(max_lines);
-    NumericVector col3(max_lines);
-    NumericVector col4(max_lines);
-    NumericVector col5(max_lines);
-    NumericVector col6(max_lines);
-    NumericVector col7(max_lines);
-    NumericVector col8(max_lines);
-    NumericVector col9(max_lines);
-    NumericVector col10(max_lines);
-    NumericVector col11(max_lines);
-    NumericVector col12(max_lines);
-    NumericVector col13(max_lines);
-    NumericVector col14(max_lines);
-    NumericVector col15(max_lines);
-    NumericVector col16(max_lines);
+    Rcpp::CharacterVector col1_time(max_lines);
+    Rcpp::CharacterVector col2(max_lines);
+    Rcpp::CharacterVector col17(max_lines);
+    Rcpp::CharacterVector col18(max_lines);
+    Rcpp::CharacterVector col20(max_lines);
+    Rcpp::IntegerVector col19(max_lines);
+    Rcpp::NumericVector col3(max_lines);
+    Rcpp::NumericVector col4(max_lines);
+    Rcpp::NumericVector col5(max_lines);
+    Rcpp::NumericVector col6(max_lines);
+    Rcpp::NumericVector col7(max_lines);
+    Rcpp::NumericVector col8(max_lines);
+    Rcpp::NumericVector col9(max_lines);
+    Rcpp::NumericVector col10(max_lines);
+    Rcpp::NumericVector col11(max_lines);
+    Rcpp::NumericVector col12(max_lines);
+    Rcpp::NumericVector col13(max_lines);
+    Rcpp::NumericVector col14(max_lines);
+    Rcpp::NumericVector col15(max_lines);
+    Rcpp::NumericVector col16(max_lines);
     int cline = 0;
     int n_fields = 20 - 1;
     int field = 0;
@@ -571,30 +577,33 @@ Rcpp::List ht8700_read_cpp_gzip(String filename) {
         return R_NilValue;
     }
     return Rcpp::List::create(
-		_["time_string"] = col1_time,
-        _["sn"] = col2,
-        _["nh3_ppb"] = col3,
-        _["nh3_ugm3"] = col4,
-        _["rh_int"] = col5,
-        _["temp_int"] = col6,
-        _["temp_amb"] = col7,
-        _["press_amb"] = col8,
-        _["oss"] = col9,
-        _["peak_pos"] = col10,
-        _["temp_leaser_chip"] = col11,
-        _["temp_leaser_housing"] = col12,
-        _["temp_mct"] = col13,
-        _["temp_mct_housing"] = col14,
-        _["laser_current"] = col15,
-        _["ref_road_2f"] = col16,
-        _["alarm_lower_bit"] = col17,
-        _["alarm_upper_bit"] = col18,
-        _["cleaning_flag"] = col19,
-        _["notused"] = col20
+		Rcpp::_["time_string"] = col1_time,
+        Rcpp::_["sn"] = col2,
+        Rcpp::_["nh3_ppb"] = col3,
+        Rcpp::_["nh3_ugm3"] = col4,
+        Rcpp::_["rh_int"] = col5,
+        Rcpp::_["temp_int"] = col6,
+        Rcpp::_["temp_amb"] = col7,
+        Rcpp::_["press_amb"] = col8,
+        Rcpp::_["oss"] = col9,
+        Rcpp::_["peak_pos"] = col10,
+        Rcpp::_["temp_leaser_chip"] = col11,
+        Rcpp::_["temp_leaser_housing"] = col12,
+        Rcpp::_["temp_mct"] = col13,
+        Rcpp::_["temp_mct_housing"] = col14,
+        Rcpp::_["laser_current"] = col15,
+        Rcpp::_["ref_road_2f"] = col16,
+        Rcpp::_["alarm_lower_bit"] = col17,
+        Rcpp::_["alarm_upper_bit"] = col18,
+        Rcpp::_["cleaning_flag"] = col19,
+        Rcpp::_["notused"] = col20
     );
 }
 ')
-
+if (Sys.info()['sysname'] == 'Windows') {
+    # reset env var
+    Sys.setenv(PKG_LIBS = old_pkg_libs)
+}
 
 # merge sonic & ht8700
 sourceCpp(code = '

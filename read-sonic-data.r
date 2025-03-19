@@ -5,13 +5,9 @@
 #' @param FilePath The path to the file containing the sonic data.
 #' @return A data.table containing the sonic data.
 #' @export
-#' @examples
-#' \dontrun{
-#' data <- read_sonic("path/to/sonic_data.qs")
-#' }
 read_sonic <- function(FilePath) {
     bn <- basename(FilePath)
-    # check if provided as qs or rds
+    # check if files are provided as qs or rds
     if (grepl('[.]qs$', bn)) {
         if (!require(qs)) {
             stop('data is provided as *.qs file -> install qs library',
@@ -23,7 +19,6 @@ read_sonic <- function(FilePath) {
     } else if (grepl("^(py_)?fnf_", bn)) {
         # new data format -> TODO: check HS vs Windmaster
         read_hs_ascii(FilePath)
-        # read_windmaster_ascii(FilePath)
     } else {
         read_windmaster_ascii(FilePath)
     }
@@ -196,50 +191,6 @@ read_windmaster_old_ascii <- function(FilePath){
     ### change units from °C to K
     out[, T := T + 273.15]
     setattr(out, "GillBug", TRUE)
-    out
-}
-
-#' Read Sonic EVS CSV Data
-#'
-#' Function to read Sonic EVS CSV data.
-#'
-#' @param FilePath The path to the file containing the Sonic EVS CSV data.
-#' @param tz The time zone of the data. Default is "Etc/GMT-1".
-#' @return A data.table containing the Sonic EVS CSV data.
-#' @export
-#' @examples
-#' \dontrun{
-#' data <- readSonicEVS_csv("path/to/sonic_evs_data.csv")
-#' }
-readSonicEVS_csv <- function(FilePath, tz = "Etc/GMT-1"){
-    ### read File
-    suppressWarnings(out <- fread(cmd=paste0("grep -v -e ',,' -e [A-Za-z] '", 
-        path.expand(FilePath), "'"), fill = TRUE, blank.lines.skip = TRUE))
-    ### remove rows with NA
-    out <- na.omit(out)
-    ### set times
-    out[,st.dec := fast_strptime(paste(V1, V2), lt = FALSE, format = "%d.%m.%Y %H.%M.%OS",
-        tz = tz)][,c("V1","V2"):=NULL]
-    # get start time
-    start_time <- out[, as.POSIXct(trunc(st.dec[1]))]
-    out[, dt := trunc(as.numeric(st.dec - start_time, units = "secs"))]
-    # correct new day
-    out[(seq_len(.N) > 30) & dt == 0, dt := dt + 24 * 3600]
-    out[dt < 0, dt := dt + 24 * 3600 - 1]
-    # add st column
-    out[, st := start_time + dt]
-    # add Hz column
-    Hz <- out[, .N, by = trunc(dt)][, round(median(N), -1)]
-    out[, Hz := Hz]
-    # remove columns
-    out[, c("st.dec", "dt") := NULL]
-    ### set Output names and order
-    setnames(out,c("u", "v", "w", "T", "Time","Hz"))
-    setcolorder(out,c("Time","Hz","u","v","w","T"))
-    ### remove 999.99 entries
-    out <- out[!(u%in%999.99|v%in%999.99|w%in%999.99|T%in%999.99),]
-    ### change units from °C to K
-    out[,T := T + 273.15]
     out
 }
 

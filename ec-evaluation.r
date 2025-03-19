@@ -608,6 +608,7 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
 	dat3 <- list2DF(wind[c("umrot","vmrot","wmrot","Tmdet")])
 	names(dat3) <- c("u","v","w","T")
 	if(!is.null(scal)){
+        # add scalars
 		dat3 <- cbind(dat3, lapply(scal, \(x) {
                 if (is.null(isna <- na.action(x$residuals))) {
                     x$fitted
@@ -618,6 +619,11 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
                 }
             })
         )
+        # add residuals
+        res <- setdiff(selection, names(dat3))
+        if (length(res) > 0) {
+            dat3 <- cbind(dat3, dat[, res])
+        }
 	}
 	dat3 <- dat3[,selection]
 	### melt and add trends:
@@ -921,9 +927,9 @@ process_ec_fluxes <- function(
 		, create_graphs = TRUE
 		, graphs_directory = NULL
 		, add_name = ''
-        , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', T = 'K', nh3_ppb = 'ppb', nh3_ugm3 = 'ug/m3', h2o_mmolm3 = 'mmol/m3', co2_mmolm3 = 'mmol/m3')
-        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', nh3_ppb = 'indianred', nh3_ugm3 = 'indianred', h2o_mmolm3 = '#63A1D6', co2_mmolm3 = '#74C974')
-        , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
+        , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, ht_oss = TRUE, nh3_ppb = FALSE, nh3_ugm3 = TRUE, li_co2ss = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
+        , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', T = 'K', ht_oss = '-', nh3_ppb = 'ppb', nh3_ugm3 = 'ug/m3', li_co2ss = '-', h2o_mmolm3 = 'mmol/m3', co2_mmolm3 = 'mmol/m3')
+        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', ht_oss = 'grey', nh3_ppb = 'indianred', nh3_ugm3 = 'indianred', li_co2ss = 'grey', h2o_mmolm3 = '#63A1D6', co2_mmolm3 = '#74C974')
         , plotting_covar_units = c(uxw = 'm2/s2', wxT = 'K*m/s', wxnh3_ppb = 'ppb*m/s', wxnh3_ugm3 = 'ug/m2/s', wxh2o_mmolm3 = 'mmol/m2/s', wxco2_mmolm3 = 'mmol/m2/s')
         , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred', wxnh3_ugm3 = 'indianred', wxh2o_mmolm3 = '#63A1D6', wxco2_mmolm3 = '#74C974')
 		, ogives_out = FALSE
@@ -969,7 +975,7 @@ process_ec_fluxes <- function(
     # get scalars and fix missing instruments
     scalars <- sub('wx', '', grep('wx[^T].+', covariances, value = TRUE))
     # fix missing ht8700
-    if (is.null(ht_directory)) {
+    if (ht_null <- is.null(ht_directory)) {
         scalars <- grep('nh3', scalars, value = TRUE, invert = TRUE)
         covariances <- grep('nh3', covariances, value = TRUE, invert = TRUE)
     } else if (!exists('read_ht8700', mode = "function")) {
@@ -977,7 +983,7 @@ process_ec_fluxes <- function(
         " ht8700-functions.r")
     }
     # fix missing licor
-    if (is.null(licor_directory)) {
+    if (licor_null <- is.null(licor_directory)) {
         scalars <- grep('h2o|co2', scalars, value = TRUE, invert = TRUE)
         covariances <- grep('h2o|co2', covariances, value = TRUE, invert = TRUE)
     } else if (!exists('read_licor', mode = "function")) {
@@ -1028,9 +1034,22 @@ process_ec_fluxes <- function(
     damping_lower <- fix_defaults(damping_lower, covariances[scalar_covariances])
     damping_upper <- fix_defaults(damping_upper, covariances[scalar_covariances])
     subint_detrending <- fix_defaults(subint_detrending, variables)
-    plotting_var_units <- fix_defaults(plotting_var_units, variables)
-    plotting_var_colors <- fix_defaults(plotting_var_colors, variables)
-    plot_timeseries <- fix_defaults(plot_timeseries, variables)
+    ts_vars <- variables
+    if (!ht_null) {
+        # add ht8700 quality parameters (oss) to plotting
+        ts_vars <- c(ts_vars, 'ht_oss')
+    }
+    if (!licor_null) {
+        # add licor quality parameters (co2ss) to plotting
+        ts_vars <- c(ts_vars, 'li_co2ss')
+    }
+    # extend & sort ts_vars
+    ts_vars <- union(names(plot_timeseries), ts_vars)
+    plot_timeseries <- fix_defaults(plot_timeseries, ts_vars)
+    # only take TRUE
+    plot_timeseries <- plot_timeseries[plot_timeseries]
+    plotting_var_colors <- fix_defaults(plotting_var_colors, ts_vars)[names(plot_timeseries)]
+    plotting_var_units <- fix_defaults(plotting_var_units, ts_vars)[names(plot_timeseries)]
     plotting_covar_units <- fix_defaults(plotting_covar_units, covariances)
     plotting_covar_colors <- fix_defaults(plotting_covar_colors, covariances)
 

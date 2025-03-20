@@ -383,10 +383,10 @@ Rcpp::List hs_read_cpp_gzip(Rcpp::String filename) {
     while (gzread(input, &c, 1) > 0) {
         if (c == \'\\n\') {
         // check for newline -> newline
-            // add s to current line vector
-            line[field] = s;
             // check field counter
             if (field == n_fields) {
+                // add s to current line vector
+                line[field] = s;
                 // line ok
                 // assign to vectors
                 col1_time[cline] = line[0];

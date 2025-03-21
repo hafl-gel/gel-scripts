@@ -871,8 +871,16 @@ correct_wpl <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'),
 
 # helper function for process_ec_fluxes()
 fix_defaults <- function(x, vars) {
+    nms <- names(x)
+    if (is.null(nms)) {
+        if (length(x) != 1) {
+            stop(deparse(substitute(x)), 
+                ' - provide either a named vector or a single value!')
+        }
+        nms <- ''
+    }
     # find vars not in x
-    missing_vars <- vars[!(vars %in% names(x))]
+    missing_vars <- vars[!(vars %in% nms)]
     if (length(missing_vars)) {
         # get formals
         frms <- formals(sys.function(sys.parent(1L)))
@@ -880,8 +888,14 @@ fix_defaults <- function(x, vars) {
         fname <- as.character(substitute(x))
         # get default values
         default <- eval(frms[[fname]])
-        # extend x with default
-        x <- c(x, default[missing_vars])
+        # extend/replace x with default
+        if (nms[1] == '') {
+            # replace
+            x <- default[missing_vars]
+        } else {
+            # extend
+            x <- c(x, default[missing_vars])
+        }
     }
     # return
     x[vars]
@@ -1255,7 +1269,7 @@ process_ec_fluxes <- function(
 
     # fix start_time (only use sonic)
     if (length(start_time) == 1 && start_time == 'first') {
-        start_time <- with_tz(sonic_start, tz_user)
+        start_time <- with_tz(start_sonic, tz_user)
     } else if (!is.null(start_time)) {
         start_time <- parse_date_time3(start_time, tz = tz_user)
     }
@@ -1264,7 +1278,7 @@ process_ec_fluxes <- function(
     if (is.null(end_time)) {
         end_time <- start_time + avg_secs
     } else if (length(end_time) == 1 && end_time == 'last') {
-        end_time <- with_tz(sonic_end, tz_user)
+        end_time <- with_tz(end_sonic, tz_user)
     } else {
         end_time <- parse_date_time3(end_time, tz = tz_user)
     }
@@ -1290,20 +1304,19 @@ process_ec_fluxes <- function(
 
     # get start/end per date in UTC & CET
     times_list <- sapply(dates, \(x) {
-        sind <- start_dates == x
         eind <- end_dates == x
-        times <- unique(c(start_time[sind], end_time[eind] - 1))
+        times <- unique(c(start_time[eind], end_time[eind] - 1))
         UTC_times <- with_tz(times, 'UTC')
         CET_times <- with_tz(times, 'Etc/GMT-1')
         list(
             UTC = unique(date(UTC_times)),
             CET = unique(date(CET_times)),
             UTC_times = list(
-                st = with_tz(start_time[sind], 'UTC'),
+                st = with_tz(start_time[eind], 'UTC'),
                 et = with_tz(end_time[eind], 'UTC')
             ),
             CET_times = list(
-                st = with_tz(start_time[sind], 'Etc/GMT-1'),
+                st = with_tz(start_time[eind], 'Etc/GMT-1'),
                 et = with_tz(end_time[eind], 'Etc/GMT-1')
             )
         )
@@ -1939,11 +1952,11 @@ process_ec_fluxes <- function(
                 })
                 names(Ogive_dyn) <- covariances
                 if (ogives_out) {
-                    Cospec_fix_Out[[day]][[.GRP]] <- c(list(freq = freq), Cospec_fix)
-                    Cospec_dyn_Out[[day]][[.GRP]] <- c(list(freq = freq), Cospec_dyn)
-                    Ogive_fix_Out[[day]][[.GRP]] <- c(list(freq = freq), Ogive_fix)
-                    Ogive_dyn_Out[[day]][[.GRP]] <- c(list(freq = freq), Ogive_dyn)
-                    Covars_Out[[day]][[.GRP]] <- c(list(Hz = .Hz), Covars)
+                    Cospec_fix_Out[[dates[day]]][[.GRP]] <- c(list(freq = freq), Cospec_fix)
+                    Cospec_dyn_Out[[dates[day]]][[.GRP]] <- c(list(freq = freq), Cospec_dyn)
+                    Ogive_fix_Out[[dates[day]]][[.GRP]] <- c(list(freq = freq), Ogive_fix)
+                    Ogive_dyn_Out[[dates[day]]][[.GRP]] <- c(list(freq = freq), Ogive_dyn)
+                    Covars_Out[[dates[day]]][[.GRP]] <- c(list(Hz = .Hz), Covars)
                 }
 
 
@@ -2180,7 +2193,17 @@ process_ec_fluxes <- function(
     } # end for loop over days
 
     # rbind list to data.table
-    results <- rbindlist(result_list)
+    results <- rbindlist(result_list, fill = TRUE)
+
+	cat("************************************************************\n") 
+	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
+        "time elapsed: ", difftime(Sys.time(), script.start, unit = "mins"),
+        "minutes\n")
+	cat("************************************************************\n")  
+
+    if (nrow(results) == 0) {
+        return(NULL)
+    }
 
     # remove bin column
     results[, bin := NULL]
@@ -2197,11 +2220,6 @@ process_ec_fluxes <- function(
     }
 
 	# #################################### END VERSION HISTORY #################################### #
-	cat("************************************************************\n") 
-	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
-        "time elapsed: ", difftime(Sys.time(), script.start, unit = "mins"),
-        "minutes\n")
-	cat("************************************************************\n")  
 
 	if (ogives_out) {
 		structure(

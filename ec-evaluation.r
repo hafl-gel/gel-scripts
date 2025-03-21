@@ -1328,8 +1328,8 @@ process_ec_fluxes <- function(
 
     # prepare ogive output
     if (ogives_out) {
-        Cospec_dyn_Out <- Cospec_fix_Out <- Covars_Out <- Ogive_fix_Out <- Ogive_dyn_Out <- vector("list", length(dates))
-        names(Cospec_fix_Out) <- names(Cospec_dyn_Out) <- names(Covars_Out) <- names(Ogive_fix_Out) <- names(Ogive_dyn_Out) <- dates
+        e_ogive <- new.env()
+        e_ogive$Cospec_dyn_Out <- e_ogive$Cospec_fix_Out <- e_ogive$Covars_Out <- e_ogive$Ogive_fix_Out <- e_ogive$Ogive_dyn_Out <- setNames(vector("list", length(dates)), dates)
     }
 
     # copy scalars etc. to fix missing
@@ -1656,9 +1656,7 @@ process_ec_fluxes <- function(
 
                 # times, frequencies etc.
                 # --------------------------------------------------------------------------
-                Int_Start <- Time[1]
-                Int_End <- tail(Time, 1) + 1 / .Hz
-                Int_Time <- as.numeric(Int_End - Int_Start, units = "secs")
+                Int_Start <- st_interval[.BY[[1]]]
                 freq <- .Hz * seq(floor(n_period / 2)) / floor(n_period / 2)
                 # TODO (maybe for later): include NA where d_t>2*mean, remove entries where d_t < 0.5*mean
 
@@ -1952,11 +1950,12 @@ process_ec_fluxes <- function(
                 })
                 names(Ogive_dyn) <- covariances
                 if (ogives_out) {
-                    Cospec_fix_Out[[dates[day]]][[.GRP]] <- c(list(freq = freq), Cospec_fix)
-                    Cospec_dyn_Out[[dates[day]]][[.GRP]] <- c(list(freq = freq), Cospec_dyn)
-                    Ogive_fix_Out[[dates[day]]][[.GRP]] <- c(list(freq = freq), Ogive_fix)
-                    Ogive_dyn_Out[[dates[day]]][[.GRP]] <- c(list(freq = freq), Ogive_dyn)
-                    Covars_Out[[dates[day]]][[.GRP]] <- c(list(Hz = .Hz), Covars)
+                    int_start <- format(Int_Start)
+                    e_ogive$Cospec_fix_Out[[dates[day]]][[int_start]] <- c(list(freq = freq), Cospec_fix)
+                    e_ogive$Cospec_dyn_Out[[dates[day]]][[int_start]] <- c(list(freq = freq), Cospec_dyn)
+                    e_ogive$Ogive_fix_Out[[dates[day]]][[int_start]] <- c(list(freq = freq), Ogive_fix)
+                    e_ogive$Ogive_dyn_Out[[dates[day]]][[int_start]] <- c(list(freq = freq), Ogive_dyn)
+                    e_ogive$Covars_Out[[dates[day]]][[int_start]] <- c(list(Hz = .Hz), Covars)
                 }
 
 
@@ -2044,7 +2043,7 @@ process_ec_fluxes <- function(
 
                 out <- c(
                     list(
-                        st = st_interval[.BY[[1]]]
+                        st = Int_Start
                         , et = et_interval[.BY[[1]]]
                         , n_values = .N
                         #, SubInts =  subint_n
@@ -2224,11 +2223,11 @@ process_ec_fluxes <- function(
 	if (ogives_out) {
 		structure(
             results, 
-            covars = Covars_Out,
-            cospec_fix = Cospec_fix_Out, 
-            cospec_dyn = Cospec_dyn_Out,
-            ogv_fix = Ogive_fix_Out, 
-            ogv_dyn = Ogive_dyn_Out
+            covars = e_ogive$Covars_Out,
+            cospec_fix = e_ogive$Cospec_fix_Out, 
+            cospec_dyn = e_ogive$Cospec_dyn_Out,
+            ogv_fix = e_ogive$Ogive_fix_Out, 
+            ogv_dyn = e_ogive$Ogive_dyn_Out
         )
 	} else {
         results

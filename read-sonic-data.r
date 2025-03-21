@@ -7,7 +7,13 @@ library(ibts)
 read_sonic <- function(FilePath) {
 	bn <- basename(FilePath)
     # check if provided as qs or rds
-    if (grepl('[.]qs$', bn)) {
+    if (grepl('[.]qdata$', bn)) {
+        if (!require(qs2)) {
+            stop('data is provided as *.qdata file -> install qs2 library',
+                ' running "install.packages("qs2")"')
+        }
+        qs2::qd_read(FilePath)
+    } else if (grepl('[.]qs$', bn)) {
         if (!require(qs)) {
             stop('data is provided as *.qs file -> install qs library',
                 ' running "install.packages("qs")"')

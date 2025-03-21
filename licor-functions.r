@@ -247,7 +247,13 @@ read_licor <- function(FilePath) {
 	# get file name
 	bn <- basename(FilePath)
     # check file name
-    if (grepl('[.]qs$', bn)) {
+    if (grepl('[.]qdata$', bn)) {
+        if (!require(qs2)) {
+            stop('data is provided as *.qdata file -> install qs2 library',
+                ' running "install.packages("qs2")"')
+        }
+        return(qs2::qd_read(FilePath))
+    } else if (grepl('[.]qs$', bn)) {
         if (!require(qs)) {
             stop('data is provided as *.qs file -> install qs library',
                 ' running "install.packages("qs")"')

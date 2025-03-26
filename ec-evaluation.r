@@ -2129,7 +2129,8 @@ process_ec_fluxes <- function(
                         dir.create(path_folder, recursive = FALSE)
                     }
                     # get end of current interval time in UTC
-                    eoi_utc <- st_interval[.GRP]
+                    soi_utc <- st_interval[.GRP]
+                    eoi_utc <- et_interval[.GRP]
                     # get date in correct format
                     date_formatted <- gsub('-', '', dates[day], fixed = TRUE)
                     # plotting:
@@ -2141,7 +2142,7 @@ process_ec_fluxes <- function(
                     # plot and save (rotated) data time series with raw-data trends...
                     # ------------------------------------------------------------------------
                     ## TODO: -> fix tz!!! -> use UTC but indicate in name!!!
-                    time2 <- format(eoi_utc, format = "%H%M")
+                    time2 <- format(soi_utc, format = "%H%M")
                     plotname <- paste("timeseries", date_formatted, time2, sep="-") 
                     ts_vars <- names(plot_timeseries)[plot_timeseries]
                     jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), width = 600, height = (sum(plot_timeseries)) * 100, quality = 60)
@@ -2173,7 +2174,7 @@ process_ec_fluxes <- function(
                                 plot_damping(Damping_dyn[[i]],freq,ylab=paste0("ogive (dyn lag) of ",i),cx=1.5,col=plotting_covar_colors[i])
                             }
                             title(paste0(ylab, " flux ", 
-                                format(Int_Start, format = "(%H:%M:%S"), " - ", format(eoi_utc, format = "%H:%M:%S)"), 
+                                format(soi_utc, format = "(%H:%M:%S"), " - ", format(eoi_utc, format = "%H:%M:%S)"), 
                                 if (scalar_covariances[i]) {
                                     reflab <- sub('(.+)x(.+)', "<\\1'\\2'>", damping_reference[i])
                                     paste0(" - damping reference flux: ", reflab)

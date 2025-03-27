@@ -943,9 +943,9 @@ process_ec_fluxes <- function(
 		, add_name = ''
         , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, ht_oss = TRUE, nh3_ppb = FALSE, nh3_ugm3 = TRUE, li_co2ss = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
         , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', T = 'K', ht_oss = '-', nh3_ppb = 'ppb', nh3_ugm3 = 'ug/m3', li_co2ss = '-', h2o_mmolm3 = 'mmol/m3', co2_mmolm3 = 'mmol/m3')
-        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', ht_oss = 'grey', nh3_ppb = 'indianred', nh3_ugm3 = 'indianred', li_co2ss = 'grey', h2o_mmolm3 = '#63A1D6', co2_mmolm3 = '#74C974')
+        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', ht_oss = 'grey', nh3_ppb = 'indianred', nh3_ugm3 = 'indianred', li_co2ss = 'grey', h2o_mmolm3 = '#8FC1E6', co2_mmolm3 = 'seagreen4')
         , plotting_covar_units = c(uxw = 'm2/s2', wxT = 'K*m/s', wxnh3_ppb = 'ppb*m/s', wxnh3_ugm3 = 'ug/m2/s', wxh2o_mmolm3 = 'mmol/m2/s', wxco2_mmolm3 = 'mmol/m2/s')
-        , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred', wxnh3_ugm3 = 'indianred', wxh2o_mmolm3 = '#63A1D6', wxco2_mmolm3 = '#74C974')
+        , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred', wxnh3_ugm3 = 'indianred', wxh2o_mmolm3 = '#8FC1E6', wxco2_mmolm3 = 'seagreen4')
 		, ogives_out = FALSE
         , as_ibts = TRUE
 	){

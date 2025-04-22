@@ -720,11 +720,12 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
             # re-add ht data
             add <- basis_sonic[, ht_orig, with = FALSE]
             setnames(add, ht_orig, ht_vars)
+            out[, (ht_vars) := copy(add)]
         } else if ('ht_oss' %in% names(basis_sonic)) {
             # re-add ht data
             add <- basis_sonic[, ht_vars, with = FALSE]
+            out[, (ht_vars) := copy(add)]
         }
-        out[, (ht_vars) := copy(add)]
     }
     # fill licor
     licor_vars <- names(out)[15:19]
@@ -733,6 +734,8 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
         t_basis <- basis_sonic[, as.numeric(Time)]
         t_licor <- draw_licor[, as.numeric(Time)]
         t0 <- t_basis[1]
+        # ~ 1/Hz
+        d_t <- median(diff(t_basis))
         # get matching indices
         indices <- match_times(t_basis - t0, t_licor - t0, d_t)
         # fill values
@@ -744,11 +747,12 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
             # re-add licor data
             add <- basis_sonic[, licor_orig, with = FALSE]
             setnames(add, licor_orig, licor_vars)
+            out[, (licor_vars) := copy(add)]
         } else if ('co2_mmolm3' %in% names(basis_sonic)) {
             # re-add licor data
             add <- basis_sonic[, licor_vars, with = FALSE]
+            out[, (licor_vars) := copy(add)]
         }
-        out[, (licor_vars) := copy(add)]
     }
     # return
     out

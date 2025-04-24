@@ -932,6 +932,8 @@ process_ec_fluxes <- function(
         # lower & upper bounds of fitting ogives (in seconds)
 		, damping_lower = c(wxnh3_ppb = 2, wxnh3_ugm3 = 2, wxh2o_mmolm3 = 2, wxco2_mmolm3 = 2)
 		, damping_upper = c(wxnh3_ppb = 20, wxnh3_ugm3 = 20, wxh2o_mmolm3 = 20, wxco2_mmolm3 = 20)
+        , low_cont_sec = 20
+        , high_cont_sec = 2
         , subintervals = TRUE
         , subint_n = 5
         , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
@@ -1975,6 +1977,31 @@ process_ec_fluxes <- function(
                     Damping_dyn <- Damping_fix <- NULL
                 }
 
+                # calculate low frequency contribution
+                i_hi <- which(1 / freq < high_cont_sec)[1]
+                if (length(i_hi) != 1) stop('check argument "high_cont_sec"!')
+                hi_cont_fix <- sapply(Ogive_fix, \(x) (x[1] - x[i_hi]) / x[1])
+                hi_cont_dyn <- sapply(Ogive_dyn, \(x) (x[1] - x[i_hi]) / x[1])
+                i_lo <- which(1 / freq <= low_cont_sec)[1]
+                if (length(i_lo) != 1) stop('check argument "low_cont_sec"!')
+                lo_cont_fix <- sapply(Ogive_fix, \(x) x[i_lo] / x[1])
+                lo_cont_dyn <- sapply(Ogive_dyn, \(x) x[i_lo] / x[1])
+
+                # get Albrecht's ogive bias
+                ogive_bias_fix <- sapply(Cospec_fix, \(x) {
+                    x[is.na(x)] <- 0
+                    ms <- median(sign(x))
+                    o <- sum(x)
+                    (ms * sum(abs(x)) - o) / o
+                })
+                ogive_bias_dyn <- sapply(Cospec_dyn, \(x) {
+                    x[is.na(x)] <- 0
+                    ms <- median(sign(x))
+                    o <- sum(x)
+                    (ms * sum(abs(x)) - o) / o
+                })
+
+
                 ##### ~~~> sub-intervals switched off
                 # if (FALSE) {
                 #     # sub-int: sub-interval calculations (switch do data.frame since code already exists (I'm lazy))
@@ -2095,6 +2122,30 @@ process_ec_fluxes <- function(
                         , setNames(
                             re_rmse[input_covariances],
                             paste0('re_rmse_', input_covariances)
+                        )
+                        , setNames(
+                            hi_cont_fix[input_covariances],
+                            paste0('hi_cont_fix_', input_covariances)
+                        )
+                        , setNames(
+                            hi_cont_dyn[input_covariances],
+                            paste0('hi_cont_dyn_', input_covariances)
+                        )
+                        , setNames(
+                            lo_cont_fix[input_covariances],
+                            paste0('lo_cont_fix_', input_covariances)
+                        )
+                        , setNames(
+                            lo_cont_dyn[input_covariances],
+                            paste0('lo_cont_dyn_', input_covariances)
+                        )
+                        , setNames(
+                            ogive_bias_fix[input_covariances],
+                            paste0('ogive_bias_fix_', input_covariances)
+                        )
+                        , setNames(
+                            ogive_bias_dyn[input_covariances],
+                            paste0('ogive_bias_dyn_', input_covariances)
                         )
                         , if (!is.null(Damping_fix)) {
                             c(

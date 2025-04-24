@@ -963,7 +963,7 @@ process_ec_fluxes <- function(
         library(reshape2)
         library(lattice)
     }
-    if (!is.null(graphs_directory) && (
+    if (create_graphs && (
             !is.character(graphs_directory) || !dir.exists(graphs_directory)
             )) {
         stop('argument "graphs_directory": directory "', graphs_directory, 

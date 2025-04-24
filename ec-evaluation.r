@@ -935,6 +935,7 @@ process_ec_fluxes <- function(
 		, damping_upper = c(wxnh3_ppb = 20, wxnh3_ugm3 = 20, wxh2o_mmolm3 = 20, wxco2_mmolm3 = 20)
         , low_cont_sec = 20
         , high_cont_sec = 2
+        , cont_pts = 5
         , subintervals = TRUE
         , subint_n = 5
         , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
@@ -1981,12 +1982,20 @@ process_ec_fluxes <- function(
                 # calculate low frequency contribution
                 i_hi <- which(1 / freq < high_cont_sec)[1]
                 if (length(i_hi) != 1) stop('check argument "high_cont_sec"!')
-                hi_cont_fix <- sapply(Ogive_fix, \(x) x[i_hi] / x[1])
-                hi_cont_dyn <- sapply(Ogive_dyn, \(x) x[i_hi] / x[1])
+                hi_cont_fix <- sapply(Ogive_fix, \(x) {
+                    mean(x[i_hi + seq(-cont_pts, cont_pts)])/ x[1]
+                })
+                hi_cont_dyn <- sapply(Ogive_dyn, \(x) {
+                    mean(x[i_hi + seq(-cont_pts, cont_pts)])/ x[1]
+                })
                 i_lo <- which(1 / freq <= low_cont_sec)[1]
                 if (length(i_lo) != 1) stop('check argument "low_cont_sec"!')
-                lo_cont_fix <- sapply(Ogive_fix, \(x) (x[1] - x[i_lo]) / x[1])
-                lo_cont_dyn <- sapply(Ogive_dyn, \(x) (x[1] - x[i_lo]) / x[1])
+                lo_cont_fix <- sapply(Ogive_fix, \(x) {
+                    (x[1] - mean(x[i_lo + seq(-cont_pts, cont_pts)])) / x[1]
+                })
+                lo_cont_dyn <- sapply(Ogive_dyn, \(x) {
+                    (x[1] - mean(x[i_lo + seq(-cont_pts, cont_pts)])) / x[1]
+                })
 
                 # get Albrecht's ogive bias
                 ogive_bias_fix <- sapply(Cospec_fix, \(x) {

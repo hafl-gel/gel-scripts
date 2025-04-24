@@ -1980,12 +1980,12 @@ process_ec_fluxes <- function(
                 # calculate low frequency contribution
                 i_hi <- which(1 / freq < high_cont_sec)[1]
                 if (length(i_hi) != 1) stop('check argument "high_cont_sec"!')
-                hi_cont_fix <- sapply(Ogive_fix, \(x) (x[1] - x[i_hi]) / x[1])
-                hi_cont_dyn <- sapply(Ogive_dyn, \(x) (x[1] - x[i_hi]) / x[1])
+                hi_cont_fix <- sapply(Ogive_fix, \(x) x[i_hi] / x[1])
+                hi_cont_dyn <- sapply(Ogive_dyn, \(x) x[i_hi] / x[1])
                 i_lo <- which(1 / freq <= low_cont_sec)[1]
                 if (length(i_lo) != 1) stop('check argument "low_cont_sec"!')
-                lo_cont_fix <- sapply(Ogive_fix, \(x) x[i_lo] / x[1])
-                lo_cont_dyn <- sapply(Ogive_dyn, \(x) x[i_lo] / x[1])
+                lo_cont_fix <- sapply(Ogive_fix, \(x) (x[1] - x[i_lo]) / x[1])
+                lo_cont_dyn <- sapply(Ogive_dyn, \(x) (x[1] - x[i_lo]) / x[1])
 
                 # get Albrecht's ogive bias
                 ogive_bias_fix <- sapply(Cospec_fix, \(x) {

@@ -496,8 +496,8 @@ find_dynlag <- function(x,dyn){
 		m <- n/2 + 1
 	}
 	ind <- seq(dyn[1],dyn[2]) + m
-	# find max:
-	maxis <- ind[which.max(abs(x[ind]))]
+	# find max relative to baseline (average):
+	maxis <- ind[which.max(abs(x[ind] - mean(x, na.rm = TRUE)))]
 	c(index = maxis, tau = maxis - m)
 }
 

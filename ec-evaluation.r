@@ -936,9 +936,9 @@ process_ec_fluxes <- function(
         , low_cont_sec = 20
         , high_cont_sec = 2
         , cont_pts = 5
-        , subintervals = TRUE
-        , subint_n = 5
-        , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
+        # , subintervals = TRUE
+        # , subint_n = 5
+        # , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
         , oss_threshold = 0
         , na_alarm_code = c(1:3, 5:8, 11, 13)
         , thresh_period = 0.75
@@ -1051,7 +1051,7 @@ process_ec_fluxes <- function(
     damping_reference <- fix_defaults(damping_reference, covariances[scalar_covariances])
     damping_lower <- fix_defaults(damping_lower, covariances[scalar_covariances])
     damping_upper <- fix_defaults(damping_upper, covariances[scalar_covariances])
-    subint_detrending <- fix_defaults(subint_detrending, variables)
+    # subint_detrending <- fix_defaults(subint_detrending, variables)
     ts_vars <- variables
     if (!ht_null) {
         # add ht8700 quality parameters (oss) to plotting
@@ -2039,7 +2039,6 @@ process_ec_fluxes <- function(
                     if (opt$convergence != 0 || opt$par['m'] < -1 || opt$par['m'] > 2.5) {
                         return(NA_real_)
                     }
-                    gopt <<- c(gopt, opt)
                     d <- (ogff(opt$par) - x) / mean(x[i_r])
                     1 - mean(d ^ 4) ^ (1 / 6)
                 })

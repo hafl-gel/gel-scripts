@@ -358,58 +358,141 @@ Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2)
 }
 ')
 
-trend <- function(y,method=c("blockAVG","linear","linear_robust","ma_360"),Hz_ts=10){
+### neue Filter Funktionen:
+filter_list <- list(
+    # Blackman-Harris:
+    "BmHarris" = function(n, ...){
+      N <- n - 1
+      x <- 0.35875 - 
+        0.48829 * cos(2 * pi * seq.int(0, N) / N) + 
+        0.14128 * cos(4 * pi * seq.int(0, N) / N) - 
+        0.01168 * cos(6 * pi * seq.int(0, N) / N)
+      x / sum(x)
+    },
+    # Hann:
+    "Hann" = function(n, ...){
+      N <- n - 1 
+      sin(pi * seq.int(0, N) / N) ^ 2 / (0.5 * N)
+    },
+    # Hamming:
+    "Hamming" = function(n, p1 = 25 / 46, p2 = 21 / 46, ...){
+      N <- n - 1
+      x <- p1 - p2 * cos(2 * pi * seq.int(0, N) / N)
+      x / sum(x)
+    },
+    # Blackman:
+    "Blackman" = function(n, p1 = 0.42, p2 = 0.5, p3 = 0.08, ...){
+      N <- n - 1
+      x <- p1 - 
+        p2 * cos(2 * pi * seq.int(0, N) / N) + 
+        p3 * cos(4 * pi * seq.int(0, N) / N)
+      x/sum(x)
+    },
+    # Blackman-Nuttall:
+    "BmNuttall" = function(n, ...){
+      N <- n - 1
+      x <- 0.3635819 - 
+        0.4891775 * cos(2 * pi * seq.int(0, N) / N) + 
+        0.1365995 * cos(4 * pi * seq.int(0, N) / N) - 
+        0.0106411 * cos(6 * pi * seq.int(0, N) / N)
+      x / sum(x)
+    },
+    # Rectangular (Moving Average):
+    "Rect" = function(n, ...){
+      rep(1 / n, n)
+    },
+    # Exponential:
+    "Exp" = function(n, p1 = n / 2, ...){
+      N <- (n - 1) / 2
+      x <- exp(p1 * sqrt(1 - (seq.int(-N, N) / N) ^ 2)) / exp(p1)
+      x / sum(x)
+    },
+    # Poisson:
+    "Poisson" = function(n, p1 = n / 2 / 6.9, ...){
+      N <- n - 1
+      x <- exp(-abs(seq.int(0, N) - N / 2) / p1)
+      x / sum(x)
+    }
+)
+
+
+trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360"), Hz_ts = 10) {
 	n <- length(y)
 	method <- method[1]
-	switch(method,
-		"blockAVG"={
+	switch(method, 
+		"blockAVG" = {
 			my <- .Internal(mean(y))
-			fitted <- rep(my,n) 
+			fitted <- rep(my, n) 
 			list(
-				coefficients=c(intercept=my,slope=0)
-				,fitted=fitted
-				,residuals=y - fitted
+				coefficients = c(intercept = my, slope = 0)
+				, fitted = fitted
+				, residuals = y - fitted
 				) 
 		}
-		,"linear"={
+		, "linear" = {
 			my <- .Internal(mean(y))
-			mx <- (n+1)/2
+			mx <- (n + 1) / 2
 			xstr <- (x <- seq.int(n)) - mx
-			b <- sum(xstr*(y-my))/(n-1)/(sum(xstr^2)/(n-1))
-			a <- my - mx*b
-			fitted <- a + b*x
+			b <- sum(xstr * (y - my)) / (n - 1) / (sum(xstr ^ 2) / (n - 1))
+			a <- my - mx * b
+			fitted <- a + b * x
 			list(
-				coefficients=c(intercept=a,slope=b)
-				,fitted=fitted
-				,residuals=y - fitted
+				coefficients = c(intercept = a, slope = b)
+				, fitted = fitted
+				, residuals = y - fitted
 				) 
 		}
-		,"linear_robust"={
-			mod <- MASS::rlm(y~seq.int(n))
+		, "linear_robust" = {
+			mod <- MASS::rlm(y ~ seq.int(n))
 			cfs <- mod$coefficients
 			a <- cfs[1]
 			b <- cfs[2]
 			fitted <- mod$fitted
-			if(!mod$converged){
+			if (!mod$converged) {
 				stop("robust linear regression did not converge!")
 			}
 			list(
-				coefficients=c(intercept=a,slope=b)
-				,fitted=fitted
-				,residuals=y - fitted
+				coefficients = c(intercept = a, slope = b)
+				, fitted = fitted
+				, residuals = y - fitted
 				) 
 		}
 		,{
-            if (!grepl('^ma_', method)) stop('detrending method not valid! ',
-                'Should be one of "blockAVG", "linear", "linear_robust" or "ma_xxx" where',
-                ' xxx represents the moving average seconds')
-			ma <- round(as.numeric(gsub("ma_","",method))*Hz_ts)
-			fitted <- caTools::runmean(y,ma,"C","mean")
-			list(
-				coefficients=c(intercept=NA,slope=NA)
-				,fitted=fitted
-				,residuals=y - fitted
-				) 
+            if (grepl('^ma_', method)) {
+                ma <- round(as.numeric(sub("ma_", "", method)) * Hz_ts)
+                fitted <- caTools::runmean(y, ma, "C", "mean")
+                list(
+                    coefficients = c(intercept = NA, slope = NA)
+                    , fitted = fitted
+                    , residuals = y - fitted
+                ) 
+            } else if (sub('_\\d+$', '', method) %in% names(filter_list)) {
+                win <- round(as.numeric(sub(".*_", "", method)) * Hz_ts)
+                filter_name <- sub('_\\d+$', '', method)
+                # lowpass filter
+                filt <- filter_list[[filter_name]](win)
+                ly <- length(y)
+                ihalf <- 1:(win / 2)
+                yh1 <- mean(y[ihalf])
+                yh2 <- mean(y[ly + 1 - ihalf])
+                ym <- y - (yh2 - yh1)
+                yp <- y - (yh1 - yh2)
+                z <- c(ym[ly + 1 - ihalf], y, yp[ihalf])
+                fitted <- stats::filter(z, filt, 'convolution', 2, circular = FALSE)[1:ly +
+                    ihalf[length(ihalf)]]
+                list(
+                    coefficients = c(intercept = NA, slope = NA)
+                    , fitted = fitted
+                    , residuals = y - fitted
+                )
+            } else {
+                stop(
+                    'detrending method not valid! Should be one of "blockAVG",',
+                    ' "linear", "linear_robust", "ma_xxx" or ',
+                    'any valid filter name yyy_xxx from the "filter_list" where',
+                    ' xxx represents the moving average or filter range in seconds'
+                )
+            }
 		}
 	)
 }

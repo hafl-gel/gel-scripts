@@ -603,12 +603,24 @@ calcU <- function (ustar, Zo, L, z, kv = 0.4){
 plot.tseries <- function(dat,wind,scal,selection,color,units){
 	msg <- paste(c(format(dat[1,1],"%d.%m.%Y")," - time series"),collapse="")
 	tsbeginning <- dat[1,1]
-	dat[,c("u","v","w","T")] <- mapply("+",wind[c("umrot","vmrot","wmrot","Tmdet")],wind[c("uprot","vprot","wprot","Tdet")])
-	dat2 <- reshape2::melt(dat[,c("st",selection)],id="st")
+    # fix wind variables
+	dat[, c("u", "v", "w", "T")] <- mapply("+", 
+        wind[c("umrot", "vmrot", "wmrot", "Tmdet")], 
+        wind[c("uprot", "vprot", "wprot", "Tdet")])
 	### get trends:
 	dat3 <- list2DF(wind[c("umrot","vmrot","wmrot","Tmdet")])
 	names(dat3) <- c("u","v","w","T")
 	if(!is.null(scal)){
+        # fix scalars
+        dat[, names(scal)] <- lapply(scal, \(x) {
+            if (is.null(isna <- na.action(x$residuals))) {
+                x$fitted + x$residuals
+            } else {
+                out <- rep(NA_real_, nrow(dat))
+                out[-isna] <- x$fitted + x$residuals
+                out
+            }
+        })
         # add scalars
 		dat3 <- cbind(dat3, lapply(scal, \(x) {
                 if (is.null(isna <- na.action(x$residuals))) {
@@ -629,6 +641,7 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
 	dat3 <- dat3[,selection]
 	### melt and add trends:
 	dat4 <- reshape2::melt(dat3, id = NULL, value.name = "trend")
+	dat2 <- reshape2::melt(dat[,c("st",selection)],id="st")
 	dat2[, "trend"] <- dat4[, "trend"]
 	myxscale.component <- function(...) {
 		ans <- xscale.components.default(...)
@@ -653,12 +666,16 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
 		xscale.component=myxscale.component, yscale.component=myyscale.component,
 		strip=FALSE, layout=c(1, length(selection)), between=list(x=0,y=1), subscripts=TRUE, lwd=rep(1,length(color)), lty=rep(1,length(color)), col=color,
 		panel=function(x, y, ...) {
-			#panel.grid(h=-1, v=-1, lty=3, col="gray80")
-			y2 <- dat2[list(...)$subscripts,"trend"]
+			# panel.grid(h=-1, v=-1, lty=3, col="gray80")
 			panel.xyplot(x,y,...)
-			# panel.xyplot(x,y2,type="l",lwd=1.5, lty=3, col="gray30")
-			# panel.xyplot(x,y2,type="l",lwd=2, lty=2, col="lightblue")
-			panel.xyplot(x,y2,type="l",lwd=2, lty=2, col="lightgrey")
+			y2 <- dat2[list(...)$subscripts,"trend"]
+            if (!identical(y, y2)) {
+                # panel.xyplot(x,y2,type="l",lwd=1.5, lty=3, col="gray30")
+                # panel.xyplot(x,y2,type="l",lwd=2, lty=2, col="lightblue")
+                # panel.xyplot(x,y2,type="l",lwd=2, lty=2, col="lightgrey")
+                # panel.xyplot(x, y2, type = "l", lwd = 2, lty = 2, col = "#B37FDF")
+                panel.xyplot(x, y2, type = "l", lwd = 3, col = "darkgrey")
+            }
 		}
 	)  	
 }

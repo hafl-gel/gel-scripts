@@ -1740,17 +1740,26 @@ process_ec_fluxes <- function(
                 )
                 if (length(scalars)) {
                     scalar_list <- SD[, I(lapply(.SD, na.omit)), .SDcols = scalars]
-
                 # detrend scalars
                 # -------------------------------------------------------------------------- 
                     cat("~~~\ndetrending scalars...\n")
                     detrended_scalars <- mapply(trend, y = scalar_list, method = 
                         detrending[scalars], MoreArgs = list(Hz_ts = .Hz), SIMPLIFY = FALSE)
-
                 # calculate scalar averages and sd:
                 # -------------------------------------------------------------------------- 
                     scalar_means[scalars] <- sapply(scalar_list, mean)
                     scalar_sd[scalars] <- sapply(scalar_list, sd)
+                # assign to SD
+                    SD[, (scalars) := lapply(names(detrended_scalars), \(nms) {
+                        if (!is.null(isna <- na.action(scalar_list[[nms]]))) {
+                            out <- rep(NA_real_, .N)
+                            x <- detrended_scalars[[nms]]$residuals
+                            out[-isna] <- x
+                            out
+                        } else {
+                            detrended_scalars[[nms]]$residuals
+                        }
+                        })]
                 } else {
                     cat('No scalars available -> skipping interval!\n')
                     next

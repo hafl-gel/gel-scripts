@@ -1997,6 +1997,74 @@ process_ec_fluxes <- function(
                     (x[1] - mean(x[i_lo + seq(-cont_pts, cont_pts)])) / x[1]
                 })
 
+                # fit theoretical ogive shape
+                cat('\t- estimate flux quality\n')
+                fcsf <- function(fx, m, mu, A0) {
+                    A0 * freq / fx / (
+                        (1 + m * (freq / fx) ^ (2 * mu)) ^ ((m + 1) / (2 * mu * m))
+                    )
+                }
+                csf <- function(fx, m, mu, A0) {
+                    fcsf(fx, m, mu, A0) / freq
+                }
+                ogf <- function(fx, m, mu, A0) {
+                    rev(cumsum(rev(csf(fx, m, mu, A0))))
+                }
+                ogff <- function(pars) {
+                    ogf(pars['fx'], pars['m'], pars['mu'], pars['A0'])
+                }
+                fit_og <- function(pars, ogive, ind = NULL) {
+                    if (is.null(ind)) {
+                        fit_ogive(pars, ogive, freq, 1, length(ogive))
+                    } else {
+                        fit_ogive(pars, ogive, freq, i_lo, i_hi)
+                    }
+                }
+                # base range
+                i_r <- i_lo:i_hi
+
+                # quality of ogive 
+                ogive_quality_fix <- sapply(Ogive_fix, \(x) {
+                    ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
+                    opt <- optim(ini, fit_og, ogive = x, control = list(maxit = 5e3))
+                    if (opt$convergence != 0 || opt$par['m'] < -1 || opt$par['m'] > 2.5) {
+                        return(NA_real_)
+                    }
+                    d <- (ogff(opt$par) - x) / mean(x[i_r])
+                    1 - mean(d ^ 4) ^ (1 / 6)
+                })
+                ogive_quality_dyn <- sapply(Ogive_dyn, \(x) {
+                    ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
+                    opt <- optim(ini, fit_og, ogive = x, control = list(maxit = 5e3))
+                    if (opt$convergence != 0 || opt$par['m'] < -1 || opt$par['m'] > 2.5) {
+                        return(NA_real_)
+                    }
+                    gopt <<- c(gopt, opt)
+                    d <- (ogff(opt$par) - x) / mean(x[i_r])
+                    1 - mean(d ^ 4) ^ (1 / 6)
+                })
+                # quality of base part of ogive 
+                base_quality_fix <- sapply(Ogive_fix, \(x) {
+                    ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
+                    opt <- optim(ini, fit_og, ogive = x, ind = i_r, 
+                        control = list(maxit = 5e3))
+                    if (opt$convergence != 0 || opt$par['m'] < -1 || opt$par['m'] > 2.5) {
+                        return(NA_real_)
+                    }
+                    d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
+                    1 - mean(d ^ 2) ^ (1 / 3)
+                })
+                base_quality_dyn <- sapply(Ogive_dyn, \(x) {
+                    ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
+                    opt <- optim(ini, fit_og, ogive = x, ind = i_r, 
+                        control = list(maxit = 5e3))
+                    if (opt$convergence != 0 || opt$par['m'] < -1 || opt$par['m'] > 2.5) {
+                        return(NA_real_)
+                    }
+                    d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
+                    1 - mean(d ^ 2) ^ (1 / 3)
+                })
+                
                 # get Albrecht's ogive bias
                 ogive_bias_fix <- sapply(Cospec_fix, \(x) {
                     x[is.na(x)] <- 0
@@ -2150,6 +2218,22 @@ process_ec_fluxes <- function(
                             paste0('lo_cont_dyn_', input_covariances)
                         )
                         , setNames(
+                            ogive_quality_fix[input_covariances],
+                            paste0('ogive_quality_fix_', input_covariances)
+                        )
+                        , setNames(
+                            ogive_quality_dyn[input_covariances],
+                            paste0('ogive_quality_dyn_', input_covariances)
+                        )
+                        , setNames(
+                            base_quality_fix[input_covariances],
+                            paste0('base_quality_fix_', input_covariances)
+                        )
+                        , setNames(
+                            base_quality_dyn[input_covariances],
+                            paste0('base_quality_dyn_', input_covariances)
+                        )
+                        , setNames(
                             ogive_bias_fix[input_covariances],
                             paste0('ogive_bias_fix_', input_covariances)
                         )
@@ -2297,6 +2381,40 @@ process_ec_fluxes <- function(
         results
 	}
 }
+
+## function to fit theoretical ogive shape to measurement
+# library(Rcpp)
+cppFunction('
+double fit_ogive(const NumericVector paras, const NumericVector ogive, const NumericVector f,
+    const int ilo, const int ihi) {
+    const double len = ogive.size();
+    const double fx = paras[0];
+    const double m = paras[1];
+    const double mu = paras[2];
+    const double A0 = paras[3];
+    const double A0_fx = A0 / fx;
+    const double m_mu_pow = (m + 1.0) / (2.0 * mu * m);
+    double last_value = 0.0;
+    double ss = 0.0;
+    // loop in reverse over ogive and get cumsum
+    for (int i = len - 1; i >= (ilo - 1); i--) {
+        // get cospec value devided by f
+        last_value = last_value + 
+            A0_fx / (
+                std::pow(1.0 + m * std::pow(f[i] / fx, (2.0 * mu)), m_mu_pow)
+            );
+        // get difference to ogive
+        if (i < ihi) {
+            ss += std::pow(ogive[i] - last_value, 2);
+        }
+    }
+    return ss;
+}
+')
+# xx <- fit_ogive(ini, og, freq)
+# yy <- fit_og(ini, og)
+# fcpp <- function(x) fit_ogive(x, og, freq)
+
 
 evalREddy <- function(
 		config_file = NULL

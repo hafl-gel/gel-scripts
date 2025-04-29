@@ -933,7 +933,8 @@ process_ec_fluxes <- function(
 		, z_ec = NULL
 		, z_canopy = NULL
         # detrending -> valid entries are blockAVG,linear,linear_robust,ma_xx (xx = time in seconds)
-        , detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
+        # , detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
+        , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', T = 'blockAVG', nh3_ppb = 'blockAVG', nh3_ugm3 = 'blockAVG', h2o_mmolm3 = 'blockAVG', co2_mmolm3 = 'blockAVG')
         , hard_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
         , hard_limits_lower = c(u = -30, v = -30, w = -10, T = 243, nh3_ppb = -100, nh3_ugm3 = -100, h2o_mmolm3 = -100, co2_mmolm3 = -100)
         , hard_limits_upper = c(u = 30, v = 30, w = 10, T = 333, nh3_ppb = 5000, nh3_ugm3 = 5000, h2o_mmolm3 = 5000, co2_mmolm3 = 5000)

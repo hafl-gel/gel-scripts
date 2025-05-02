@@ -2065,14 +2065,6 @@ process_ec_fluxes <- function(
                     rev(cumsum(rev(x)))
                 })
                 names(Ogive_dyn) <- covariances
-                if (ogives_out) {
-                    int_start <- format(Int_Start)
-                    e_ogive$Cospec_fix_Out[[dates[day]]][[int_start]] <- c(list(freq = freq), Cospec_fix)
-                    e_ogive$Cospec_dyn_Out[[dates[day]]][[int_start]] <- c(list(freq = freq), Cospec_dyn)
-                    e_ogive$Ogive_fix_Out[[dates[day]]][[int_start]] <- c(list(freq = freq), Ogive_fix)
-                    e_ogive$Ogive_dyn_Out[[dates[day]]][[int_start]] <- c(list(freq = freq), Ogive_dyn)
-                    e_ogive$Covars_Out[[dates[day]]][[int_start]] <- c(list(Hz = .Hz), Covars)
-                }
 
 
                 # empirical damping estimation, dyn and fix should have best reference (dyn/fix)...
@@ -2109,19 +2101,8 @@ process_ec_fluxes <- function(
 
                 # fit theoretical ogive shape
                 cat('\t- estimate flux quality\n')
-                fcsf <- function(fx, m, mu, A0) {
-                    A0 * freq / fx / (
-                        (1 + m * (freq / fx) ^ (2 * mu)) ^ ((m + 1) / (2 * mu * m))
-                    )
-                }
-                csf <- function(fx, m, mu, A0) {
-                    fcsf(fx, m, mu, A0) / freq
-                }
-                ogf <- function(fx, m, mu, A0) {
-                    rev(cumsum(rev(csf(fx, m, mu, A0))))
-                }
                 ogff <- function(pars) {
-                    ogf(pars['fx'], pars['m'], pars['mu'], pars['A0'])
+                    ogive_model(pars['fx'], 3 / 4, pars['mu'], pars['A0'], freq)
                 }
                 fit_og <- function(pars, ogive, ind = NULL) {
                     if (is.null(ind)) {
@@ -2130,48 +2111,64 @@ process_ec_fluxes <- function(
                         fit_ogive(pars, ogive, freq, i_lo, i_hi)
                     }
                 }
+
                 # base range
                 i_r <- i_lo:i_hi
+                # set limit for valid mu values
+                mu_lim <- 10
 
                 # quality of ogive 
                 ogive_quality_fix <- sapply(Ogive_fix, \(x) {
-                    ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
+                    # ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
+                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
                     opt <- optim(ini, fit_og, ogive = x, control = list(maxit = 5e3))
-                    if (opt$convergence != 0 || opt$par['m'] < -1 || opt$par['m'] > 2.5) {
-                        return(NA_real_)
+                    if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
+                        return(rep(NA_real_, 6))
                     }
-                    d <- (ogff(opt$par) - x) / mean(x[i_r])
-                    1 - mean(d ^ 4) ^ (1 / 6)
+                    fog <- ogff(opt$par)
+                    d <- (fog - x) / fog[1]
+                    d0 <- diff(d)
+                    c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
                 })
                 ogive_quality_dyn <- sapply(Ogive_dyn, \(x) {
-                    ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
+                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
                     opt <- optim(ini, fit_og, ogive = x, control = list(maxit = 5e3))
-                    if (opt$convergence != 0 || opt$par['m'] < -1 || opt$par['m'] > 2.5) {
-                        return(NA_real_)
+                    if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
+                        return(rep(NA_real_, 6))
                     }
-                    d <- (ogff(opt$par) - x) / mean(x[i_r])
-                    1 - mean(d ^ 4) ^ (1 / 6)
+                    fog <- ogff(opt$par)
+                    d <- (fog - x) / fog[1]
+                    d0 <- diff(d)
+                    c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
                 })
                 # quality of base part of ogive 
                 base_quality_fix <- sapply(Ogive_fix, \(x) {
-                    ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
+                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
                     opt <- optim(ini, fit_og, ogive = x, ind = i_r, 
                         control = list(maxit = 5e3))
-                    if (opt$convergence != 0 || opt$par['m'] < -1 || opt$par['m'] > 2.5) {
+                    if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
                         return(NA_real_)
                     }
-                    d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
-                    1 - mean(d ^ 2) ^ (1 / 3)
+                    # d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
+                    # 1 - mean(d ^ 2) ^ (1 / 3)
+                    fog <- ogff(opt$par)
+                    d <- (fog - x) / fog[1]
+                    d0 <- diff(d)
+                    1 - mean(d0 ^ 6) ^ (1 / 6) * 6
                 })
                 base_quality_dyn <- sapply(Ogive_dyn, \(x) {
-                    ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
+                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
                     opt <- optim(ini, fit_og, ogive = x, ind = i_r, 
                         control = list(maxit = 5e3))
-                    if (opt$convergence != 0 || opt$par['m'] < -1 || opt$par['m'] > 2.5) {
+                    if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
                         return(NA_real_)
                     }
-                    d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
-                    1 - mean(d ^ 2) ^ (1 / 3)
+                    # d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
+                    # 1 - mean(d ^ 2) ^ (1 / 3)
+                    fog <- ogff(opt$par)
+                    d <- (fog - x) / fog[1]
+                    d0 <- diff(d)
+                    1 - mean(d0 ^ 6) ^ (1 / 6) * 6
                 })
                 
                 # get Albrecht's ogive bias
@@ -2188,6 +2185,30 @@ process_ec_fluxes <- function(
                     (ms * sum(abs(x)) - o) / o
                 })
 
+                # fix matrix to vector for output
+                rownames(ogive_quality_fix) <- rownames(ogive_quality_dyn) <- 
+                    c('q', 'f', 'fx', 'mu', 'A0', 'm')
+                ogive_par_fix <- ogive_quality_fix[3:6, ]
+                ogive_par_dyn <- ogive_quality_dyn[3:6, ]
+                ogive_fitted_fix <- ogive_quality_fix[2, ]
+                ogive_quality_fix <- ogive_quality_fix[1, ]
+                ogive_fitted_dyn <- ogive_quality_dyn[2, ]
+                ogive_quality_dyn <- ogive_quality_dyn[1, ]
+
+                # should ogives be provided with output
+                if (ogives_out) {
+                    int_start <- format(Int_Start)
+                    e_ogive$Cospec_fix_Out[[dates[day]]][[int_start]] <- c(
+                        list(freq = freq, model_coef = ogive_par_fix), Cospec_fix)
+                    e_ogive$Cospec_dyn_Out[[dates[day]]][[int_start]] <- c(
+                        list(freq = freq, model_coef = ogive_par_dyn), Cospec_dyn)
+                    e_ogive$Ogive_fix_Out[[dates[day]]][[int_start]] <- c(
+                        list(freq = freq, model_coef = ogive_par_fix), Ogive_fix)
+                    e_ogive$Ogive_dyn_Out[[dates[day]]][[int_start]] <- c(
+                        list(freq = freq, model_coef = ogive_par_dyn), Ogive_dyn)
+                    e_ogive$Covars_Out[[dates[day]]][[int_start]] <- c(
+                        list(Hz = .Hz), Covars)
+                }
 
                 ##### ~~~> sub-intervals switched off
                 # if (FALSE) {
@@ -2325,6 +2346,14 @@ process_ec_fluxes <- function(
                         , setNames(
                             lo_cont_dyn[input_covariances],
                             paste0('lo_cont_dyn_', input_covariances)
+                        )
+                        , setNames(
+                            ogive_fitted_fix[input_covariances],
+                            paste0('ogive_fitted_fix_', input_covariances)
+                        )
+                        , setNames(
+                            ogive_fitted_dyn[input_covariances],
+                            paste0('ogive_fitted_dyn_', input_covariances)
                         )
                         , setNames(
                             ogive_quality_fix[input_covariances],
@@ -2497,10 +2526,10 @@ cppFunction('
 double fit_ogive(const NumericVector paras, const NumericVector ogive, const NumericVector f,
     const int ilo, const int ihi) {
     const double len = ogive.size();
+    const double m = 3.0 / 4.0;
     const double fx = paras[0];
-    const double m = paras[1];
-    const double mu = paras[2];
-    const double A0 = paras[3];
+    const double mu = paras[1];
+    const double A0 = paras[2];
     const double A0_fx = A0 / fx;
     const double m_mu_pow = (m + 1.0) / (2.0 * mu * m);
     double last_value = 0.0;
@@ -2514,7 +2543,7 @@ double fit_ogive(const NumericVector paras, const NumericVector ogive, const Num
             );
         // get difference to ogive
         if (i < ihi) {
-            ss += std::pow(ogive[i] - last_value, 2);
+            ss += std::fabs(ogive[i] - last_value) * std::sqrt(1 / f[i]);
         }
     }
     return ss;
@@ -2524,6 +2553,15 @@ double fit_ogive(const NumericVector paras, const NumericVector ogive, const Num
 # yy <- fit_og(ini, og)
 # fcpp <- function(x) fit_ogive(x, og, freq)
 
+# convenience functions for theoretical cospec/ogive models
+cospec_model <- function(fx, m, mu, A0, f = freq) {
+    A0 / fx / (
+        (1 + m * (f / fx) ^ (2 * mu)) ^ ((m + 1) / (2 * mu * m))
+    )
+}
+ogive_model <- function(fx, m, mu, A0, f = freq) {
+    rev(cumsum(rev(cospec_model(fx, m, mu, A0, f))))
+}
 
 
 

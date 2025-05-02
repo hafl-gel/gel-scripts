@@ -845,6 +845,10 @@ plot_cospec_ogive <- function(ogive, cospec, freq, ylab = NULL, xlim = NULL, cx 
 # convert colors to hex
 col2hex <- function(name, alpha) {
     if (!grepl('^#', name)) {
+        # check if alpha provided
+        if (!missing(alpha) && is.character(alpha)) {
+                alpha <- as.integer(as.hexmode(alpha)) / 255
+        }
         m <- col2rgb(name) / 255
         rgb(m[1, ], m[2, ], m[3, ], alpha)
     } else {

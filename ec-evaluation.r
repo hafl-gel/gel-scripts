@@ -2442,8 +2442,8 @@ process_ec_fluxes <- function(
                         dir.create(path_folder, recursive = FALSE)
                     }
                     # get end of current interval time in UTC
-                    soi_utc <- st_interval[.GRP]
-                    eoi_utc <- et_interval[.GRP]
+                    soi_utc <- st_interval[.BY[[1]]]
+                    eoi_utc <- et_interval[.BY[[1]]]
                     # get date in correct format
                     date_formatted <- gsub('-', '', dates[day], fixed = TRUE)
                     # plotting:
@@ -2458,7 +2458,8 @@ process_ec_fluxes <- function(
                     time2 <- format(soi_utc, format = "%H%M")
                     plotname <- paste("timeseries", date_formatted, time2, sep="-") 
                     ts_vars <- names(plot_timeseries)[plot_timeseries]
-                    jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), width = 600, height = (sum(plot_timeseries)) * 100, quality = 60)
+                    jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), width = 600, 
+                        height = (sum(plot_timeseries)) * 100, quality = 60)
                         ts_plot <- plot.tseries(
                             cbind(st = Time, as.data.frame(SD)),
                             wind, detrended_scalars, ts_vars,

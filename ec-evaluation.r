@@ -793,14 +793,14 @@ plot_covfunc <- function(cov_func,avg_t,dynLag,fixLag, ylab=NULL, xlim = NULL, c
 	}
 }
 
-plot_cospec_ogive <- function(ogive,cospec,freq,ylab=NULL,xlim=NULL,cx=1.5,col="lightblue",nred=floor(sqrt(sqrt(length(ogive)))*3)){
+plot_cospec_ogive <- function(ogive, cospec, freq, ylab = NULL, xlim = NULL, cx = 1.5, 
+    col = "lightblue", nred = floor(sqrt(sqrt(length(ogive))) * 1.5), model_par = NULL) {
 	# reduced cospec 1:
 	cospec_reduced0 <- reduce_cospec(cospec,freq,nred*10)
 	cospec_f <- cospec_reduced0$cospec
 	# reduced cospec 2:
 	cospec_reduced <- reduce_cospec(cospec,freq,nred)
 	cospec_rm <- cospec_reduced$cospec
-
 	rCo <- range(cospec_rm,na.rm=TRUE)
 	if(is.null(xlim))xlim <- rev(range(freq))
 	ylim <- c(min(ogive,0),max(0,max(ogive)))
@@ -811,7 +811,6 @@ plot_cospec_ogive <- function(ogive,cospec,freq,ylab=NULL,xlim=NULL,cx=1.5,col="
 	y_cf <- (cospec_f - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1]
 	y_crm <- (cospec_rm - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1]
 	py2 <- (prCo - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1]
-	
 	plot(1,xlim=xlim,ylim=ylim, cex.axis=cx, cex.lab=cx,type="n",log="x",xaxt="n",yaxt="n",xlab="frequency [Hz]",ylab="",panel.first=abline(h=0,col=col,lty=2))
 	abline(h=(0 - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1],lty=2,col="darkgrey")
 	axis(1,at=10^pxlims,labels=FALSE,tck=-0.01, cex.axis=cx, cex.lab=cx)
@@ -825,9 +824,40 @@ plot_cospec_ogive <- function(ogive,cospec,freq,ylab=NULL,xlim=NULL,cx=1.5,col="
         seq(2, 9), seq(20, 50, by = 10), seq(120, 540, by = 60)) 
 	axis(3,at=at3,labels=lab3, cex.axis = cx, cex.lab = cx)
 	axis(3,at=sub3,labels=NA, cex.axis = cx, cex.lab = cx, tck = -0.01)
-	lines(cospec_reduced0$freq,y_cf,col="lightgrey")
+	lines(cospec_reduced0$freq,y_cf,col="#E5E0E0")
+    # modelled cospec/ogive
+    if (!is.null(model_par) && !anyNA(model_par)) {
+        # cospec: f * Co(f)
+        cs <- freq * cospec_model(model_par['fx'], model_par['m'], model_par['mu'], 
+            model_par['A0'], freq)
+	    y_cs <- (cs - min(prCo)) / diff(range(prCo)) * diff(ylim) + ylim[1]
+        lines(freq, y_cs, col = '#AE71EB99', lwd = 2)
+        # ogive
+        og <- ogive_model(model_par['fx'], model_par['m'], model_par['mu'], 
+            model_par['A0'], freq)
+        lines(freq, og, col = '#AE71EB99', lwd = 2)
+    }
+    # measured cospec/ogive
 	lines(cospec_reduced$freq,y_crm,type="b",col="black",lwd=2)
 	lines(freq,ogive,col=col,lwd=2)
+}
+
+# convert colors to hex
+col2hex <- function(name, alpha) {
+    if (!grepl('^#', name)) {
+        m <- col2rgb(name) / 255
+        rgb(m[1, ], m[2, ], m[3, ], alpha)
+    } else {
+        # check if alpha provided
+        if (missing(alpha)) {
+            name
+        } else {
+            if (is.numeric(alpha)) {
+                alpha <- as.hexmode(as.integer(alpha * 255))
+            }
+            paste0(sub('^(#\\d{6}).*', '\\1', name), alpha)
+        }
+    }
 }
 
 plot_damping <- function(ogive_damp,freq,ylab=NULL,xlim=NULL,ylim=NULL,cx=1.5,cx.leg=1.5,col="lightblue",main=NULL){
@@ -2440,26 +2470,44 @@ process_ec_fluxes <- function(
                     # ------------------------------------------------------------------------
                     for(i in covariances){
                         # i <- "w'TDL CH4'"
-                        plotname <- paste("plots", date_formatted, time2, covariances_plotnames[i], sep = "-")
+                        plotname <- paste("plots", date_formatted, time2, 
+                            covariances_plotnames[i], sep = "-")
                         # fix ylab
                         ylab <- sub('(.+)x(.+)', "<\\1'\\2'>", i)
-                        jpeg(file=paste0(path_folder, '/', plotname,".jpg"),width=1350, height=900, quality=60)
+                        jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), 
+                            width = 1350, height = 900, quality = 60)
                             par(mfrow=c(2,3))
-                            # ----------------------- Covariance -------------------------------------
-                            plot_covfunc(Covars[[i]],n_period / .Hz,dyn_lag_max[,i],fix_lag[i],ylab=ylab, xlim = c(-50,50), cx=1.5, cxmt=1.25, cl=plotting_covar_colors[i])
-                            # ---------------------- Co-Spec/Ogive fix lag -----------------------------------
-                            plot_cospec_ogive(Ogive_fix[[i]],Cospec_fix[[i]],freq,ylab=paste0("ogive (fix lag) of ",ylab),cx=1.5,col=plotting_covar_colors[i])
-                            # ---------------------- Co-Spec/Ogive dyn lag -----------------------------------
-                            plot_cospec_ogive(Ogive_dyn[[i]],Cospec_dyn[[i]],freq,ylab=paste0("ogive (dyn lag) of ",ylab),cx=1.5,col=plotting_covar_colors[i])
-                            # ---------------------- empirical damping -----------------------------------
-                            if(scalar_covariances[i]){
-                                plot_damping(Damping_fix[[i]],freq,ylab=paste0("ogive (fix lag) of ",i),cx=1.5,col=plotting_covar_colors[i])
-                                plot_damping(Damping_dyn[[i]],freq,ylab=paste0("ogive (dyn lag) of ",i),cx=1.5,col=plotting_covar_colors[i])
+                            # ----------------------- Covariance -----------------------
+                            plot_covfunc(Covars[[i]], n_period / .Hz, dyn_lag_max[, i], 
+                                fix_lag[i], ylab = ylab, xlim = c(-50, 50), cx = 1.5, 
+                                cxmt = 1.25, cl = plotting_covar_colors[i])
+                            # ---------------------- Co-Spec/Ogive fix lag -----------------------
+                            plot_cospec_ogive(Ogive_fix[[i]], Cospec_fix[[i]], freq, 
+                                ylab = paste0("ogive (fix lag) of ", ylab), cx = 1.5, 
+                                col = plotting_covar_colors[i], 
+                                model_par = ogive_par_fix[, i]
+                            )
+                            # ---------------------- Co-Spec/Ogive dyn lag -----------------------
+                            plot_cospec_ogive(Ogive_dyn[[i]], Cospec_dyn[[i]], freq, 
+                                ylab = paste0("ogive (dyn lag) of ", ylab), cx = 1.5, 
+                                col = plotting_covar_colors[i], 
+                                model_par = ogive_par_dyn[, i]
+                            )
+                            # ---------------------- empirical damping -----------------------
+                            if (scalar_covariances[i]) {
+                                plot_damping(Damping_fix[[i]], freq, ylab = 
+                                    paste0("ogive (fix lag) of ", i), cx = 1.5, 
+                                col = plotting_covar_colors[i])
+                                plot_damping(Damping_dyn[[i]], freq, ylab = 
+                                    paste0("ogive (dyn lag) of ", i), cx = 1.5, 
+                                col = plotting_covar_colors[i])
                             }
                             title(paste0(ylab, " flux ", 
-                                format(soi_utc, format = "(%H:%M:%S"), " - ", format(eoi_utc, format = "%H:%M:%S)"), 
+                                format(soi_utc, format = "(%H:%M:%S"), " - ", 
+                                format(eoi_utc, format = "%H:%M:%S)"), 
                                 if (scalar_covariances[i]) {
-                                    reflab <- sub('(.+)x(.+)', "<\\1'\\2'>", damping_reference[i])
+                                    reflab <- sub('(.+)x(.+)', "<\\1'\\2'>", 
+                                        damping_reference[i])
                                     paste0(" - damping reference flux: ", reflab)
                                 }
                             ), outer = TRUE, line = -1)

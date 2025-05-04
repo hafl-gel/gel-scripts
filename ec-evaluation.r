@@ -441,22 +441,6 @@ pf_fit <- function(u, v, w, FUN = MASS::rlm, method = c("Wilczak2001", "vanDik20
     )
 }
 
-# replace me!
-shift <- function(x, lag){
-	if (lag != 0) {
-		if (lag > 0) {
-			indr <- seq.int(lag)
-			indl <- seq.int(length(x) - lag) + lag
-			x <- x[c(indl,indr)]
-		} else {
-			indr <- seq.int(length(x) + lag)
-			indl <- length(x) - seq.int(-lag,1) + 1
-			x <- x[c(indl,indr)]
-		}
-	}
-	x
-}
-
 # find the dynamic lag time (search for max in cov fun)
 find_dynlag <- function(x,dyn){
 	n <- length(x)
@@ -1927,7 +1911,7 @@ process_ec_fluxes <- function(
                     } else {
                         x <- SD[, get(i[2])]
                     }
-                    xs <- fft(shift(x, -lag)) / N
+                    xs <- fft(data.table::shift(x, lag, type = 'cyclic')) / N
                     re <- Re(Conj(xs) * ffts[[i[1]]])[seq(N / 2) + 1] * N / 
                         (N - 1) * 2
                     # get missing
@@ -1954,7 +1938,7 @@ process_ec_fluxes <- function(
                     } else {
                         x <- SD[, get(i[2])]
                     }
-                    xs <- fft(shift(x, -lag)) / N
+                    xs <- fft(data.table::shift(x, lag, type = 'cyclic')) / N
                     re <- Re(Conj(xs) * ffts[[i[1]]])[seq(N / 2) + 1] * N / 
                         (N - 1) * 2
                     # get missing

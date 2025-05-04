@@ -70,17 +70,19 @@ read_ht_merged <- function(FilePath) {
 check_limits <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){ 
 	nms <- names(input)
 	missing <- !(nms %in% colnames(limits))
-	if(length(nms[missing]) > 0) stop(paste0("physical limits missing for: ", paste(nms[missing], collapse=", ")), call. = TRUE, domain = NULL)
-	limits <- limits[,nms]
+	if (length(nms[missing]) > 0) {
+        stop(paste0("physical limits missing for: ", paste(nms[missing], collapse=", ")),
+            call. = TRUE, domain = NULL)
+    }
+	limits <- limits[, nms]
 	### replace values outside of limits by NAs
-	dat <- mapply(function(x,lo,hi){
+	dat <- mapply(function(x, lo, hi) {
 		x[x < lo | x > hi] <- NA
 		x
-	},x=input,lo=limits["lower",],hi=limits["top",],SIMPLIFY = FALSE)
-	hflgs <- unlist(lapply(dat,anyNA))
-	if(any(hflgs))cat("Hard Flag: flagged values in columns ",paste(names(hflgs)[hflgs],sep=", "),"\n")
-	if(pmatch(hflg.met, "replace", nomatch = 0) && any(hflgs)){
-		cat("Replacing NA values by window median...\n")
+	}, x = input, lo = limits["lower", ], hi = limits["top", ], SIMPLIFY = FALSE)
+	hflgs <- unlist(lapply(dat, \(x) sum(is.na(x))))
+	if (pmatch(hflg.met, "replace", nomatch = 0) && any(hflgs > 0)) {
+		cat("Replacing flagged values by window median...\n")
 		# since we're only intrested in specific time windows, find first NAs:
 		isna <- lapply(dat[hflgs],function(x)which(is.na(x)))
 		# replace if all NA? (Why could this happen?)
@@ -106,7 +108,17 @@ check_limits <- function(input, time, d_t, limits, wind = 500, hflg.met = "norep
 			dat[hflgs][[i]][isna[[i]]] <- sapply(ind, function(x) median(dat[hflgs][[i]][x], na.rm = TRUE))
 		}	
 		cat("number of replaced values\n*~~~~*\n", names(dat[hflgs]),"\n", lengths(isna),"\n*~~~~*\n")
-	}
+	} else {
+		cat(
+            paste0(
+                'number of values outside of hard limits (set to NA)\n*~~~~*\n',
+                paste(
+                    sprintf('%s: %i', names(dat[hflgs > 0]), hflgs[hflgs > 0]), 
+                    collapse = '\n'),
+                "\n*~~~~*\n"
+            )
+        )
+    }
 	dat
 }
 
@@ -295,40 +307,201 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
 	)
 }
 
-# rotate and detrend sonic data
-rotate_detrend <- function(u, v, w, T, phi = NULL, 
-    method = c(u = "blockAVG", v = "blockAVG", w = "blockAVG", T = "linear"), 
-    c.system = "Windmaster", Hz_ts = 10) {
+# get WD from different coord. systems
+csystem_wd <- function(c.system, um, vm) {
+    if (missing(vm)) {
+        theta <- um
+    } else {
+        theta <- atan2(vm, um)
+    }
+	switch(tolower(c.system)
+        , "windmaster" = (180 - theta / pi * 180) %% 360 
+        , "hs-wauwilermoos" = (150 - theta / pi * 180) %% 360
+        , "art.ec1" = ((180 / pi) * -theta + 150 + 147) %% 360
+	)
+}
+
+# two-axis rotation
+rotate_twoaxis <- function(u, v, w, phi = NULL, c.system = "Windmaster") {
+    # wind direction
 	thetam <- atan2(.Internal(mean(v)), .Internal(mean(u)))
+	# horizontal rotation
 	u1 <- u * cos(thetam) + v * sin(thetam)
+    # apply vertival rotation?
 	if (is.null(phi)) {
 		phi <- atan2(.Internal(mean(w)), .Internal(mean(u1)))
 	}
-	ud <- trend(u1 * cos(phi) + w * sin(phi), method["u"], Hz_ts)
-	vd <- trend(-u * sin(thetam) + v * cos(thetam), method["v"], Hz_ts)
-	wd <- trend(-u1 * sin(phi) + w * cos(phi), method["w"], Hz_ts)		
-	Td <- trend(T, method["T"], Hz_ts)
+    # output
 	out <- list(
-		uprot = ud$residuals
-		, vprot = vd$residuals
-		, wprot = wd$residuals
-		, Tdet = Td$residuals
-		, wd = switch(c.system
-			, "Windmaster" = (180 - thetam / pi * 180) %% 360 
-            , "HS-Wauwilermoos" = (150 - thetam / pi * 180) %% 360
-			, "ART.EC1" = ((180 / pi) * -thetam + 150 + 147) %% 360
-			# new (coordinate) system
-			, "Licor" = (270 - thetam / pi * 180) %% 360
-			# # old (coordinate) system
-			# ,"Licor" = (180 + thetam / pi * 180) %% 360 
-			)
+		wd = csystem_wd(c.system, thetam)
 		, phi = phi
-		, umrot = ud$fitted
-		, vmrot = vd$fitted
-		, wmrot = wd$fitted
-		, Tmdet = Td$fitted
-		)	
-	return(out)
+		, urot = u1 * cos(phi) + w * sin(phi)
+		, vrot = -u * sin(thetam) + v * cos(thetam)
+		, wrot = -u1 * sin(phi) + w * cos(phi)
+	)
+}
+
+# planar fit
+planar_fit <- function(x, coord_system, method = c('Wilczak2001', 'vanDik2004')[1], 
+    avg_time = '30mins', wd_sectors = c(0, 360), u_thresh = 0, n_thresh = 10, 
+    reg_fun = MASS::rlm, start_time, data_threshold, Hz, dev_north) {
+    cat(paste0("~~~\nApply planar fit method (", method, ") based on"), 
+        if (is.character(avg_time)) {
+            avg_time
+        } else {
+            paste(parse_time_diff(avg_time), "secs")
+        }
+        , "intervals\n"
+    )
+    pf_avg_time <- parse_time_diff(avg_time)
+    # PF periods:
+    x[, pf_period := floor(
+        as.numeric(Time - start_time[1], units = "secs") / 
+            pf_avg_time)]
+    ### tag 'complete' intervals
+    x[, pf_keep := .N / (pf_avg_time * Hz) > data_threshold, by = pf_period]
+    # get Uavg & provis. WD
+    x[, c("um", "vm", "wm", "Uavg", "WDprov") := {
+        um <- mean(u)
+        vm <- mean(v)
+        wm <- mean(w)
+        .(
+            um, vm, wm
+            , sqrt(um ^ 2 + vm ^ 2 + wm ^ 2)
+            , csystem_wd(coord_system, um, vm)
+        )
+    }, by = pf_period]
+    x[, WDprov := (WDprov + dev_north[1]) %% 360]
+    # fit to plane
+    wd_sort <- unique(sort(wd_sectors))
+    if (wd_sort[1] != 0 && wd_sort[length(wd_sort)] != 360) {
+        wd_sec <- c(wd_sort[length(wd_sort)], wd_sort)
+    } else {
+        wd_sec <- wd_sort
+    }
+    no_sec <- length(wd_sec) - 1
+    if (is.null(u_thresh)) {
+        u_thresh <- 0
+    }
+    x[, c("alpha", "beta", "w_bias") := NA_real_]
+    cat(sprintf("\tU threshold = %1.2f m/s (%1.1f%% of data set)\n", u_thresh, 
+            x[Uavg > u_thresh, .N] / nrow(x) * 100))
+    if (no_sec >= 1) {
+        cat("\tFollowing wind sectors have been defined:\n")
+        for (i in seq.int(no_sec)) {
+            x_sub <- x[WDprov > wd_sec[i] & WDprov <= wd_sec[i + 1] & Uavg > u_thresh &
+                pf_keep]
+            n_ints <- x_sub[, uniqueN(pf_period)]
+            n_data <- x_sub[, .N]
+            cat(paste0("\tSector ", i, ": (", wd_sec[i], "\u00B0 to ", 
+                    wd_sec[i + 1], "\u00B0] (", n_ints, " intervals", 
+                    sprintf(" %1.1f%% of wind speed subset)", 
+                        n_data / x[Uavg > u_thresh, .N] * 100)
+                    , "\n"))
+            if (n_ints < n_thresh) {
+                if (n_data == 0) {
+                    cat("\t\t|-> No data in this sector.\n")
+                } else {
+                    cat(paste0("\t\t|-> Not enough intervals (", 
+                            n_ints, 
+                            ") for planar fit with threshold of ", 
+                            n_thresh, 
+                            " (applying two axis rotation for this sector)\n"))
+                }
+            } else {
+                # planar fitting
+                PF <- x_sub[, .(um = um[1], vm = vm[1], wm = wm[1]), 
+                    by = pf_period][, {
+                    list2env(pf_fit(um, vm, wm, FUN = reg_fun, 
+                            method = method)[
+                        c("Pmat", "cw", "alpha", "beta")])
+                }]
+                # transform:
+                x[WDprov > wd_sec[i] & WDprov <= wd_sec[i + 1], 
+                    c("u", "v", "w", "alpha", "beta", "w_bias") := {
+                    c(pf_transf(u, v, w, with(PF, Pmat), with(PF, cw)), 
+                        list(with(PF, alpha), with(PF, beta), with(PF, cw)))
+                }]
+            }
+        }
+        # browser()
+    } else {
+        x_sub <- x[Uavg > u_thresh, ]
+        n_ints <- x_sub[, uniqueN(pf_period)]
+        n_data <- x_sub[, .N]
+        cat("No wind sectors have been defined.\n")
+        if (n_ints < n_thresh) {
+            cat(paste0("\t-> Not enough intervals (", n_ints, 
+                    ") for planar fit with threshold of ", n_thresh, 
+                    " (applying two axis rotation)\n"))
+        } else {
+            cat( n_ints, " intervals available\n")
+            # planar fitting
+            PF <- x[Uavg > u_thresh, .(um = um[1], vm = vm[1], wm = wm[1]), 
+                by = pf_period][, {
+                list2env(pf_fit(um, vm, wm, FUN = reg_fun, 
+                        method = method)[
+                    c("Pmat", "cw", "alpha", "beta")])
+            }]
+            # transform:
+            x[, c("u", "v", "w", "alpha", "beta", "w_bias") := .(
+                pf_transf(u, v, w, with(PF, Pmat), with(PF, cw)), with(PF, alpha), 
+                with(PF, beta), with(PF, cw))]
+        }
+    }
+    ### subtract w_avg (is done by detrending) and remove pf_keep column:
+    x[, c('pf_period', 'pf_keep', 'WDprov', 'Uavg') := NULL]
+    x
+}
+pf_transf <- function(u, v, w, P, cw) {
+	list(
+		u = P["up", "u"] * u + P["up", "v"] * v + P["up", "w"] * (w - cw)
+		, v = P["vp", "u"] * u + P["vp", "v"] * v + P["vp", "w"] * (w - cw)
+		, w = P["wp", "u"] * u + P["wp", "v"] * v + P["wp", "w"] * (w - cw)
+		)
+}
+pf_fit <- function(u, v, w, FUN = MASS::rlm, method = c("Wilczak2001", "vanDik2004"), ...) {
+	if (method[1] %in% "Wilczak2001") {
+		# Wilczak 2001 equation 39, wm = b0 + b1*um + b2*vm:	
+		mod <- FUN(w ~ u + v, ...)
+		b <- coef(mod)
+		names(b) <- c("b0", "b1", "b2")
+		cw <- b["b0"]
+		b1 <- b["b1"]
+		b2 <- b["b2"]
+	} else {
+		# van Dik 2004, wm = b1*um + b2*vm:	
+		mod <- FUN(w ~ u + v - 1, ...)
+		b <- coef(mod)
+		names(b) <- c("b1", "b2")
+		cw <- 0
+		b1 <- b["b1"]
+		b2 <- b["b2"]		
+	}
+	# equation 42, p3j:
+	p31 <- -b1 / sqrt(b1 ^ 2 + b2 ^ 2 + 1)
+	p32 <- -b2 / sqrt(b1 ^ 2 + b2 ^ 2 + 1)
+	p33 <- 1 / sqrt(b1 ^ 2 + b2 ^ 2 + 1)
+	# equation 44, angles:
+	# tan_b <- -p32/p33
+	sin_b <- -p32 / sqrt(p32 ^ 2 + p33 ^ 2)
+	cos_b <- p33 / sqrt(p32 ^ 2 + p33 ^ 2)
+	sin_a <- p31
+	cos_a <- sqrt(p32 ^ 2 + p33 ^ 2)
+	# equation 2, D + C:
+	Cmat <- cbind(c(1, 0, 0), c(0, cos_b, sin_b), c(0, -sin_b, cos_b))
+	Dmat <- cbind(c(cos_a, 0, -sin_a), c(0, 1, 0), c(sin_a, 0, cos_a))
+	# equation 36, P = t(D)%*%t(C):
+	Pmat <- t(Dmat) %*% t(Cmat)
+	colnames(Pmat) <- c("u", "v", "w")
+	rownames(Pmat) <- c("up", "vp", "wp")
+	list(
+        Pmat = Pmat, 
+        cw = cw, 
+        mod = mod, 
+        alpha = asin(sin_a) / pi * 180, 
+        beta = asin(sin_b) / pi * 180
+    )
 }
 
 # replace me!
@@ -820,6 +993,16 @@ process_ec_fluxes <- function(
         , declination = NULL
 		, z_ec = NULL
 		, z_canopy = NULL
+		, rotation_method = c("two axis", "planar fit")
+		, rotation_args = list(
+            phi = NULL, 
+            pf_avg_time = avg_period, 
+            pf_FUN = MASS::rlm, 
+            pf_method = c("Wilczak2001", "vanDik2004"), 
+            pf_N_thresh = 10, 
+            pf_wd_sectors = c(0, 360), 
+            pf_U_thresh = 0
+        )
         # detrending -> valid entries are blockAVG,linear,linear_robust,ma_xx (xx = time in seconds)
         , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', T = 'blockAVG', 
             nh3_ppb = 'blockAVG', nh3_ugm3 = 'blockAVG', h2o_mmolm3 = 'blockAVG', 
@@ -965,6 +1148,10 @@ process_ec_fluxes <- function(
     }
 
     # fix input (vectors of default values)
+    rotation_method <- match.arg(rotation_method, c('two axis', 'planar fit'))
+    rot_args <- rotation_args
+    rotation_args <- eval(formals(process_ec_fluxes)$rotation_args)
+    rotation_args[names(rot_args)] <- rot_args
     detrending <- fix_defaults(detrending, variables)
     hard_limits <- fix_defaults(hard_limits, variables)
     hard_limits_lower <- fix_defaults(hard_limits_lower, variables)
@@ -1218,45 +1405,13 @@ process_ec_fluxes <- function(
     # check & extend start/end times
     if (length(start_time) != length(end_time)) {
         stop('arguments "start_time" and "end_time" must have equal lengths!')
-    } else if (length(start_time) == 1) {
+    }
+    if (any(end_time - start_time <= 0)) {
+        stop('argument "end_time" must be strictly greater than "start_time"!')
+    }
+    if (length(start_time) == 1) {
         start_time <- seq(start_time, end_time, by = avg_secs)
         end_time <- start_time + avg_secs
-    }
-
-    # get vector of dates
-    start_dates <- format(date(start_time), '%Y-%m-%d')
-    # subtract 1 second to convert date of 00:00:00 to 23:59:59
-    end_dates <- format(date(end_time - 1), '%Y-%m-%d')
-    dates <- unique(c(start_dates, end_dates))
-
-    # get start/end per date in UTC & CET
-    times_list <- sapply(dates, \(x) {
-        eind <- end_dates == x
-        times <- unique(c(start_time[eind], end_time[eind] - 1))
-        UTC_times <- with_tz(times, 'UTC')
-        CET_times <- with_tz(times, 'Etc/GMT-1')
-        list(
-            UTC = unique(date(UTC_times)),
-            CET = unique(date(CET_times)),
-            UTC_times = list(
-                st = with_tz(start_time[eind], 'UTC'),
-                et = with_tz(end_time[eind], 'UTC')
-            ),
-            CET_times = list(
-                st = with_tz(start_time[eind], 'Etc/GMT-1'),
-                et = with_tz(end_time[eind], 'Etc/GMT-1')
-            )
-        )
-    }, simplify = FALSE)
-
-    # create output list
-    result_list <- vector(mode = 'list', length(dates))
-    names(result_list) <- dates
-
-    # prepare ogive output
-    if (ogives_out) {
-        e_ogive <- new.env()
-        e_ogive$Cospec_dyn_Out <- e_ogive$Cospec_fix_Out <- e_ogive$Covars_Out <- e_ogive$Ogive_fix_Out <- e_ogive$Ogive_dyn_Out <- setNames(vector("list", length(dates)), dates)
     }
 
     # copy scalars etc. to fix missing
@@ -1289,1001 +1444,996 @@ process_ec_fluxes <- function(
         path_folder <- file.path(graphs_directory, folder)
     }
 
+    # prepare interval times
+    dates_utc <- unique(date(c(start_time, end_time)))
+    dates_formatted <- gsub('-', '_', dates_utc, fixed = TRUE)
 
-    # loop over dates
-    for (day in seq_along(dates)) {
+    # read raw data:
+    # ------------------------------------------------------------------------------
 
-        # day <- dates[1]
-        cat(
-            '\n\n-------------------------------------------',
-            '\nReading raw data for', 
-            dates[[day]],
-            '\n-------------------------------------------\n\n'
-        )
+    # TODO: fix missing intervals in sonic/ht/licor!!!
+    #       fix old sonic files format
+    #       fix old sonic time format
+    #       fix gill bug in old sonic
+			# Data[, w := w * ifelse(w < 0, 1.289, 1.166)]
 
-        # prepare dates & times
-        dates_utc <- times_list[[day]]$UTC
-        dates_cet <- times_list[[day]]$CET
-        times_utc <- times_list[[day]]$UTC_times
-        times_cet <- times_list[[day]]$CET_times
-
-        # reading data file:                                      
-        # ------------------------------------------------------------------------------
-
-        # get sonic data
-        if (sonic_has_data) {
-            cat('~~~\nSubsetting sonic data - ')
-            # copy
-            sonic <- sonic_directory[Time >= times_utc$st[1] &
-                Time < tail(times_utc$et, 1), ]
+    # get sonic data
+    if (sonic_has_data) {
+        cat('~~~\nSubsetting sonic data - ')
+        # subset provided sonic data
+        sonic <- sonic_directory[Time >= start_time[1] & Time < tail(end_time, 1), ]
+    } else {
+        cat('~~~\nReading sonic files\n')
+        # select files
+        sonic_selected <- sonic_files[
+            sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', sonic_files) %in% dates_formatted
+            ]
+        # read sonic files
+        if (length(sonic_selected)) {
+            sonic <- rbindlist(lapply(
+                    file.path(sonic_directory, sonic_selected), 
+                    \(x) {
+                        cat('\t')
+                        read_sonic(x)
+                    }
+            ))
         } else {
-            cat('~~~\nReading sonic files - ')
-            # get data from old files
-            if (day > 1 && !is.null(sonic)) {
-                # copy old data
-                old_sonic <- sonic[Time >= times_utc$st[1], ]
-                # remove old date
-                dates_sonic <- dates_utc[!(dates_utc %in% dates_sonic)]
-            } else {
-                dates_sonic <- dates_utc
-                old_sonic <- NULL
-            }
-            # get files
-            sonic_read <- grep(
-                gsub('-', '_', dates_sonic, fixed = TRUE)
-                , sonic_files, value = TRUE)
-            if (length(sonic_read)) {
-                # read new sonic files
-                capture.output(
-                    sonic <- rbindlist(lapply(file.path(sonic_directory, sonic_read), 
-                            read_sonic))
-                )
-            } else {
-                sonic <- NULL
-            }
-            # no UTC conversion needed, since this case is excluded up to now
-            # # convert to UTC
-            # sonic[, Time := with_tz(Time, 'UTC')]
-            # bind together
-            sonic <- rbind(sonic, old_sonic)
-            if (is.null(sonic)) {
-                cat('No sonic data for current day. -> skipping day.\n')
-                next
-            }
+            sonic <- NULL
         }
-        cat('done\n')
+        # no UTC conversion needed, since this case is excluded up to now
+        # # convert to UTC
+        # sonic[, Time := with_tz(Time, 'UTC')]
+    }
+    cat('done\n')
+    # check sonic data
+    if (is.null(sonic) || nrow(sonic) == 0) {
+        stop('No sonic data available within given time range! Aborting routine!\n')
+    }
 
-        # get ht8700 data
-        if (ht_provided && ht_has_data) {
-            cat('Subsetting HT8700 data - ')
-            # copy
-            ht <- ht_directory[Time >= times_utc$st[1] &
-                Time < tail(times_utc$et, 1), ]
-            cat('done\n')
-        } else if (ht_provided && !ht_with_sonic) {
-            cat('Reading HT8700 files - ')
-            # get data from old files
-            if (day > 1 && !is.null(ht)) {
-                # copy old data
-                old_ht <- ht[Time >= times_utc$st[1], ]
-                # remove old date
-                dates_ht <- dates_utc[!(dates_utc %in% dates_ht)]
-            } else {
-                dates_ht <- dates_utc
-                old_ht <- NULL
-            }
-            # get files
-            ht_read <- grep(
-                gsub('-', '_', dates_ht, fixed = TRUE)
-                , ht_files, value = TRUE)
-            if (length(ht_read)) {
-                # read new ht files
-                capture.output(
-                    ht <- rbindlist(lapply(file.path(ht_directory, ht_read), read_ht8700))
-                )
-            } else {
-                ht <- NULL
-            }
-            # no UTC conversion needed, since this case is excluded up to now
-            # # convert to UTC
-            # ht[, Time := with_tz(Time, 'UTC')]
-            # bind together
-            ht <- rbind(ht, old_ht[, names(ht), with = FALSE])
-            if (is.null(ht)) {
-                cat('No HT8700 data for current day.\n')
-            } else {
-                cat('done\n')
-            }
+    # get ht8700 data
+    if (ht_provided && ht_has_data) {
+        cat('Subsetting HT8700 data - ')
+        # subset
+        ht <- ht_directory[Time >= start_time[1] & Time < tail(end_time, 1), ]
+        cat('done\n')
+    } else if (ht_provided && !ht_with_sonic) {
+        cat('Reading HT8700 files\n')
+        # select files
+        ht_selected <- ht_files[
+            sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', ht_files) %in% dates_formatted
+            ]
+        # read ht files
+        if (length(ht_selected)) {
+            ht <- rbindlist(lapply(
+                    file.path(ht_directory, ht_selected), 
+                    \(x) {
+                        cat('\t')
+                        read_ht8700(x)
+                    }
+            ))
         } else {
-            # no ht data
             ht <- NULL
         }
+        # no UTC conversion needed, since this case is excluded up to now
+        # # convert to UTC
+        # ht[, Time := with_tz(Time, 'UTC')]
+        cat('done\n')
+    } else {
+        # no ht data
+        ht <- NULL
+    }
+    # check ht
+    if (ht_provided && is.null(ht)) {
+        cat('-> No HT8700 data within given time range.\n')
+    }
 
-        # check HT8700 quality: alarm codes & OSS
-        if (ht_provided && ht_with_sonic) {
-            cat('Checking oss and alarm codes - ')
-            # add alarm code
-            if ('ht_alarm_code' %in% names(sonic)) {
-                # rename all ht_* variables
-                ht_vars <- grep('ht_', names(sonic), value = TRUE)
-                setnames(sonic, ht_vars, sub('ht_', '', ht_vars, fixed = TRUE))
-            } else if (!('alarm_code' %in% names(sonic))) {
-                sonic[, alarm_code := get_alarms(.SD)]
-            }
-            # create regex pattern
-            na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'), collapse = '|')
-            # check alarms and set nh3 NA
-            nh3_vars <- grep('nh3', names(sonic), value = TRUE)
-            na0 <- sonic[, sum(is.na(get(nh3_vars[1])))]
-            sonic[grepl(na_alarm_pattern, alarm_code),
-                (nh3_vars) := NA_real_]
-            na1 <- sonic[, sum(is.na(get(nh3_vars[1])))]
-            # check oss
-            sonic[oss < oss_threshold,
-                (nh3_vars) := NA_real_]
-            cat('done\nBad alarms:', na1 - na0, '\nValues below OSS:', 
-                sonic[, sum(oss < oss_threshold)], '\n')
-        } else if (ht_provided && !is.null(ht)) {
-            cat('Checking oss and alarm codes - ')
-            # add alarm code
-            if (!('alarm_code' %in% names(ht))) {
-                ht[, alarm_code := get_alarms(.SD)]
-            }
-            # create regex pattern
-            na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'), collapse = '|')
-            # check alarms and set nh3 NA
-            nh3_vars <- grep('nh3', names(ht), value = TRUE)
-            na0 <- ht[, sum(is.na(get(nh3_vars[1])))]
-            ht[grepl(na_alarm_pattern, alarm_code),
-                (nh3_vars) := NA_real_]
-            na1 <- ht[, sum(is.na(get(nh3_vars[1])))]
-            # check oss
-            ht[oss < oss_threshold,
-                (nh3_vars) := NA_real_]
-            cat('done\nBad alarms:', na1 - na0, '\nValues below OSS:', 
-                ht[, sum(oss < oss_threshold)], '\n')
-        }
-
-        # get licor data
-        if (licor_provided && licor_has_data) {
-            cat('Subsetting LI-7500 data - ')
-            # copy
-            licor <- licor_directory[Time >= times_utc$st[1] &
-                Time < tail(times_utc$et, 1), ]
-            cat('done\n')
-        } else if (licor_provided && !licor_with_sonic) {
-            cat('Reading LI-7500 files - ')
-            # get data from old files
-            if (day > 1 && !is.null(licor)) {
-                # copy old data
-                old_licor <- licor[Time >= times_utc$st[1], ]
-                # remove old date
-                dates_licor <- dates_utc[!(dates_utc %in% dates_licor)]
-            } else {
-                dates_licor <- dates_utc
-                old_licor <- NULL
-            }
-            # get files
-            licor_read <- grep(
-                gsub('-', '_', dates_licor, fixed = TRUE)
-                , licor_files, value = TRUE)
-            if (length(licor_read)) {
-                # read new licor files
-                capture.output(
-                    licor <- rbindlist(lapply(file.path(licor_directory, licor_read), 
-                            read_licor))
-                )
-            } else {
-                licor <- NULL
-            }
-            # no UTC conversion needed, since this case is excluded up to now
-            # # convert to UTC
-            # licor[, Time := with_tz(Time, 'UTC')]
-            # bind together
-            licor <- rbind(licor, old_licor[, names(licor), with = FALSE])
-            if (is.null(licor)) {
-                cat('No LI-7500 data for current day.\n')
-            } else {
-                cat("done\n")
-            }
+    # get licor data
+    if (licor_provided && licor_has_data) {
+        cat('Subsetting LI-7500 data - ')
+        # copy
+        licor <- licor_directory[Time >= start_time & Time < tail(end_time, 1), ]
+        cat('done\n')
+    } else if (licor_provided && !licor_with_sonic) {
+        cat('Reading LI-7500 files\n')
+        # select files
+        licor_selected <- licor_files[
+            sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', licor_files) %in% dates_formatted
+            ]
+        if (length(licor_selected)) {
+            # read new licor files
+            licor <- rbindlist(lapply(
+                    file.path(licor_directory, licor_selected), 
+                    \(x) {
+                        cat('\tFile:', x, '- ')
+                        out <- read_licor(x)
+                        cat('done\n')
+                        out
+                    }
+            ))
         } else {
-            # no licor data
             licor <- NULL
         }
+        # no UTC conversion needed, since this case is excluded up to now
+        # # convert to UTC
+        # licor[, Time := with_tz(Time, 'UTC')]
+    } else {
+        # no licor data
+        licor <- NULL
+    }
+    # check licor
+    if (licor_provided && is.null(licor)) {
+        cat('-> No LI-7500 data within given time range.\n')
+    }
 
-        cat('Merging files - ')
+    cat('Merging files - ')
+    daily_data <- merge_data(sonic, ht, licor)
+    cat('done\n~~~\n')
 
-        daily_data <- merge_data(sonic, ht, licor)
-
-        cat('done\n~~~\n')
-
-        # check if empty
-        if (nrow(daily_data) == 0) {
-            cat('No valid data available...\n')
-            next
-        }
-        
-        # check variables and covars and subset by columns
-        if (!all(cn_check <- variables %in% names(daily_data))) {
-            stop(
-                "cannot find variable(s): ", 
-                paste(variables[!cn_check], collapse = ", "),
-                "\nAvailable column names are: ", 
-                paste(names(daily_data), collapse = ", ")
-            )
-        }
-        
-        # define coordinate system
-        if (daily_data[, sonic[1] == 'HS']) {
-            coord.system <-  'HS-Wauwilermoos'
-        } else {
-            coord.system <-  'Windmaster'
-        }
-
-        # get intervals:                                      
-        # ------------------------------------------------------------------------------ 
-        st_interval <- times_utc$st
-        et_interval <- times_utc$et
-
-        # define bins & subset again & just make sure sonic has no missing data
-        daily_data <- daily_data[, bin := getIntervals(Time, st_interval, et_interval)][
-            bin != 0L & is.finite(u) & is.finite(v) & is.finite(w) & is.finite(T) &
-                !is.na(Time)]
-
-        # check again if empty
-        if (nrow(daily_data) == 0) {
-            cat('No valid data available...\n')
-            # advance to next day
-            next
-        }
-        
-        # be verbose
-        daily_data[, {
-            cat("\n~~~\nCalculation will include",
-                uniqueN(bin)
-                ,"intervals between", 
-                format(Time[1], format = "%Y-%m-%d %H:%M"), "and", 
-                format(Time[.N], 
-                    format = "%Y-%m-%d %H:%M", usetz = TRUE), 
-                "on a", avg_period, "min basis\n~~~\n\n")
-        }]
-
-        # --------------------- read fix lags from lag_lookuptable ---------------------
-        # TODO: only if necessary/wanted
-
-        # loop over individual intervals:
-        # ------------------------------------------------------------------------------ 
-        .Hz <- daily_data[, {
-            d_t <- diff(as.numeric(Time))
-            round(1 / median(d_t, na.rm = TRUE), -1)
-        }]
-        if (.Hz < 10) {
-            cat('Frequency is lower than 10 Hz! Skipping processing fluxes!\n')
-            next
-        }
-        n_period <- avg_secs * .Hz
-        n_threshold <- thresh_period * n_period
-
-        # fix and dyn lags:                                      
-        # ------------------------------------------------------------------------------ 
-        input_fix_lag <- round(lag_fix * .Hz)
-        input_dyn_lag <- rbind(
-            lower = round((lag_fix - lag_dyn) * .Hz)
-            , upper = round((lag_fix + lag_dyn) * .Hz)
+    # check variables and covars and subset by columns
+    if (!all(cn_check <- variables %in% names(daily_data))) {
+        stop(
+            "cannot find variable(s): ", 
+            paste(variables[!cn_check], collapse = ", "),
+            "\nAvailable column names are: ", 
+            paste(names(daily_data), collapse = ", ")
         )
-
-        # loop over bins
-        result_list[[day]] <- daily_data[, {
-
-            cat("\n\n~~~~~~~~\n", dates[[day]], ": interval ", .GRP, " of ", .NGRP, "\n", sep = '')
-            # get subset:
-            # --------------------------------------------------------------------------
-            if (.N > n_threshold) {
-
-                # ugly copy because of inability to change .SD values
-                SD <- copy(.SD)
-
-                # times, frequencies etc.
-                # --------------------------------------------------------------------------
-                Int_Start <- st_interval[.BY[[1]]]
-                freq <- .Hz * seq(floor(n_period / 2)) / floor(n_period / 2)
-                # TODO (maybe for later): include NA where d_t>2*mean, remove entries where d_t < 0.5*mean
-
-                # raw data quality control I, i.e. hard limits = physical range
-                # --------------------------------------------------------------------------
-                cat("~~~\nchecking hard limits...\n")
-                if (any(hard_limits)) {
-                    SD[, variables[hard_limits] := check_limits(
-                        mget(variables[hard_limits]), Time, .Hz, 
-                        lim_range[, variables[hard_limits], drop = FALSE], 
-                        hard_limits_window, hl_method
-                        )]
-                } 
-
-                # check NA values in scalars
-                scalars <- input_scalars
-                covariances <- input_covariances
-                covariances_variables <- input_covariances_variables
-                covariances_plotnames <- input_covariances_plotnames
-                scalar_covariances <- input_scalar_covariances
-                flux_variables <- input_flux_variables
-                plot_timeseries <- input_plot_timeseries
-                fix_lag <- input_fix_lag
-                dyn_lag <- input_dyn_lag
-                damping_reference <- input_damping_reference
-                damp_region <- input_damp_region
-                if (SD[, anyNA(.SD), .SDcols = scalars]) {
-                    # loop over scalars & check
-                    for (s in scalars) {
-                        x <- SD[, unlist(mget(s, ifnotfound = NA))]
-                        if (sum(is.finite(x)) < n_threshold) {
-                            cat('=> ', s, ': number of valid measurements is below',
-                                ' threshold -> exclude from current interval\n', sep = '')
-                            scalars <- scalars[!(scalars %in% s)]
-                            flux_variables <- flux_variables[!(flux_variables %in% s)]
-                            plot_timeseries <- plot_timeseries[!(names(plot_timeseries) %in% s)]
-                            sind <- grep(s, covariances)
-                            if (length(sind)) {
-                                damping_reference <- damping_reference[!(names(damping_reference) %in% covariances[sind])]
-                                damp_region <- damp_region[!(names(damp_region) %in% covariances[sind])]
-                                covariances <- covariances[-sind]
-                                fix_lag <- fix_lag[-sind]
-                                dyn_lag <- dyn_lag[, -sind, drop = FALSE]
-                                covariances_variables <- covariances_variables[-sind]
-                                covariances_plotnames <- covariances_plotnames[-sind]
-                                scalar_covariances <- scalar_covariances[-sind]
-                            }
-                        }
-                    }
-                }
-
-
-                # calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
-                # -------------------------------------------------------------------------- 
-                cat("~~~\nrotating and deterending sonic data...\n")
-                cat("     -> coordinate system:", coord.system, "\n")
-                wind <- SD[, I(rotate_detrend(u, v, w, T, c.system = coord.system,
-                        method = detrending[c("u", "v", "w", "T")], Hz_ts = .Hz))]
-                SD[, c("u", "v", "w", "T") := wind[c("uprot", "vprot", "wprot", "Tdet")]]
-
-                # calculate some turbulence parameters and collect some wind parameters
-                # -------------------------------------------------------------------------- 
-                wind_stats <- wind_statistics(wind, z_canopy, z_ec)
-                ### correct for sonic north deviation and magn. declination
-                current_declination <- mag_dec(Time[1])
-                wind_stats["WD"] <- (wind_stats["WD"] + dev_north + current_declination) %% 360
-
-                # switch to list with different lengths
-                # only for scalar fluxes!
-                # -> check na.action for omitted indices
-                detrended_scalars <- NULL
-                scalar_means <- setNames(
-                    rep(NA_real_, length(scalars)),
-                    scalars
-                )
-                scalar_sd <- setNames(
-                    rep(NA_real_, length(scalars)),
-                    scalars
-                )
-                if (length(scalars)) {
-                    scalar_list <- SD[, I(lapply(.SD, na.omit)), .SDcols = scalars]
-                # detrend scalars
-                # -------------------------------------------------------------------------- 
-                    cat("~~~\ndetrending scalars...\n")
-                    detrended_scalars <- mapply(trend, y = scalar_list, method = 
-                        detrending[scalars], MoreArgs = list(Hz_ts = .Hz), SIMPLIFY = FALSE)
-                # calculate scalar averages and sd:
-                # -------------------------------------------------------------------------- 
-                    scalar_means[scalars] <- sapply(scalar_list, mean)
-                    scalar_sd[scalars] <- sapply(scalar_list, sd)
-                # assign to SD
-                    SD[, (scalars) := lapply(names(detrended_scalars), \(nms) {
-                        if (!is.null(isna <- na.action(scalar_list[[nms]]))) {
-                            out <- rep(NA_real_, .N)
-                            x <- detrended_scalars[[nms]]$residuals
-                            out[-isna] <- x
-                            out
-                        } else {
-                            detrended_scalars[[nms]]$residuals
-                        }
-                        })]
-                # } else {
-                    # cat('No scalars available -> skipping interval!\n')
-                    # next
-                }
-
-                # start of flux relevant data manipulation
-                # -------------------------------------------------------------------------- 
-                # -------------------------------------------------------------------------- 
-                cat("~~~\nstarting flux evaluation...\n")
-
-                # get fft (keep list format)
-                FFTs <- SD[, I(lapply(.SD, \(x) fft(na.omit(x)) / .N)), .SDcols = flux_variables]
-
-                # ### testing auto-covariances
-                # AutoCovars <- lapply(names(FFTs), \(i) {
-                #     # check scalars
-                #     if (i %in% scalars && !is.null(na_ind <- na.action(FFTs[[i]]))) {
-                #         # fix lengths
-                #         FFTs[[i]] <- FFTs[[i]][-na_ind]
-                #         # get N
-                #         N <- length(FFTs[[i]])
-                #     } else {
-                #         N <- .N
-                #     }
-                #     # get Re
-                #     re <- Re(fft(Conj(FFTs[[i]]) * FFTs[[i]], inverse = TRUE))
-                #     # get missing
-                #     # subset
-                #     if (N %% 2) {
-                #         out <- re[c(((N + 1) / 2 + 1):N, 1:((N + 1) / 2))] * N / (N - 1)
-                #     } else {
-                #         out <- re[c((N / 2 + 1):N, 1:(N / 2))] * N / (N - 1)
-                #     }
-                #     n_missing <- n_period - N
-                #     if (sign(n_missing) >= 0) {
-                #         if (n_missing %% 2) {
-                #             n1 <- rep(NA_real_, (n_missing + 1) / 2)
-                #             n2 <- rep(NA_real_, (n_missing - 1) / 2)
-                #         } else {
-                #             n1 <- n2 <- rep(NA_real_, n_missing / 2)
-                #         }
-                #         c(n1, out, n2)
-                #     } else {
-                #         if (-n_missing %% 2) {
-                #             ind <- ((1 - n_missing) / 2 + 1):(N - (-n_missing - 1) / 2)
-                #         } else {
-                #             ind <- (1 - n_missing / 2):(N + n_missing / 2)
-                #         }
-                #         out[ind]
-                #     }
-                # })
-                # names(AutoCovars) <- paste(flux_variables, flux_variables, sep = 'x')
-
-                # calculate covariances with fix lag time:
-                # -------------------------------------------------------------------------- 
-                cat("\t- covariances\n")
-                Covars <- lapply(covariances_variables, function(i, ffts) {
-                    # check scalars
-                    if (i[2] %in% scalars && !is.null(na_ind <- na.action(ffts[[i[2]]]))) {
-                        # fix lengths
-                        ffts[[i[1]]] <- ffts[[i[1]]][-na_ind]
-                        # get N
-                        N <- length(ffts[[i[1]]])
-                    } else {
-                        N <- .N
-                    }
-                    # get Re
-                    re <- Re(fft(Conj(ffts[[i[2]]]) * ffts[[i[1]]], inverse = TRUE))
-                    # get missing
-                    # subset
-                    if (N %% 2) {
-                        out <- re[c(((N + 1) / 2 + 1):N, 1:((N + 1) / 2))] * N / (N - 1)
-                    } else {
-                        out <- re[c((N / 2 + 1):N, 1:(N / 2))] * N / (N - 1)
-                    }
-                    n_missing <- n_period - N
-                    if (sign(n_missing) >= 0) {
-                        if (n_missing %% 2) {
-                            n1 <- rep(NA_real_, (n_missing + 1) / 2)
-                            n2 <- rep(NA_real_, (n_missing - 1) / 2)
-                        } else {
-                            n1 <- n2 <- rep(NA_real_, n_missing / 2)
-                        }
-                        c(n1, out, n2)
-                    } else {
-                        if (-n_missing %% 2) {
-                            ind <- ((1 - n_missing) / 2 + 1):(N - (-n_missing - 1) / 2)
-                        } else {
-                            ind <- (1 - n_missing / 2):(N + n_missing / 2)
-                        }
-                        out[ind]
-                    }
-                }, ffts = FFTs)
-                names(Covars) <- covariances
-
-                # find maximum in dynamic lag time range:
-                # -------------------------------------------------------------------------- 
-                cat("\t- dyn lag\n")
-                dyn_lag_max <- sapply(covariances, function(i, x, lag) {
-                    find_dynlag(x[[i]], lag[, i])
-                }, x = Covars, lag = dyn_lag)
-
-                # covariance function's standard deviation and mean values left and right of fix lag
-                # ------------------------------------------------------------------------
-                # RE_RMSE (Eq. 9 in Langford et al. 2015)
-                # -> ranges lo/hi (-/+180 to -/+150 secs? => define range as argument)
-                # gamma_time_window <- c(2.5, 5)
-                n <- length(Covars[[1]])
-                m <- ifelse(n %% 2, (n + 1) / 2, n / 2 + 1)
-                lo_range <- m - rev(gamma_time_window) * 60 * .Hz
-                hi_range <- m + gamma_time_window * 60 * .Hz
-                # -> sd_cov_low
-                sd_cov_lo <- sapply(Covars, \(x) sd(x[lo_range]))
-                # -> avg_cov_low
-                avg_cov_lo <- sapply(Covars, \(x) mean(x[lo_range]))
-                # -> sd_cov_hi
-                sd_cov_hi <- sapply(Covars, \(x) sd(x[hi_range]))
-                # -> avg_cov_hi
-                avg_cov_hi <- sapply(Covars, \(x) mean(x[hi_range]))
-                re_rmse <- sqrt(0.5 * (sd_cov_lo ^ 2 + avg_cov_lo ^ 2 +
-                        sd_cov_hi ^ 2 + avg_cov_hi ^ 2))
-                # ## auto-covariances
-                # sd_acov_lo <- sapply(AutoCovars, \(x) sd(x[lo_range]))
-                # # avg_acov_lo <- sapply(AutoCovars, \(x) mean(x[lo_range]))
-                # sd_acov_hi <- sapply(AutoCovars, \(x) sd(x[hi_range]))
-                # # avg_acov_hi <- sapply(AutoCovars, \(x) mean(x[hi_range]))
-                # # re_rmse_acov <- sqrt(0.5 * (sd_acov_lo ^ 2 + avg_acov_lo ^ 2 +
-                # #         sd_acov_hi ^ 2 + avg_acov_hi ^ 2))
-                # re_rmse_acov <- sqrt(0.5 * (sd_acov_lo ^ 2 + sd_acov_hi ^ 2))
-
-                # covariance function values +/- tau.off.sec of fix lag
-                # ------------------------------------------------------------------------
-                # not implemented...
-
-                # cospectra for fixed & dynamic lags
-                # ------------------------------------------------------------------------ 			
-                cat("\t- co-spectra\n")
-                Cospec_fix <- mapply(function(i, lag, ffts) {
-                        # check scalars
-                        N <- .N
-                        if (i[2] %in% scalars) {
-                            if (!is.null(na_ind <- na.action(scalar_list[[i[2]]]))) {
-                                # fix lengths
-                                ffts[[i[1]]] <- ffts[[i[1]]][-na_ind]
-                                # get N
-                                N <- length(ffts[[i[1]]])
-                            }
-                            x <- scalar_list[[i[2]]]
-                        } else {
-                            x <- SD[, get(i[2])]
-                        }
-                        xs <- fft(shift(x, -lag)) / N
-                        re <- Re(Conj(xs) * ffts[[i[1]]])[seq(N / 2) + 1] * N / 
-                            (N - 1) * 2
-                        # get missing
-                        n_missing <- n_period / 2 - length(re)
-                        if (sign(n_missing) >= 0) {
-                            c(re, rep(NA_real_, n_missing))
-                        } else {
-                            re[seq_len(n_period / 2)]
-                        }
-                    }, i = covariances_variables, lag = fix_lag, 
-                    MoreArgs = list(ffts = FFTs), SIMPLIFY = FALSE)
-                names(Cospec_fix) <- covariances
-                Cospec_dyn <- mapply(function(i, lag, ffts) {
-                        # check scalars
-                        N <- .N
-                        if (i[2] %in% scalars) {
-                            if (!is.null(na_ind <- na.action(scalar_list[[i[2]]]))) {
-                                # fix lengths
-                                ffts[[i[1]]] <- ffts[[i[1]]][-na_ind]
-                                # get N
-                                N <- length(ffts[[i[1]]])
-                            }
-                            x <- scalar_list[[i[2]]]
-                        } else {
-                            x <- SD[, get(i[2])]
-                        }
-                        xs <- fft(shift(x, -lag)) / N
-                        re <- Re(Conj(xs) * ffts[[i[1]]])[seq(N / 2) + 1] * N / 
-                            (N - 1) * 2
-                        # get missing
-                        n_missing <- n_period / 2 - length(re)
-                        if (sign(n_missing) >= 0) {
-                            c(re, rep(NA_real_, n_missing))
-                        } else {
-                            re[seq_len(n_period / 2)]
-                        }
-                    }, i = covariances_variables, lag = dyn_lag_max[2, ],
-                    MoreArgs = list(ffts = FFTs), SIMPLIFY = FALSE)
-                names(Cospec_dyn) <- covariances
+    }
         
-                # ogives for fixed & dynamic lags 
-                # ------------------------------------------------------------------------ 
-                Ogive_fix <- lapply(Cospec_fix, function(x) {
-                    x[is.na(x)] <- 0
-                    rev(cumsum(rev(x)))
-                })
-                names(Ogive_fix) <- covariances
-                Ogive_dyn <- lapply(Cospec_dyn, function(x) {
-                    x[is.na(x)] <- 0
-                    rev(cumsum(rev(x)))
-                })
-                names(Ogive_dyn) <- covariances
+    # define bins & subset again & just make sure sonic has no missing data
+    daily_data <- daily_data[, bin := getIntervals(Time, start_time, end_time)][
+        bin != 0L & is.finite(u) & is.finite(v) & is.finite(w) & is.finite(T) &
+            !is.na(Time)]
+
+    # get Hz/frequency etc.
+    rec_Hz <- daily_data[, {
+        d_t <- diff(as.numeric(Time))
+        round(1 / median(d_t, na.rm = TRUE), -1)
+    }]
+    if (rec_Hz < 10) {
+        stop('Frequency is lower than 10 Hz! Aborting script!')
+    }
+    n_period <- avg_secs * rec_Hz
+    n_threshold <- thresh_period * n_period
+    freq <- rec_Hz * seq(floor(n_period / 2)) / floor(n_period / 2)
+
+	# remove incomplete intervals
+    cat('Check given "thresh_period"\n')
+    np0 <- daily_data[, uniqueN(bin)]
+	daily_data <- daily_data[, keep := .N >= n_threshold, by = bin][(keep)][,
+        keep := NULL]
+    np <- daily_data[, uniqueN(bin)]
+    if (np0 - np > 1) {
+        cat(np0 - np, 'intervals have less than', thresh_period * 100, '% of valid data\n')
+    } else if (np0 - np > 0) {
+        cat(np0 - np, 'interval has less than', thresh_period * 100, '% of valid data\n')
+    }
+
+    # check again if empty
+    if (nrow(daily_data) == 0) {
+        stop('No valid data available within given time range!')
+    }
+
+    # --------------------- read fix lags from lag_lookuptable ---------------------
+    # TODO: only if necessary/wanted
+
+    # fix and dyn lags:                                      
+    # ------------------------------------------------------------------------------ 
+    input_fix_lag <- round(lag_fix * rec_Hz)
+    input_dyn_lag <- rbind(
+        lower = round((lag_fix - lag_dyn) * rec_Hz)
+        , upper = round((lag_fix + lag_dyn) * rec_Hz)
+    )
+
+    # be verbose
+    cat("\n~~~\nCalculation will include",
+        daily_data[, uniqueN(bin)]
+        , "of", length(start_time), "intervals between", 
+        format(start_time[1], format = "%Y-%m-%d %H:%M"), "and", 
+        format(tail(end_time, 1), 
+            format = "%Y-%m-%d %H:%M", usetz = TRUE), 
+        "on a", avg_secs / 60, "minute basis\n~~~\n\n"
+    )
+
+    # raw data quality control I, i.e. hard limits = physical range
+    # --------------------------------------------------------------------------
+    cat("~~~\nchecking hard limits...\n")
+    if (any(hard_limits)) {
+        daily_data[, variables[hard_limits] := check_limits(
+            mget(variables[hard_limits]), Time, rec_Hz, 
+            lim_range[, variables[hard_limits], drop = FALSE], 
+            hard_limits_window, hl_method
+            )]
+    } 
+
+    # define coordinate system
+    if (daily_data[, sonic[1] == 'HS']) {
+        coord.system <-  'HS-Wauwilermoos'
+    } else {
+        coord.system <-  'Windmaster'
+    }
+
+    # declination
+    current_declination <- daily_data[, mag_dec(Time[1]), by = bin][, V1]
+    d_north <- dev_north + current_declination
+
+    ## coordinate rotation
+	cat("~~~\nrotating data...\n")
+    # apply planar fit
+    if (rotation_method == 'planar fit') {
+        cat('applying planar-fit rotation...\n')
+        daily_data <- planar_fit(daily_data, coord_system = coord.system, 
+            method = rotation_args[['pf_method']],
+            avg_time = rotation_args[['pf_avg_time']],
+            wd_sectors = rotation_args[['pf_wd_sectors']],
+            u_thresh = rotation_args[['pf_U_thresh']],
+            n_thresh = rotation_args[['pf_N_thresh']],
+            reg_fun = rotation_args[['pf_FUN']],
+            start_time = start_time[1], data_threshold = thresh_period, Hz = rec_Hz, 
+            dev_north = d_north
+        )
+    } else {
+        cat('applying two-axis rotation...\n')
+    }
+
+    # apply two-axis rotation (if planar fit has not been applied successfully)
+	daily_data[, c("WD", "phi", "urot", "vrot", "wrot") := rotate_twoaxis(u, v, w,
+        phi = if (rotation_method[1] %in% "two axis") {
+            # two-axis rotation
+            rotation_args$phi 
+        } else if (is.na(alpha[1])) {
+            # planar fit failed
+            NULL 
+        } else {
+            # planar fit successful
+            0
+        }, c.system = coord.system)
+		, by = bin]
+
+	### correct for sonic north deviation
+	daily_data[, WD := (WD + d_north[.GRP]) %% 360, by = bin]
+
+    # prepare ogive output
+    if (ogives_out) {
+        e_ogive <- new.env()
+        e_ogive$Cospec_dyn_Out <- e_ogive$Cospec_fix_Out <- e_ogive$Covars_Out <- 
+            e_ogive$Ogive_fix_Out <- e_ogive$Ogive_dyn_Out <- 
+                setNames(vector("list", length(start_time)), format(start_time))
+    }
 
 
-                # empirical damping estimation, dyn and fix should have best reference (dyn/fix)...
-                # ------------------------------------------------------------------------
-                if (any(scalar_covariances)) {
-                    cat("\t- damping\n")
-                    Damping_fix <- mapply(damp_hac5, ogive = Ogive_fix[scalar_covariances], 
-                        ogive_ref = Ogive_fix[damping_reference], freq.limits = damp_region,
-                        MoreArgs = list(freq = freq), SIMPLIFY = FALSE)
-                    Damping_dyn <- mapply(damp_hac5, ogive = Ogive_dyn[scalar_covariances], 
-                        ogive_ref = Ogive_dyn[damping_reference], freq.limits = damp_region,
-                        MoreArgs = list(freq = freq), SIMPLIFY = FALSE)
-                } else {
-                    Damping_dyn <- Damping_fix <- NULL
+    # loop over bins
+    results <- daily_data[, {
+
+        # be verbose
+        cat("\n\n~~~~~~~~\n", format(start_time[.BY[[1]]]), " - interval ", .GRP, 
+            " of ", .NGRP, "\n", sep = '')
+
+        # check number of data
+        if (.N > n_threshold) {
+
+            # ugly copy because of inability to change .SD values
+            SD <- copy(.SD)
+
+            # check HT8700 quality: alarm codes & OSS
+            if (ht_provided) {
+                cat('~~~\nChecking HT-8700 OSS and alarm codes - ')
+                # add alarm code
+                if (!('ht_alarm_code' %in% names(SD))) {
+                    SD[, ht_alarm_code := get_alarms(.SD)]
                 }
-
-                # calculate low frequency contribution
-                i_hi <- which(1 / freq < high_cont_sec)[1]
-                if (length(i_hi) != 1) stop('check argument "high_cont_sec"!')
-                hi_cont_fix <- sapply(Ogive_fix, \(x) {
-                    mean(x[i_hi + seq(-cont_pts, cont_pts)])/ x[1]
-                })
-                hi_cont_dyn <- sapply(Ogive_dyn, \(x) {
-                    mean(x[i_hi + seq(-cont_pts, cont_pts)])/ x[1]
-                })
-                i_lo <- which(1 / freq <= low_cont_sec)[1]
-                if (length(i_lo) != 1) stop('check argument "low_cont_sec"!')
-                lo_cont_fix <- sapply(Ogive_fix, \(x) {
-                    (x[1] - mean(x[i_lo + seq(-cont_pts, cont_pts)])) / x[1]
-                })
-                lo_cont_dyn <- sapply(Ogive_dyn, \(x) {
-                    (x[1] - mean(x[i_lo + seq(-cont_pts, cont_pts)])) / x[1]
-                })
-
-                # fit theoretical ogive shape
-                cat('\t- estimate flux quality\n')
-                ogff <- function(pars) {
-                    ogive_model(pars['fx'], 3 / 4, pars['mu'], pars['A0'], freq)
-                }
-                fit_og <- function(pars, ogive, ind = NULL) {
-                    if (is.null(ind)) {
-                        fit_ogive(pars, ogive, freq, 1, length(ogive))
-                    } else {
-                        fit_ogive(pars, ogive, freq, i_lo, i_hi)
-                    }
-                }
-
-                # base range
-                i_r <- i_lo:i_hi
-                # set limit for valid mu values
-                mu_lim <- 10
-
-                # quality of ogive 
-                ogive_quality_fix <- sapply(Ogive_fix, \(x) {
-                    # ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
-                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
-                    opt <- optim(ini, fit_og, ogive = x, control = list(maxit = 5e3))
-                    if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
-                        return(rep(NA_real_, 6))
-                    }
-                    fog <- ogff(opt$par)
-                    d <- (fog - x) / fog[1]
-                    d0 <- diff(d)
-                    c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
-                })
-                ogive_quality_dyn <- sapply(Ogive_dyn, \(x) {
-                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
-                    opt <- optim(ini, fit_og, ogive = x, control = list(maxit = 5e3))
-                    if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
-                        return(rep(NA_real_, 6))
-                    }
-                    fog <- ogff(opt$par)
-                    d <- (fog - x) / fog[1]
-                    d0 <- diff(d)
-                    c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
-                })
-                # quality of base part of ogive 
-                base_quality_fix <- sapply(Ogive_fix, \(x) {
-                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
-                    opt <- optim(ini, fit_og, ogive = x, ind = i_r, 
-                        control = list(maxit = 5e3))
-                    if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
-                        return(NA_real_)
-                    }
-                    # d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
-                    # 1 - mean(d ^ 2) ^ (1 / 3)
-                    fog <- ogff(opt$par)
-                    d <- (fog - x) / fog[1]
-                    d0 <- diff(d)
-                    1 - mean(d0 ^ 6) ^ (1 / 6) * 6
-                })
-                base_quality_dyn <- sapply(Ogive_dyn, \(x) {
-                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
-                    opt <- optim(ini, fit_og, ogive = x, ind = i_r, 
-                        control = list(maxit = 5e3))
-                    if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
-                        return(NA_real_)
-                    }
-                    # d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
-                    # 1 - mean(d ^ 2) ^ (1 / 3)
-                    fog <- ogff(opt$par)
-                    d <- (fog - x) / fog[1]
-                    d0 <- diff(d)
-                    1 - mean(d0 ^ 6) ^ (1 / 6) * 6
-                })
-                
-                # get Albrecht's ogive bias
-                ogive_bias_fix <- sapply(Cospec_fix, \(x) {
-                    x[is.na(x)] <- 0
-                    ms <- median(sign(x))
-                    o <- sum(x)
-                    (ms * sum(abs(x)) - o) / o
-                })
-                ogive_bias_dyn <- sapply(Cospec_dyn, \(x) {
-                    x[is.na(x)] <- 0
-                    ms <- median(sign(x))
-                    o <- sum(x)
-                    (ms * sum(abs(x)) - o) / o
-                })
-
-                # fix matrix to vector for output
-                rownames(ogive_quality_fix) <- rownames(ogive_quality_dyn) <- 
-                    c('q', 'f', 'fx', 'mu', 'A0', 'm')
-                ogive_par_fix <- ogive_quality_fix[3:6, ]
-                ogive_par_dyn <- ogive_quality_dyn[3:6, ]
-                ogive_fitted_fix <- ogive_quality_fix[2, ]
-                ogive_quality_fix <- ogive_quality_fix[1, ]
-                ogive_fitted_dyn <- ogive_quality_dyn[2, ]
-                ogive_quality_dyn <- ogive_quality_dyn[1, ]
-
-                # should ogives be provided with output
-                if (ogives_out) {
-                    int_start <- format(Int_Start)
-                    e_ogive$Cospec_fix_Out[[dates[day]]][[int_start]] <- c(
-                        list(freq = freq, model_coef = ogive_par_fix), Cospec_fix)
-                    e_ogive$Cospec_dyn_Out[[dates[day]]][[int_start]] <- c(
-                        list(freq = freq, model_coef = ogive_par_dyn), Cospec_dyn)
-                    e_ogive$Ogive_fix_Out[[dates[day]]][[int_start]] <- c(
-                        list(freq = freq, model_coef = ogive_par_fix), Ogive_fix)
-                    e_ogive$Ogive_dyn_Out[[dates[day]]][[int_start]] <- c(
-                        list(freq = freq, model_coef = ogive_par_dyn), Ogive_dyn)
-                    e_ogive$Covars_Out[[dates[day]]][[int_start]] <- c(
-                        list(Hz = .Hz), Covars)
-                }
-
-                ### some output and namings
-                fix_lag_out <- fix_lag
-                dyn_lag_out <- dyn_lag_max["tau", ]
-                flux_fix_lag <- sapply(Ogive_fix, "[", 1)
-                flux_dyn_lag <- sapply(Ogive_dyn, "[", 1)
-                fix_damping_pbreg <- sapply(Damping_fix, "[[", 1)
-                dyn_damping_pbreg <- sapply(Damping_dyn, "[[", 1)
-                fix_damping_deming <- sapply(Damping_fix, "[[", 2)
-                dyn_damping_deming <- sapply(Damping_dyn, "[[", 2)
-                if (!is.null(Damping_fix)) {
-                    names(fix_damping_pbreg) <- names(Damping_fix)
-                    names(fix_damping_deming) <- names(Damping_fix)
-                }
-                if (!is.null(Damping_dyn)) {
-                    names(dyn_damping_pbreg) <- names(Damping_dyn)
-                    names(dyn_damping_deming) <- names(Damping_dyn)
-                }
-
-                # write results:
-                # -------------------------------------------------------------------------- 
-                out <- c(
-                    list(
-                        st = Int_Start
-                        , et = et_interval[.BY[[1]]]
-                        , n_values = .N
-                        #, SubInts =  subint_n
-                    )
-                    , if (ht_provided) {
-                        list(
-                            ht_temp_amb = mean(ht_temp_amb, na.rm = TRUE)
-                            , ht_press_amb = mean(ht_press_amb, na.rm = TRUE)
-                            , ht_oss = mean(ht_oss, na.rm = TRUE)
-                            , ht_alarm_codes = paste(unique(unlist(strsplit(
-                                            unique(ht_alarm_code[!is.na(ht_alarm_code)])
-                                            , split = ','))), collapse = ',')
-                        )
-                    }
-                    , if (licor_provided) {
-                        list(
-                            li_temp_amb = mean(li_temp_amb, na.rm = TRUE)
-                            , li_press_amb = mean(li_press_amb, na.rm = TRUE)
-                            , li_co2ss = mean(li_co2ss, na.rm = TRUE)
-                        )
-                    }
-                    , as.list(c(
-                        wind_stats
-                        # scalar avg & sd
-                        , if (length(input_scalars) > 0) {
-                            list(
-                                setNames(scalar_means[input_scalars], 
-                                    paste0('avg_', input_scalars))
-                                , setNames(scalar_sd[input_scalars], 
-                                    paste0('sd_', input_scalars))
-                            )
-                        }
-                        # fluxes
-                        , setNames(
-                            flux_fix_lag[input_covariances],
-                            paste0('flux_fix_', input_covariances)
-                        )
-                        , setNames(
-                            flux_dyn_lag[input_covariances],
-                            paste0('flux_dyn_', input_covariances)
-                        )
-                        # , sub_cov_means
-                        # , sub_cov_sd
-                        # fix/dyn lag as seconds
-                        , setNames(
-                            fix_lag_out[input_covariances] / .Hz, 
-                            paste0('lag_fix_', input_covariances)
-                        )
-                        , setNames(
-                            dyn_lag_out[input_covariances] / .Hz, 
-                            paste0('lag_dyn_', input_covariances)
-                        )
-                        , setNames(
-                            re_rmse[input_covariances],
-                            paste0('re_rmse_', input_covariances)
-                        )
-                        , setNames(
-                            hi_cont_fix[input_covariances],
-                            paste0('hi_cont_fix_', input_covariances)
-                        )
-                        , setNames(
-                            hi_cont_dyn[input_covariances],
-                            paste0('hi_cont_dyn_', input_covariances)
-                        )
-                        , setNames(
-                            lo_cont_fix[input_covariances],
-                            paste0('lo_cont_fix_', input_covariances)
-                        )
-                        , setNames(
-                            lo_cont_dyn[input_covariances],
-                            paste0('lo_cont_dyn_', input_covariances)
-                        )
-                        , setNames(
-                            ogive_fitted_fix[input_covariances],
-                            paste0('ogive_fitted_fix_', input_covariances)
-                        )
-                        , setNames(
-                            ogive_fitted_dyn[input_covariances],
-                            paste0('ogive_fitted_dyn_', input_covariances)
-                        )
-                        , setNames(
-                            ogive_quality_fix[input_covariances],
-                            paste0('ogive_quality_fix_', input_covariances)
-                        )
-                        , setNames(
-                            ogive_quality_dyn[input_covariances],
-                            paste0('ogive_quality_dyn_', input_covariances)
-                        )
-                        , setNames(
-                            base_quality_fix[input_covariances],
-                            paste0('base_quality_fix_', input_covariances)
-                        )
-                        , setNames(
-                            base_quality_dyn[input_covariances],
-                            paste0('base_quality_dyn_', input_covariances)
-                        )
-                        , setNames(
-                            ogive_bias_fix[input_covariances],
-                            paste0('ogive_bias_fix_', input_covariances)
-                        )
-                        , setNames(
-                            ogive_bias_dyn[input_covariances],
-                            paste0('ogive_bias_dyn_', input_covariances)
-                        )
-                        , if (!is.null(Damping_fix) && length(scalar_covariances_only) > 0) {
-                            c(
-                                setNames(
-                                    fix_damping_pbreg[scalar_covariances_only],
-                                    paste0('damping_fix_pbreg_', scalar_covariances_only)
-                                ),
-                                setNames(
-                                    fix_damping_deming[scalar_covariances_only],
-                                    paste0('damping_fix_deming_', scalar_covariances_only)
-                                )
-                            )
-                        }
-                        , if (!is.null(Damping_dyn) && length(scalar_covariances_only) > 0) {
-                            c(
-                                setNames(
-                                    dyn_damping_pbreg[scalar_covariances_only],
-                                    paste0('damping_dyn_pbreg_', scalar_covariances_only)
-                                ),
-                                setNames(
-                                    dyn_damping_deming[scalar_covariances_only],
-                                    paste0('damping_dyn_deming_', scalar_covariances_only)
-                                )
-                            )
-                        }
-                        ))
-                )				
-
-
-                if (create_graphs) {
-                    if (!dir.exists(path_folder)) {
-                        dir.create(path_folder, recursive = FALSE)
-                    }
-                    # get end of current interval time in UTC
-                    soi_utc <- st_interval[.BY[[1]]]
-                    eoi_utc <- et_interval[.BY[[1]]]
-                    # get date in correct format
-                    date_formatted <- gsub('-', '', dates[day], fixed = TRUE)
-                    # plotting:
-                    # -------------------------------------------------------------------------- 
-                    # -------------------------------------------------------------------------- 
-                    cat("~~~\nplotting timeseries and fluxes\n")
-                    # time series:
-                    # -------------------------------------------------------------------------- 
-                    # plot and save (rotated) data time series with raw-data trends...
-                    # ------------------------------------------------------------------------
-                    ## TODO: -> fix tz!!! -> use UTC but indicate in name!!!
-                    time2 <- format(soi_utc, format = "%H%M")
-                    plotname <- paste("timeseries", date_formatted, time2, sep="-") 
-                    ts_vars <- names(plot_timeseries)[plot_timeseries]
-                    jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), width = 600, 
-                        height = (sum(plot_timeseries)) * 100, quality = 60)
-                        ts_plot <- plot.tseries(
-                            cbind(st = Time, as.data.frame(SD)),
-                            wind, detrended_scalars, ts_vars,
-                            plotting_var_colors, plotting_var_units)
-                        print(ts_plot)
-                    dev.off()
-
-                    # plot and save flux evaluation...
-                    # ------------------------------------------------------------------------
-                    for(i in covariances){
-                        # i <- "w'TDL CH4'"
-                        plotname <- paste("plots", date_formatted, time2, 
-                            covariances_plotnames[i], sep = "-")
-                        # fix ylab
-                        ylab <- sub('(.+)x(.+)', "<\\1'\\2'>", i)
-                        jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), 
-                            width = 1350, height = 900, quality = 60)
-                            par(mfrow=c(2,3))
-                            # ----------------------- Covariance -----------------------
-                            plot_covfunc(Covars[[i]], n_period / .Hz, dyn_lag_max[, i], 
-                                fix_lag[i], ylab = ylab, xlim = c(-50, 50), cx = 1.5, 
-                                cxmt = 1.25, cl = plotting_covar_colors[i])
-                            # ---------------------- Co-Spec/Ogive fix lag -----------------------
-                            plot_cospec_ogive(Ogive_fix[[i]], Cospec_fix[[i]], freq, 
-                                ylab = paste0("ogive (fix lag) of ", ylab), cx = 1.5, 
-                                col = plotting_covar_colors[i], 
-                                model_par = ogive_par_fix[, i]
-                            )
-                            # ---------------------- Co-Spec/Ogive dyn lag -----------------------
-                            plot_cospec_ogive(Ogive_dyn[[i]], Cospec_dyn[[i]], freq, 
-                                ylab = paste0("ogive (dyn lag) of ", ylab), cx = 1.5, 
-                                col = plotting_covar_colors[i], 
-                                model_par = ogive_par_dyn[, i]
-                            )
-                            # ---------------------- empirical damping -----------------------
-                            if (scalar_covariances[i]) {
-                                plot_damping(Damping_fix[[i]], freq, ylab = 
-                                    paste0("ogive (fix lag) of ", i), cx = 1.5, 
-                                col = plotting_covar_colors[i])
-                                plot_damping(Damping_dyn[[i]], freq, ylab = 
-                                    paste0("ogive (dyn lag) of ", i), cx = 1.5, 
-                                col = plotting_covar_colors[i])
-                            }
-                            title(paste0(ylab, " flux ", 
-                                format(soi_utc, format = "(%H:%M:%S"), " - ", 
-                                format(eoi_utc, format = "%H:%M:%S)"), 
-                                if (scalar_covariances[i]) {
-                                    reflab <- sub('(.+)x(.+)', "<\\1'\\2'>", 
-                                        damping_reference[i])
-                                    paste0(" - damping reference flux: ", reflab)
-                                }
-                            ), outer = TRUE, line = -1)
-                        dev.off()	
-                    }
-                } # end plotting
-                # return out
-                out
-            } else {
-                cat("less than ", round(thresh_period * 100),"% of data points in raw data - skipping interval.\n", sep = '')
-                # return NULL
-                NULL
+                # create regex pattern
+                na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'),
+                    collapse = '|')
+                # check alarms and set nh3 NA
+                nh3_vars <- grep('nh3', names(SD), value = TRUE)
+                na0 <- SD[, sum(is.na(get(nh3_vars[1])))]
+                SD[grepl(na_alarm_pattern, ht_alarm_code),
+                    (nh3_vars) := NA_real_]
+                na1 <- SD[, sum(is.na(get(nh3_vars[1])))]
+                # check oss
+                SD[ht_oss < oss_threshold,
+                    (nh3_vars) := NA_real_]
+                cat('done\nBad alarms:', na1 - na0, '\nValues below OSS threshold:', 
+                    SD[, sum(ht_oss < oss_threshold, na.rm = TRUE)], '\n')
             }
-        }, by = bin]
 
-    } # end for loop over days
+            # TODO: check licor ss!
 
-    # rbind list to data.table
-    results <- rbindlist(result_list, fill = TRUE)
+            # get start of interval
+            Int_Start <- start_time[.BY[[1]]]
+            # TODO (maybe for later): include NA where d_t>2*mean, remove entries where d_t < 0.5*mean
 
-	cat("************************************************************\n") 
+            # check NA values in scalars
+            scalars <- input_scalars
+            covariances <- input_covariances
+            covariances_variables <- input_covariances_variables
+            covariances_plotnames <- input_covariances_plotnames
+            scalar_covariances <- input_scalar_covariances
+            flux_variables <- input_flux_variables
+            plot_timeseries <- input_plot_timeseries
+            fix_lag <- input_fix_lag
+            dyn_lag <- input_dyn_lag
+            damping_reference <- input_damping_reference
+            damp_region <- input_damp_region
+            if (SD[, anyNA(.SD), .SDcols = scalars]) {
+                # loop over scalars & check
+                for (s in scalars) {
+                    x <- SD[, unlist(mget(s, ifnotfound = NA))]
+                    if (sum(is.finite(x)) < n_threshold) {
+                        cat('=> ', s, ': number of valid measurements is below',
+                            ' threshold -> exclude from current interval\n', sep = '')
+                        scalars <- scalars[!(scalars %in% s)]
+                        flux_variables <- flux_variables[!(flux_variables %in% s)]
+                        plot_timeseries <- plot_timeseries[!(names(plot_timeseries) %in% s)]
+                        sind <- grep(s, covariances)
+                        if (length(sind)) {
+                            damping_reference <- damping_reference[!(names(damping_reference) %in% covariances[sind])]
+                            damp_region <- damp_region[!(names(damp_region) %in% covariances[sind])]
+                            covariances <- covariances[-sind]
+                            fix_lag <- fix_lag[-sind]
+                            dyn_lag <- dyn_lag[, -sind, drop = FALSE]
+                            covariances_variables <- covariances_variables[-sind]
+                            covariances_plotnames <- covariances_plotnames[-sind]
+                            scalar_covariances <- scalar_covariances[-sind]
+                        }
+                    }
+                }
+            }
+
+            # calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
+            # -------------------------------------------------------------------------- 
+            cat("~~~\ndeterending sonic data...\n")
+            wind <- SD[, {
+                ud <- trend(urot, detrending["u"], rec_Hz)
+                vd <- trend(vrot, detrending["v"], rec_Hz)
+                wd <- trend(wrot, detrending["w"], rec_Hz)
+                Td <- trend(T, detrending["T"], rec_Hz)
+                I(list(
+                    uprot = ud$residuals
+                    , vprot = vd$residuals
+                    , wprot = wd$residuals
+                    , Tdet = Td$residuals
+                    , umrot = ud$fitted
+                    , vmrot = vd$fitted
+                    , wmrot = wd$fitted
+                    , Tmdet = Td$fitted
+                ))
+            }]
+            SD[, c("u", "v", "w", "T") := wind[c("uprot", "vprot", "wprot", "Tdet")]]
+
+            # calculate some turbulence parameters and collect some wind parameters
+            # -------------------------------------------------------------------------- 
+            wind_stats <- wind_statistics(wind, z_canopy, z_ec)
+
+            # switch to list with different lengths
+            # only for scalar fluxes!
+            # -> check na.action for omitted indices
+            detrended_scalars <- NULL
+            scalar_means <- setNames(
+                rep(NA_real_, length(scalars)),
+                scalars
+            )
+            scalar_sd <- setNames(
+                rep(NA_real_, length(scalars)),
+                scalars
+            )
+            if (length(scalars)) {
+                scalar_list <- SD[, I(lapply(.SD, na.omit)), .SDcols = scalars]
+            # detrend scalars
+            # -------------------------------------------------------------------------- 
+                cat("~~~\ndetrending scalars...\n")
+                detrended_scalars <- mapply(trend, y = scalar_list, method = 
+                    detrending[scalars], MoreArgs = list(Hz_ts = rec_Hz), SIMPLIFY = FALSE)
+            # calculate scalar averages and sd:
+            # -------------------------------------------------------------------------- 
+                scalar_means[scalars] <- sapply(scalar_list, mean)
+                scalar_sd[scalars] <- sapply(scalar_list, sd)
+            # assign to SD
+                SD[, (scalars) := lapply(names(detrended_scalars), \(nms) {
+                    if (!is.null(isna <- na.action(scalar_list[[nms]]))) {
+                        out <- rep(NA_real_, .N)
+                        x <- detrended_scalars[[nms]]$residuals
+                        out[-isna] <- x
+                        out
+                    } else {
+                        detrended_scalars[[nms]]$residuals
+                    }
+                    })]
+            # } else {
+                # cat('No scalars available -> skipping interval!\n')
+                # next
+            }
+
+            # start of flux relevant data manipulation
+            # -------------------------------------------------------------------------- 
+            # -------------------------------------------------------------------------- 
+            cat("~~~\nstarting flux evaluation...\n")
+
+            # get fft (keep list format)
+            FFTs <- SD[, I(lapply(.SD, \(x) fft(na.omit(x)) / .N)), .SDcols = flux_variables]
+
+            # ### testing auto-covariances
+            # AutoCovars <- lapply(names(FFTs), \(i) {
+            #     # check scalars
+            #     if (i %in% scalars && !is.null(na_ind <- na.action(FFTs[[i]]))) {
+            #         # fix lengths
+            #         FFTs[[i]] <- FFTs[[i]][-na_ind]
+            #         # get N
+            #         N <- length(FFTs[[i]])
+            #     } else {
+            #         N <- .N
+            #     }
+            #     # get Re
+            #     re <- Re(fft(Conj(FFTs[[i]]) * FFTs[[i]], inverse = TRUE))
+            #     # get missing
+            #     # subset
+            #     if (N %% 2) {
+            #         out <- re[c(((N + 1) / 2 + 1):N, 1:((N + 1) / 2))] * N / (N - 1)
+            #     } else {
+            #         out <- re[c((N / 2 + 1):N, 1:(N / 2))] * N / (N - 1)
+            #     }
+            #     n_missing <- n_period - N
+            #     if (sign(n_missing) >= 0) {
+            #         if (n_missing %% 2) {
+            #             n1 <- rep(NA_real_, (n_missing + 1) / 2)
+            #             n2 <- rep(NA_real_, (n_missing - 1) / 2)
+            #         } else {
+            #             n1 <- n2 <- rep(NA_real_, n_missing / 2)
+            #         }
+            #         c(n1, out, n2)
+            #     } else {
+            #         if (-n_missing %% 2) {
+            #             ind <- ((1 - n_missing) / 2 + 1):(N - (-n_missing - 1) / 2)
+            #         } else {
+            #             ind <- (1 - n_missing / 2):(N + n_missing / 2)
+            #         }
+            #         out[ind]
+            #     }
+            # })
+            # names(AutoCovars) <- paste(flux_variables, flux_variables, sep = 'x')
+
+            # calculate covariances with fix lag time:
+            # -------------------------------------------------------------------------- 
+            cat("\t- covariances\n")
+            Covars <- lapply(covariances_variables, function(i, ffts) {
+                # check scalars
+                if (i[2] %in% scalars && !is.null(na_ind <- na.action(ffts[[i[2]]]))) {
+                    # fix lengths
+                    ffts[[i[1]]] <- ffts[[i[1]]][-na_ind]
+                    # get N
+                    N <- length(ffts[[i[1]]])
+                } else {
+                    N <- .N
+                }
+                # get Re
+                re <- Re(fft(Conj(ffts[[i[2]]]) * ffts[[i[1]]], inverse = TRUE))
+                # get missing
+                # subset
+                if (N %% 2) {
+                    out <- re[c(((N + 1) / 2 + 1):N, 1:((N + 1) / 2))] * N / (N - 1)
+                } else {
+                    out <- re[c((N / 2 + 1):N, 1:(N / 2))] * N / (N - 1)
+                }
+                n_missing <- n_period - N
+                if (sign(n_missing) >= 0) {
+                    if (n_missing %% 2) {
+                        n1 <- rep(NA_real_, (n_missing + 1) / 2)
+                        n2 <- rep(NA_real_, (n_missing - 1) / 2)
+                    } else {
+                        n1 <- n2 <- rep(NA_real_, n_missing / 2)
+                    }
+                    c(n1, out, n2)
+                } else {
+                    if (-n_missing %% 2) {
+                        ind <- ((1 - n_missing) / 2 + 1):(N - (-n_missing - 1) / 2)
+                    } else {
+                        ind <- (1 - n_missing / 2):(N + n_missing / 2)
+                    }
+                    out[ind]
+                }
+            }, ffts = FFTs)
+            names(Covars) <- covariances
+
+            # find maximum in dynamic lag time range:
+            # -------------------------------------------------------------------------- 
+            cat("\t- dyn lag\n")
+            dyn_lag_max <- sapply(covariances, function(i, x, lag) {
+                find_dynlag(x[[i]], lag[, i])
+            }, x = Covars, lag = dyn_lag)
+
+            # covariance function's standard deviation and mean values left and right of fix lag
+            # ------------------------------------------------------------------------
+            # RE_RMSE (Eq. 9 in Langford et al. 2015)
+            # -> ranges lo/hi (-/+180 to -/+150 secs? => define range as argument)
+            # gamma_time_window <- c(2.5, 5)
+            n <- length(Covars[[1]])
+            m <- ifelse(n %% 2, (n + 1) / 2, n / 2 + 1)
+            lo_range <- m - rev(gamma_time_window) * 60 * rec_Hz
+            hi_range <- m + gamma_time_window * 60 * rec_Hz
+            # -> sd_cov_low
+            sd_cov_lo <- sapply(Covars, \(x) sd(x[lo_range]))
+            # -> avg_cov_low
+            avg_cov_lo <- sapply(Covars, \(x) mean(x[lo_range]))
+            # -> sd_cov_hi
+            sd_cov_hi <- sapply(Covars, \(x) sd(x[hi_range]))
+            # -> avg_cov_hi
+            avg_cov_hi <- sapply(Covars, \(x) mean(x[hi_range]))
+            re_rmse <- sqrt(0.5 * (sd_cov_lo ^ 2 + avg_cov_lo ^ 2 +
+                    sd_cov_hi ^ 2 + avg_cov_hi ^ 2))
+            # ## auto-covariances
+            # sd_acov_lo <- sapply(AutoCovars, \(x) sd(x[lo_range]))
+            # # avg_acov_lo <- sapply(AutoCovars, \(x) mean(x[lo_range]))
+            # sd_acov_hi <- sapply(AutoCovars, \(x) sd(x[hi_range]))
+            # # avg_acov_hi <- sapply(AutoCovars, \(x) mean(x[hi_range]))
+            # # re_rmse_acov <- sqrt(0.5 * (sd_acov_lo ^ 2 + avg_acov_lo ^ 2 +
+            # #         sd_acov_hi ^ 2 + avg_acov_hi ^ 2))
+            # re_rmse_acov <- sqrt(0.5 * (sd_acov_lo ^ 2 + sd_acov_hi ^ 2))
+
+            # covariance function values +/- tau.off.sec of fix lag
+            # ------------------------------------------------------------------------
+            # not implemented...
+
+            # cospectra for fixed & dynamic lags
+            # ------------------------------------------------------------------------ 			
+            cat("\t- co-spectra\n")
+            Cospec_fix <- mapply(function(i, lag, ffts) {
+                    # check scalars
+                    N <- .N
+                    if (i[2] %in% scalars) {
+                        if (!is.null(na_ind <- na.action(scalar_list[[i[2]]]))) {
+                            # fix lengths
+                            ffts[[i[1]]] <- ffts[[i[1]]][-na_ind]
+                            # get N
+                            N <- length(ffts[[i[1]]])
+                        }
+                        x <- scalar_list[[i[2]]]
+                    } else {
+                        x <- SD[, get(i[2])]
+                    }
+                    xs <- fft(shift(x, -lag)) / N
+                    re <- Re(Conj(xs) * ffts[[i[1]]])[seq(N / 2) + 1] * N / 
+                        (N - 1) * 2
+                    # get missing
+                    n_missing <- n_period / 2 - length(re)
+                    if (sign(n_missing) >= 0) {
+                        c(re, rep(NA_real_, n_missing))
+                    } else {
+                        re[seq_len(n_period / 2)]
+                    }
+                }, i = covariances_variables, lag = fix_lag, 
+                MoreArgs = list(ffts = FFTs), SIMPLIFY = FALSE)
+            names(Cospec_fix) <- covariances
+            Cospec_dyn <- mapply(function(i, lag, ffts) {
+                    # check scalars
+                    N <- .N
+                    if (i[2] %in% scalars) {
+                        if (!is.null(na_ind <- na.action(scalar_list[[i[2]]]))) {
+                            # fix lengths
+                            ffts[[i[1]]] <- ffts[[i[1]]][-na_ind]
+                            # get N
+                            N <- length(ffts[[i[1]]])
+                        }
+                        x <- scalar_list[[i[2]]]
+                    } else {
+                        x <- SD[, get(i[2])]
+                    }
+                    xs <- fft(shift(x, -lag)) / N
+                    re <- Re(Conj(xs) * ffts[[i[1]]])[seq(N / 2) + 1] * N / 
+                        (N - 1) * 2
+                    # get missing
+                    n_missing <- n_period / 2 - length(re)
+                    if (sign(n_missing) >= 0) {
+                        c(re, rep(NA_real_, n_missing))
+                    } else {
+                        re[seq_len(n_period / 2)]
+                    }
+                }, i = covariances_variables, lag = dyn_lag_max[2, ],
+                MoreArgs = list(ffts = FFTs), SIMPLIFY = FALSE)
+            names(Cospec_dyn) <- covariances
+    
+            # ogives for fixed & dynamic lags 
+            # ------------------------------------------------------------------------ 
+            Ogive_fix <- lapply(Cospec_fix, function(x) {
+                x[is.na(x)] <- 0
+                rev(cumsum(rev(x)))
+            })
+            names(Ogive_fix) <- covariances
+            Ogive_dyn <- lapply(Cospec_dyn, function(x) {
+                x[is.na(x)] <- 0
+                rev(cumsum(rev(x)))
+            })
+            names(Ogive_dyn) <- covariances
+
+
+            # empirical damping estimation, dyn and fix should have best reference (dyn/fix)...
+            # ------------------------------------------------------------------------
+            if (any(scalar_covariances)) {
+                cat("\t- damping\n")
+                Damping_fix <- mapply(damp_hac5, ogive = Ogive_fix[scalar_covariances], 
+                    ogive_ref = Ogive_fix[damping_reference], freq.limits = damp_region,
+                    MoreArgs = list(freq = freq), SIMPLIFY = FALSE)
+                Damping_dyn <- mapply(damp_hac5, ogive = Ogive_dyn[scalar_covariances], 
+                    ogive_ref = Ogive_dyn[damping_reference], freq.limits = damp_region,
+                    MoreArgs = list(freq = freq), SIMPLIFY = FALSE)
+            } else {
+                Damping_dyn <- Damping_fix <- NULL
+            }
+
+            # calculate low frequency contribution
+            i_hi <- which(1 / freq < high_cont_sec)[1]
+            if (length(i_hi) != 1) stop('check argument "high_cont_sec"!')
+            hi_cont_fix <- sapply(Ogive_fix, \(x) {
+                mean(x[i_hi + seq(-cont_pts, cont_pts)])/ x[1]
+            })
+            hi_cont_dyn <- sapply(Ogive_dyn, \(x) {
+                mean(x[i_hi + seq(-cont_pts, cont_pts)])/ x[1]
+            })
+            i_lo <- which(1 / freq <= low_cont_sec)[1]
+            if (length(i_lo) != 1) stop('check argument "low_cont_sec"!')
+            lo_cont_fix <- sapply(Ogive_fix, \(x) {
+                (x[1] - mean(x[i_lo + seq(-cont_pts, cont_pts)])) / x[1]
+            })
+            lo_cont_dyn <- sapply(Ogive_dyn, \(x) {
+                (x[1] - mean(x[i_lo + seq(-cont_pts, cont_pts)])) / x[1]
+            })
+
+            # fit theoretical ogive shape
+            cat('\t- estimate flux quality\n')
+            ogff <- function(pars) {
+                ogive_model(pars['fx'], 3 / 4, pars['mu'], pars['A0'], freq)
+            }
+            fit_og <- function(pars, ogive, ind = NULL) {
+                if (is.null(ind)) {
+                    fit_ogive(pars, ogive, freq, 1, length(ogive))
+                } else {
+                    fit_ogive(pars, ogive, freq, i_lo, i_hi)
+                }
+            }
+
+            # base range
+            i_r <- i_lo:i_hi
+            # set limit for valid mu values
+            mu_lim <- 10
+
+            # quality of ogive 
+            ogive_quality_fix <- sapply(Ogive_fix, \(x) {
+                # ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
+                ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
+                opt <- optim(ini, fit_og, ogive = x, control = list(maxit = 5e3))
+                if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
+                    return(rep(NA_real_, 6))
+                }
+                fog <- ogff(opt$par)
+                d <- (fog - x) / fog[1]
+                d0 <- diff(d)
+                c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
+            })
+            ogive_quality_dyn <- sapply(Ogive_dyn, \(x) {
+                ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
+                opt <- optim(ini, fit_og, ogive = x, control = list(maxit = 5e3))
+                if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
+                    return(rep(NA_real_, 6))
+                }
+                fog <- ogff(opt$par)
+                d <- (fog - x) / fog[1]
+                d0 <- diff(d)
+                c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
+            })
+            # quality of base part of ogive 
+            base_quality_fix <- sapply(Ogive_fix, \(x) {
+                ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
+                opt <- optim(ini, fit_og, ogive = x, ind = i_r, 
+                    control = list(maxit = 5e3))
+                if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
+                    return(NA_real_)
+                }
+                # d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
+                # 1 - mean(d ^ 2) ^ (1 / 3)
+                fog <- ogff(opt$par)
+                d <- (fog - x) / fog[1]
+                d0 <- diff(d)
+                1 - mean(d0 ^ 6) ^ (1 / 6) * 6
+            })
+            base_quality_dyn <- sapply(Ogive_dyn, \(x) {
+                ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
+                opt <- optim(ini, fit_og, ogive = x, ind = i_r, 
+                    control = list(maxit = 5e3))
+                if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
+                    return(NA_real_)
+                }
+                # d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
+                # 1 - mean(d ^ 2) ^ (1 / 3)
+                fog <- ogff(opt$par)
+                d <- (fog - x) / fog[1]
+                d0 <- diff(d)
+                1 - mean(d0 ^ 6) ^ (1 / 6) * 6
+            })
+            
+            # get Albrecht's ogive bias
+            ogive_bias_fix <- sapply(Cospec_fix, \(x) {
+                x[is.na(x)] <- 0
+                ms <- median(sign(x))
+                o <- sum(x)
+                (ms * sum(abs(x)) - o) / o
+            })
+            ogive_bias_dyn <- sapply(Cospec_dyn, \(x) {
+                x[is.na(x)] <- 0
+                ms <- median(sign(x))
+                o <- sum(x)
+                (ms * sum(abs(x)) - o) / o
+            })
+
+            # fix matrix to vector for output
+            rownames(ogive_quality_fix) <- rownames(ogive_quality_dyn) <- 
+                c('q', 'f', 'fx', 'mu', 'A0', 'm')
+            ogive_par_fix <- ogive_quality_fix[3:6, ]
+            ogive_par_dyn <- ogive_quality_dyn[3:6, ]
+            ogive_fitted_fix <- ogive_quality_fix[2, ]
+            ogive_quality_fix <- ogive_quality_fix[1, ]
+            ogive_fitted_dyn <- ogive_quality_dyn[2, ]
+            ogive_quality_dyn <- ogive_quality_dyn[1, ]
+
+            # should ogives be provided with output
+            if (ogives_out) {
+                int_start <- format(Int_Start)
+                e_ogive$Cospec_fix_Out[[int_start]] <- c(
+                    list(freq = freq, model_coef = ogive_par_fix), Cospec_fix)
+                e_ogive$Cospec_dyn_Out[[int_start]] <- c(
+                    list(freq = freq, model_coef = ogive_par_dyn), Cospec_dyn)
+                e_ogive$Ogive_fix_Out[[int_start]] <- c(
+                    list(freq = freq, model_coef = ogive_par_fix), Ogive_fix)
+                e_ogive$Ogive_dyn_Out[[int_start]] <- c(
+                    list(freq = freq, model_coef = ogive_par_dyn), Ogive_dyn)
+                e_ogive$Covars_Out[[int_start]] <- c(
+                    list(Hz = rec_Hz), Covars)
+            }
+
+            ### some output and namings
+            fix_lag_out <- fix_lag
+            dyn_lag_out <- dyn_lag_max["tau", ]
+            flux_fix_lag <- sapply(Ogive_fix, "[", 1)
+            flux_dyn_lag <- sapply(Ogive_dyn, "[", 1)
+            fix_damping_pbreg <- sapply(Damping_fix, "[[", 1)
+            dyn_damping_pbreg <- sapply(Damping_dyn, "[[", 1)
+            fix_damping_deming <- sapply(Damping_fix, "[[", 2)
+            dyn_damping_deming <- sapply(Damping_dyn, "[[", 2)
+            if (!is.null(Damping_fix)) {
+                names(fix_damping_pbreg) <- names(Damping_fix)
+                names(fix_damping_deming) <- names(Damping_fix)
+            }
+            if (!is.null(Damping_dyn)) {
+                names(dyn_damping_pbreg) <- names(Damping_dyn)
+                names(dyn_damping_deming) <- names(Damping_dyn)
+            }
+
+            # write results:
+            # -------------------------------------------------------------------------- 
+            out <- c(
+                list(
+                    st = Int_Start
+                    , et = end_time[.BY[[1]]]
+                    , n_values = .N
+                    #, SubInts =  subint_n
+                )
+                , if (ht_provided) {
+                    list(
+                        ht_temp_amb = mean(ht_temp_amb, na.rm = TRUE)
+                        , ht_press_amb = mean(ht_press_amb, na.rm = TRUE)
+                        , ht_oss = mean(ht_oss, na.rm = TRUE)
+                        , ht_alarm_codes = paste(unique(unlist(strsplit(
+                                        unique(ht_alarm_code[!is.na(ht_alarm_code)])
+                                        , split = ','))), collapse = ',')
+                    )
+                }
+                , if (licor_provided) {
+                    list(
+                        li_temp_amb = mean(li_temp_amb, na.rm = TRUE)
+                        , li_press_amb = mean(li_press_amb, na.rm = TRUE)
+                        , li_co2ss = mean(li_co2ss, na.rm = TRUE)
+                    )
+                }
+                , as.list(c(
+                    wind_stats
+                    # scalar avg & sd
+                    , if (length(input_scalars) > 0) {
+                        as.list(c(
+                            setNames(scalar_means[input_scalars], 
+                                paste0('avg_', input_scalars))
+                            , setNames(scalar_sd[input_scalars], 
+                                paste0('sd_', input_scalars))
+                        ))
+                    }
+                    # fluxes
+                    , setNames(
+                        flux_fix_lag[input_covariances],
+                        paste0('flux_fix_', input_covariances)
+                    )
+                    , setNames(
+                        flux_dyn_lag[input_covariances],
+                        paste0('flux_dyn_', input_covariances)
+                    )
+                    # , sub_cov_means
+                    # , sub_cov_sd
+                    # fix/dyn lag as seconds
+                    , setNames(
+                        fix_lag_out[input_covariances] / rec_Hz, 
+                        paste0('lag_fix_', input_covariances)
+                    )
+                    , setNames(
+                        dyn_lag_out[input_covariances] / rec_Hz, 
+                        paste0('lag_dyn_', input_covariances)
+                    )
+                    , setNames(
+                        re_rmse[input_covariances],
+                        paste0('re_rmse_', input_covariances)
+                    )
+                    , setNames(
+                        hi_cont_fix[input_covariances],
+                        paste0('hi_cont_fix_', input_covariances)
+                    )
+                    , setNames(
+                        hi_cont_dyn[input_covariances],
+                        paste0('hi_cont_dyn_', input_covariances)
+                    )
+                    , setNames(
+                        lo_cont_fix[input_covariances],
+                        paste0('lo_cont_fix_', input_covariances)
+                    )
+                    , setNames(
+                        lo_cont_dyn[input_covariances],
+                        paste0('lo_cont_dyn_', input_covariances)
+                    )
+                    , setNames(
+                        ogive_fitted_fix[input_covariances],
+                        paste0('ogive_fitted_fix_', input_covariances)
+                    )
+                    , setNames(
+                        ogive_fitted_dyn[input_covariances],
+                        paste0('ogive_fitted_dyn_', input_covariances)
+                    )
+                    , setNames(
+                        ogive_quality_fix[input_covariances],
+                        paste0('ogive_quality_fix_', input_covariances)
+                    )
+                    , setNames(
+                        ogive_quality_dyn[input_covariances],
+                        paste0('ogive_quality_dyn_', input_covariances)
+                    )
+                    , setNames(
+                        base_quality_fix[input_covariances],
+                        paste0('base_quality_fix_', input_covariances)
+                    )
+                    , setNames(
+                        base_quality_dyn[input_covariances],
+                        paste0('base_quality_dyn_', input_covariances)
+                    )
+                    , setNames(
+                        ogive_bias_fix[input_covariances],
+                        paste0('ogive_bias_fix_', input_covariances)
+                    )
+                    , setNames(
+                        ogive_bias_dyn[input_covariances],
+                        paste0('ogive_bias_dyn_', input_covariances)
+                    )
+                    , if (!is.null(Damping_fix) && length(scalar_covariances_only) > 0) {
+                        c(
+                            setNames(
+                                fix_damping_pbreg[scalar_covariances_only],
+                                paste0('damping_fix_pbreg_', scalar_covariances_only)
+                            ),
+                            setNames(
+                                fix_damping_deming[scalar_covariances_only],
+                                paste0('damping_fix_deming_', scalar_covariances_only)
+                            )
+                        )
+                    }
+                    , if (!is.null(Damping_dyn) && length(scalar_covariances_only) > 0) {
+                        c(
+                            setNames(
+                                dyn_damping_pbreg[scalar_covariances_only],
+                                paste0('damping_dyn_pbreg_', scalar_covariances_only)
+                            ),
+                            setNames(
+                                dyn_damping_deming[scalar_covariances_only],
+                                paste0('damping_dyn_deming_', scalar_covariances_only)
+                            )
+                        )
+                    }
+                    ))
+            )				
+
+            ##### figures
+            # -----------------------------------------------------------------------
+
+            if (create_graphs) {
+                if (!dir.exists(path_folder)) {
+                    dir.create(path_folder, recursive = FALSE)
+                }
+                # get end of current interval time in UTC
+                soi_utc <- start_time[.BY[[1]]]
+                eoi_utc <- end_time[.BY[[1]]]
+                # get date in correct format
+                date_formatted <- format(soi_utc, '%Y%m%d')
+                # plotting:
+                # -------------------------------------------------------------------------- 
+                # -------------------------------------------------------------------------- 
+                cat("~~~\nplotting timeseries and fluxes\n")
+                # time series:
+                # -------------------------------------------------------------------------- 
+                # plot and save (rotated) data time series with raw-data trends...
+                # ------------------------------------------------------------------------
+                ## TODO: -> fix tz!!! -> use UTC but indicate in name!!!
+                time2 <- format(soi_utc, format = "%H%M")
+                plotname <- paste("timeseries", date_formatted, time2, sep="-") 
+                ts_vars <- names(plot_timeseries)[plot_timeseries]
+                jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), width = 600, 
+                    height = (sum(plot_timeseries)) * 100, quality = 60)
+                    ts_plot <- plot.tseries(
+                        cbind(st = Time, as.data.frame(SD)),
+                        wind, detrended_scalars, ts_vars,
+                        plotting_var_colors, plotting_var_units)
+                    print(ts_plot)
+                dev.off()
+
+                # plot and save flux evaluation...
+                # ------------------------------------------------------------------------
+                for(i in covariances){
+                    # i <- "w'TDL CH4'"
+                    plotname <- paste("plots", date_formatted, time2, 
+                        covariances_plotnames[i], sep = "-")
+                    # fix ylab
+                    ylab <- sub('(.+)x(.+)', "<\\1'\\2'>", i)
+                    jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), 
+                        width = 1350, height = 900, quality = 60)
+                        par(mfrow=c(2,3))
+                        # ----------------------- Covariance -----------------------
+                        plot_covfunc(Covars[[i]], n_period / rec_Hz, dyn_lag_max[, i], 
+                            fix_lag[i], ylab = ylab, xlim = c(-50, 50), cx = 1.5, 
+                            cxmt = 1.25, cl = plotting_covar_colors[i])
+                        # ---------------------- Co-Spec/Ogive fix lag -----------------------
+                        plot_cospec_ogive(Ogive_fix[[i]], Cospec_fix[[i]], freq, 
+                            ylab = paste0("ogive (fix lag) of ", ylab), cx = 1.5, 
+                            col = plotting_covar_colors[i], 
+                            model_par = ogive_par_fix[, i]
+                        )
+                        # ---------------------- Co-Spec/Ogive dyn lag -----------------------
+                        plot_cospec_ogive(Ogive_dyn[[i]], Cospec_dyn[[i]], freq, 
+                            ylab = paste0("ogive (dyn lag) of ", ylab), cx = 1.5, 
+                            col = plotting_covar_colors[i], 
+                            model_par = ogive_par_dyn[, i]
+                        )
+                        # ---------------------- empirical damping -----------------------
+                        if (scalar_covariances[i]) {
+                            plot_damping(Damping_fix[[i]], freq, ylab = 
+                                paste0("ogive (fix lag) of ", i), cx = 1.5, 
+                            col = plotting_covar_colors[i])
+                            plot_damping(Damping_dyn[[i]], freq, ylab = 
+                                paste0("ogive (dyn lag) of ", i), cx = 1.5, 
+                            col = plotting_covar_colors[i])
+                        }
+                        title(paste0(ylab, " flux ", 
+                            format(soi_utc, format = "(%H:%M:%S"), " - ", 
+                            format(eoi_utc, format = "%H:%M:%S)"), 
+                            if (scalar_covariances[i]) {
+                                reflab <- sub('(.+)x(.+)', "<\\1'\\2'>", 
+                                    damping_reference[i])
+                                paste0(" - damping reference flux: ", reflab)
+                            }
+                        ), outer = TRUE, line = -1)
+                    dev.off()	
+                }
+            } # end plotting
+            cat('~~~\nfinished interval.\n~~~~~~~~')
+            # return out
+            out
+        } else {
+            cat("less than ", round(thresh_period * 100),"% of data points in raw data - skipping interval.\n", sep = '')
+            # return NULL
+            NULL
+        }
+    }, by = bin]
+
+	cat("\n************************************************************\n") 
 	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
         "time elapsed: ", difftime(Sys.time(), script_start, unit = "mins"),
         "minutes\n")
@@ -2365,5 +2515,4 @@ cospec_model <- function(fx, m, mu, A0, f = freq) {
 ogive_model <- function(fx, m, mu, A0, f = freq) {
     rev(cumsum(rev(cospec_model(fx, m, mu, A0, f))))
 }
-
 

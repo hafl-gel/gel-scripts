@@ -257,28 +257,23 @@ planar_fit <- function(u,v,w,FUN=MASS::rlm,method=c("Wilczak2001","vanDik2004"),
 		b1 <- b["b1"]
 		b2 <- b["b2"]		
 	}
-
 	# equation 42, p3j:
 	p31 <- -b1/sqrt(b1^2 + b2^2 + 1)
 	p32 <- -b2/sqrt(b1^2 + b2^2 + 1)
 	p33 <- 1/sqrt(b1^2 + b2^2 + 1)
-
 	# equation 44, angles:
 	# tan_b <- -p32/p33
 	sin_b <- -p32/sqrt(p32^2 + p33^2)
 	cos_b <- p33/sqrt(p32^2 + p33^2)
 	sin_a <- p31
 	cos_a <- sqrt(p32^2 + p33^2)
-
 	# equation 2, D + C:
 	Cmat <- cbind(c(1,0,0),c(0,cos_b,sin_b),c(0,-sin_b,cos_b))
 	Dmat <- cbind(c(cos_a,0,-sin_a),c(0,1,0),c(sin_a,0,cos_a))
-
 	# equation 36, P = t(D)%*%t(C):
 	Pmat <- t(Dmat)%*%t(Cmat)
 	colnames(Pmat) <- c("u","v","w")
 	rownames(Pmat) <- c("up","vp","wp")
-
 	list(Pmat=Pmat,cw=cw,mod=mod,alpha=asin(sin_a)/pi*180,beta=asin(sin_b)/pi*180)
 }
 

@@ -1,70 +1,7 @@
 
-## libraries etc. ----------------------------------------
-
 library(data.table)
 library(ibts)
 library(Rcpp)
-
-## read raw data ----------------------------------------
-
-# read old windmaster ascii data
-readWindMaster_ascii <- function(FilePath,skip=","){
-	### get Date
-	bn <- basename(FilePath)
-	Date <- gsub(".*_([0-9]{6})_.*","\\1",bn)
-	### read File
-	suppressWarnings(out <- try(fread(FilePath,sep=",",fill=TRUE,blank.lines.skip = TRUE),silent=TRUE))
-	if(inherits(out,"try-error")){
-		cat("\nRaw data file is corrupt. Trying to read it anyway.\n")
-		msg <- conditionMessage(attr(out,"condition"))
-		lin <- as.numeric(gsub(".*line ([0-9]*) contains.*","\\1",msg))
-		out1 <- fread(FilePath,sep=",",fill=TRUE,nrows=lin-1)
-		out2 <- fread(FilePath,sep=",",fill=TRUE,skip=lin-1)
-		suppressWarnings(out2[,V2 := as.character(V2)])
-		suppressWarnings(out2[,V3 := as.numeric(V3)])
-		suppressWarnings(out2[,V4 := as.numeric(V4)])
-		suppressWarnings(out2[,V5 := as.numeric(V5)])
-		suppressWarnings(out2[,V6 := as.numeric(V6)])
-		suppressWarnings(out2[,V7 := as.numeric(V7)])
-		out2 <- na.omit(out2,cols=2:7)
-		out2 <- out2[!(V2 %chin% ""),1:7]
-		out <- rbind(out1,out2)
-	}
- 	out[,V1 := NULL]
- 	out <- na.omit(out)
-	### set times
-	out[,st :=fast_strptime(paste0(Date,V2),lt=FALSE,format="%y%m%d%H:%M:%S",tz="Etc/GMT-1")+V3][,c("V2","V3"):=NULL]
-	### check delta-t
-	out[,dt := c(round(as.numeric(diff(st))*1000),100)]
-	# browser()
-	out[min(which(dt < -10000),.N):.N,":="(
-		st = st[1]
-		,dt = 100
-		)]
-	out <- out[dt>50]
- 	out[dt > 150, dt := 100]
-	### set Output names and order
-	setnames(out,c("u", "v", "w", "T", "st","delta-t"))
-	setcolorder(out,c("st","delta-t","u","v","w","T"))
-	### remove 999.99 entries
-	out <- out[!(u%in%999.99|v%in%999.99|w%in%999.99|T%in%999.99),]
-	### change units from °C to K
-	out[,T := T + 273.15]
-	as.data.frame(out)
-}
-
-# read merged sonic & ht8700 data (legacy?)
-read_ht_merged <- function(FilePath) {
-    out <- fread(file = FilePath, showProgress = FALSE)
-	### check delta-t
-	out[,dt := c(round(as.numeric(diff(Time))*1000),100)]
-    dt_med <- out[, median(dt)]
- 	out[dt > dt_med * 1.5, dt := dt_med]
-    as.data.frame(out[dt > dt_med / 2, 
-        .(st = with_tz(Time, 'Etc/GMT-1'), dt, u, v, w, T, 
-            nh3_ugm3, nh3_ppb, temp_amb, press_amb, oss)
-        ])
-}
 
 # check (and optionally replace) 'hard' data limits
 check_limits <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){ 
@@ -2457,8 +2394,7 @@ process_ec_fluxes <- function(
         results <- as.ibts(results)
     }
 
-	# #################################### END VERSION HISTORY #################################### #
-
+    # output incl. ogives
 	if (ogives_out) {
 		structure(
             results, 

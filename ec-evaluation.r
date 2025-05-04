@@ -1,99 +1,12 @@
-## 13.04.2018 - Christoph - 
-##     Funktion 'readWindMaster_ascii' abgeändert. Korrupte Files werden führen nun nicht mehr zu einem Fehler.
-##     Funktion 'evalReddy': Argument 'create_graphs' hinzugefügt (FALSE -> kein plotten).
-##                           ca. L814: zu kurze Messfiles werden abgefangen und führen nicht mehr zu einem Fehler.
-# *************************************************************************************
-## 16.01.2018 - Marcel - Funktion zur Berechnung der Pfadlänge GF hinzugefügt
-# *************************************************************************************
 
-# REddy.version <- "v20220218"
+## libraries etc. ----------------------------------------
 library(data.table)
 library(ibts)
 library(Rcpp)
 
-# library(latticeExtra)
-# library(gridExtra)
-# library(grid)
+## read raw data ----------------------------------------
 
-# *************************************************************************************
-# new formula database
-# readWindMaster_ascii
-# readART2012_binary
-# readART2012_ascii
-# readART2012_rds
-# convertARTbinary_2012
-# "%w/o%"
-# H.flags
-# trend
-# rotate_detrend
-
-# ************************************
-# Reading raw data
-# ************************************
-
-# readART2012_binary
-# readART2012_ascii
-# readLicor_ascii (Jesper's Licor EC measurements)
-
-
-# FilePath <- "~/Y-Drive/Jesper/Foulum_MiniDOAS/EC_raw/2019-08-15T200000_AIU-1273.ghg"
-# FilePath <- "~/Y-Drive/Jesper/Foulum_MiniDOAS/EC_raw/2019-08-15T200000_AIU-1273.data"
-read4hLicor <- function(FilePath){
-	filename <- gsub("ghg$","data",basename(FilePath))
-	con <- unz(FilePath, filename)
-	read.table(con, skip = 7, header = TRUE, sep = "\t", check.names = FALSE)
-}
-
-# Folder <- "~/Y-Drive/Jesper/Foulum_MiniDOAS/EC_raw"
-convert2dailyLicor <- function(Folder){
-	ghg <- dir(Folder, pattern = ".ghg")
-	dates <- gsub("([0-9]{4}[-][0-9]{2}[-][0-9]{2})T.*","\\1",ghg)
-	times <- gsub("([0-9]{4}[-][0-9]{2}[-][0-9]{2})T([0-9]{6}).*","\\2",ghg)
-	ending <- gsub("([0-9]{4}[-][0-9]{2}[-][0-9]{2})T([0-9]{6})(.*)[.]ghg","\\3",ghg)
-	uend <- unique(ending)
-	udates <- unique(dates)
-	for(u in uend){
-		for(d in udates){
-			cat("Gathering data for",d,"\n")
-			ghgList <- lapply(file.path(Folder,ghg[dates == d][order(times[dates == d])]), read4hLicor)
-			cat("Writing daily file.\n")
-			fwrite(rbindlist(ghgList), file = file.path(Folder,paste0(d,u,".txt")))
-		}
-	}
-	invisible(NULL)
-}
-# convert2dai1lyLicor(Folder)
-
-# FilePath <- "~/Y-Drive/Jesper/Foulum_MiniDOAS/EC_raw/2019-08-15_AIU-1273.txt"
-readLicor_ascii <- function(FilePath){
-	Data <- fread(FilePath)
-	Data[, st := fast_strptime(paste(Date[1],gsub("[:]([0-9]{3})$",".\\1",
-		Time[1])),"%Y-%m-%d %H:%M:%OS", lt = FALSE) - Seconds[1] - Nanoseconds[1]*1E-9 + Seconds + Nanoseconds*1E-9]
-	### check delta-t
-	Data[,dt := c(round(as.numeric(diff(st))*1000),100)]
-	Data <- Data[dt>50]
- 	Data[dt > 150, dt := 100]
-	### set Output names and order
-	setnames(Data,
-		c("Aux 1 - U (m/s)","Aux 2 - V (m/s)","Aux 3 - W (m/s)","Aux 4 - Ts (K)","dt"), 
-		c("u_analog", "v_analog", "w_analog", "T_analog","delta-t"))
-	# Conversion from aux (analog) to m/s:
-	# u = u_analog * 24 - 60;
-	# v = v_analog * 24 - 60;
-	# w = w_analog * 2 - 5;
-	# T = T_analog * 20 - 40;
-	Data[,":="(
-		u = u_analog * 24 - 60,
-		v = v_analog * 24 - 60,
-		w = w_analog * 2 - 5,
-		T = T_analog * 20 - 40 + 273.15
-		)]
-	nms <- names(Data)
-	setcolorder(Data,c("st","delta-t","u","v","w","T",nms %w/o% c("st","delta-t","u","v","w","T")))
-
-	as.data.frame(Data)
-}
-
+# read old windmaster ascii data
 readWindMaster_ascii <- function(FilePath,skip=","){
 	### get Date
 	bn <- basename(FilePath)
@@ -139,6 +52,7 @@ readWindMaster_ascii <- function(FilePath,skip=","){
 	as.data.frame(out)
 }
 
+# read merged sonic & ht8700 data (legacy?)
 read_ht_merged <- function(FilePath) {
     out <- fread(file = FilePath, showProgress = FALSE)
 	### check delta-t
@@ -151,108 +65,6 @@ read_ht_merged <- function(FilePath) {
         ])
 }
 
-
-readART2012_rds <- function(FilePath){
-	Data <- readRDS(FilePath)
-	Start <- parse_date_time2(paste(Data[1,1:2],collapse=" "),"%d.%m.%Y %H:%M:%S",tz="Etc/GMT-1")
-	cn <- as.character(Data[2,])
-	Data <- data.frame(lapply(Data[-(1:2),],as.double))
-	names(Data) <- cn
-	# delta-t kommt von LabVIEW -> Buffer Problem!
-	# csum <- cumsum(Data[,1])/1000
-	out <- cbind(
-		st=Start + seq.int(0,(nrow(Data) - 1)/10,0.1)
-		,Data
-		)
-	out
-}
-
-convertARTbinary_2012 <- function(Pfad,FilePattern="PSX%y%m%d_0.dat",asRDS=TRUE,asCSV=FALSE){	
-
-	if(file.info(Pfad)$isdir){
-		Files <- choose.files(default=dir(Pfad,full.names=TRUE)[1])
-	} else {
-		Files <- Pfad
-	}
-
-	for(File in Files){
-		### Read Header:
-		header.length <- read.table(File, header=FALSE, sep=";", stringsAsFactors=FALSE, nrows=1, flush=TRUE) # read only the first row to extract the header length (recorded in the first row as ascii)
-		header.compl <- read.table(File, header=FALSE, sep=";", stringsAsFactors=FALSE, row.names=1,       # read entire header, except 1st line
-				skip=1, nrows=as.numeric(header.length[2])-1, flush=TRUE, fill=TRUE)
-
-		running.bytes <- as.numeric(header.compl[3,])
-	  
-		channels <- length(running.bytes)                                                              # number of data channels
-		total.bytes <- sum(running.bytes)
-		signed <- as.numeric(header.compl[5,]) == 1
-
-		##### read data
-		con.binary <- file(File,open="rb")
-		on.exit(close(con.binary))
-		Nirvana <- readBin(con.binary,"raw",n=as.numeric(header.length[1]),size=1)
-		rm(Nirvana)
-		File_Seconds <- as.numeric(fast_strptime(paste(header.compl[1,3], header.compl[1,4]),format="%d.%m.%Y %H:%M:%S", tz="UTC",lt=FALSE) - fast_strptime(paste(header.compl[1,1], header.compl[1,2]),format="%d.%m.%Y %H:%M:%S", tz="UTC",lt=FALSE),units="secs")
-		if(is.na(File_Seconds)) File_Seconds <- 24*3600
-		max.datapoints.estimate <- 11*File_Seconds
-		output <- matrix(nrow=max.datapoints.estimate, ncol=channels)
-		KeepOnReading <- TRUE
-		starts <- cumsum(c(1,running.bytes[-length(running.bytes)]))
-		ends <- cumsum(running.bytes)
-		max.running.bytes <- max(running.bytes)
-		running.factor <- 2^(((max.running.bytes-1):0)*8)
-		j <- 0
-		cat("Reading binary data...\n")
-		pb <- tcltk::tkProgressBar("Reading binary data...","progress",0,max.datapoints.estimate,0)
-		on.exit(close(pb),add=TRUE)
-		while(KeepOnReading){
-			dat.raw <- readBin(con.binary, "raw", n=total.bytes)
-			if(length(dat.raw)==0){
-				KeepOnReading <- FALSE
-			} else {
-				j <- j + 1
-				if(j==max.datapoints.estimate){
-					cat("data file has more data than estimated. ")
-					cat("extending output matrix...\n")
-					close(pb)
-					pb <- tcltk::tkProgressBar("Reading binary data...","progress",max.datapoints.estimate,max.datapoints.estimate + File_Seconds,max.datapoints.estimate)
-					max.datapoints.estimate <- max.datapoints.estimate + File_Seconds
-					output <- rbind(output,matrix(nrow=File_Seconds, ncol=channels))
-				}
-				# cat("\r",j)
-				tcltk::setTkProgressBar(pb,j)
-				for (i in 1:channels) {                                                                    # read the number of bytes for one complete "row" of the dataset                                 
-					if (signed[i] & as.integer(dat.raw)[starts[i]] >= 128) {# consider sign-byte (readBin() itself can only consider signed bytes in 4-byte or 2-byte system...)
-						output[j,i] <- -sum(running.factor[max.running.bytes + 1 - (running.bytes[i]:1)] * as.integer(!dat.raw[starts[i]:ends[i]])) + 1														
-					} else {
-						output[j,i] <- sum(running.factor[max.running.bytes + 1 - (running.bytes[i]:1)] * as.integer(dat.raw[starts[i]:ends[i]]))
-					}
-				}
-			}
-		}
-		close(con.binary)
-		close(pb)
-		on.exit()
-		cat("done.\n")
-		output <- output[1:j,]
-
-		output <- sweep(output,2,as.numeric(header.compl[4,]),"/")
-		colnames(output) <- names(header.compl)
-		mode(output) <- "character"
-		out <- rbind(header.compl[1:2,],output)
-		if(asCSV)write.table(out,file=sub(".dat$",".csv",File),sep=";",row.names=FALSE,col.names=FALSE)
-		if(asRDS)saveRDS(out,file=sub(".dat$",".rds",File))
-	}
-	invisible(NULL)
-}
-
-
-# misc
-"%w/o%" <- function(x,y){
-	x[!(x %in% y)]
-}
-
-
 # hard flag function
 H.flags <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){ 
 	# *****************************************************************************
@@ -261,25 +73,18 @@ H.flags <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){
 	# ********************* author: Raphael Felber, 16.08.2012 ********************
 	# ********************* adpted: Raphael Felber, 25.02.2014 ********************
 	# *****************************************************************************
-
 	nms <- names(input)
 	missing <- !(nms %in% colnames(limits))
-
 	if(length(nms[missing]) > 0) stop(paste0("physical limits missing for: ", paste(nms[missing], collapse=", ")), call. = TRUE, domain = NULL)
 	limits <- limits[,nms]
-	
 	### replace values outside of limits by NAs
 	dat <- mapply(function(x,lo,hi){
 		x[x < lo | x > hi] <- NA
 		x
 	},x=input,lo=limits["lower",],hi=limits["top",],SIMPLIFY = FALSE)
-
 	hflgs <- unlist(lapply(dat,anyNA))
 	if(any(hflgs))cat("Hard Flag: flagged values in columns ",paste(names(hflgs)[hflgs],sep=", "),"\n")
-	
 	if(pmatch(hflg.met, "replace", nomatch = 0) && any(hflgs)){
-
-		# cat("Replacing NA values by window mean...\n")
 		cat("Replacing NA values by window median...\n")
 		# since we're only intrested in specific time windows, find first NAs:
 		isna <- lapply(dat[hflgs],function(x)which(is.na(x)))
@@ -287,10 +92,8 @@ H.flags <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){
 		l <- length(dat[hflgs][[1]])
 		replAll <- (l - lengths(isna)) < 2
 		if(any(replAll)) dat[hflgs][replAll] <- rep(-99999,l)
-		
 		# replace wind by seconds
 		wind <- parse_time_diff(wind)
-
 		### create matrix with running means of size wind (default = 500)
 		# original code
 		# run.m <- lapply(dat_r,function(x)rollapply(x, wind, mean, by.column=TRUE, na.rm = TRUE, fill="extend"))
@@ -309,11 +112,10 @@ H.flags <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){
 		}	
 		cat("number of replaced values\n*~~~~*\n", names(dat[hflgs]),"\n", lengths(isna),"\n*~~~~*\n")
 	}
-							
 	dat
-	
 }
 
+# C++ helper function used in hard limits function
 sourceCpp(code = '
 #include <Rcpp.h>
 using namespace Rcpp;
@@ -358,7 +160,8 @@ Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2)
 }
 ')
 
-### neue Filter Funktionen:
+# filter functions for higph-pass filtering time series
+# (copied from minidoas scripts)
 filter_list <- list(
     # Blackman-Harris:
     "BmHarris" = function(n, ...){
@@ -415,7 +218,7 @@ filter_list <- list(
     }
 )
 
-
+# detrending time series
 trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360"), Hz_ts = 10) {
 	n <- length(y)
 	method <- method[1]
@@ -497,7 +300,7 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
 	)
 }
 
-
+# rotate and detrend sonic data
 rotate_detrend <- function(u, v, w, T, phi = NULL, 
     method = c(u = "blockAVG", v = "blockAVG", w = "blockAVG", T = "linear"), 
     c.system = "Windmaster", Hz_ts = 10) {
@@ -533,27 +336,7 @@ rotate_detrend <- function(u, v, w, T, phi = NULL,
 	return(out)
 }
 
-cov_fun <- function(x1,x2){
-	n <- length(x1)
-	x1 <- fft(x1)/n
-	x2 <- fft(x2)/n
-	if(n%%2){
-		# n ungerade:
-		Re(fft(Conj(x2) * x1, inverse=TRUE))[c(((n+1)/2+1):n,1:((n+1)/2))]*n/(n-1)
-	} else {
-		# n gerade:
-		Re(fft(Conj(x2) * x1, inverse=TRUE))[c((n/2+1):n,1:(n/2))]*n/(n-1)
-	}
-}
-
-cospec_fun <- function(x1,x2,lag=0){
-	n <- length(x1)
-	x1 <- fft(x1)/n
-	x2 <- fft(shift(x2,-lag))/n
-	Re(Conj(x2) * x1)[seq(n/2)+1]*n/(n-1)*2
-}
-
-
+# replace me!
 shift <- function(x, lag){
 	if (lag != 0) {
 		if (lag > 0) {
@@ -569,6 +352,7 @@ shift <- function(x, lag){
 	x
 }
 
+# find the dynamic lag time (search for max in cov fun)
 find_dynlag <- function(x,dyn){
 	n <- length(x)
 	if(n%%2){
@@ -585,6 +369,7 @@ find_dynlag <- function(x,dyn){
 	c(index = maxis, tau = maxis - m)
 }
 
+# reduce cospecta "resolution" for plotting
 reduce_cospec <- function(cospec,freq,length.out=100){
 	log_freq <- log(freq)
 	log_cuts <- seq(min(log_freq),max(log_freq),length.out=length.out+1)
@@ -596,13 +381,14 @@ reduce_cospec <- function(cospec,freq,length.out=100){
     )
 }
 
+# estimate high-frequency damping by fitting a good-quality
+# ogive to a pre-defined frequency range
 damp_hac5 <- function(ogive, freq, freq.limits, ogive_ref){
 	require(deming)
 	# select undamped frequqency region:
 	undamped_ind <- freq < (1/freq.limits[1]) & freq > (1/freq.limits[2])
 	undamped_ogv <- ogive[undamped_ind]
 	undamped_ogvref <- ogive_ref[undamped_ind]
-
 	if(sign(sum(undamped_ogvref))!=sign(sum(undamped_ogv))){
 		undamped_ogvref <- -undamped_ogvref
 		ogive_ref <- -ogive_ref
@@ -616,7 +402,6 @@ damp_hac5 <- function(ogive, freq, freq.limits, ogive_ref){
         cfs <- coef(mod)
     }
 	pred_ogv_deming <- cfs[2]*ogive_ref + cfs[1]
-
 	# robust linear regression + prediction:
 	mod2 <- try(deming::pbreg(undamped_ogv ~ undamped_ogvref,method=3,eps=min(abs(undamped_ogv))*1E-8), silent = TRUE)
     if (inherits(mod2, 'try-error')) {
@@ -629,17 +414,7 @@ damp_hac5 <- function(ogive, freq, freq.limits, ogive_ref){
 	list(dampf_pbreg=ogive[1]/(ogive[1] - cfs2[1]),dampf_deming=ogive[1]/(ogive[1] - cfs[1]),freq.limits=freq.limits,ogive=ogive,ogive_ref_pbreg=pred_ogv_pbreg,ogive_ref_deming=pred_ogv_deming)	
 }
 
-# -cfs2 = og1/dp - og1 = (1/dp - 1)*og1
-
-
-split_index <- function(index_length,n_subint){
-	nm <- index_length/n_subint
-	fn <- floor(nm)
-	res <- index_length - n_subint*fn 
-	len <- rep(fn,n_subint) + c(rep(1,res),rep(0,n_subint-res))
-	mapply(function(x,y)seq.int(x)+y,x=len,y=cumsum(c(0,len[-length(len)])),SIMPLIFY=FALSE)
-}
-
+# calculate wind statistics and MOST parameters
 wind_statistics <- function(wind,z_canopy,z_sonic){
 	Cov_sonic <- cov(list2DF(wind[1:4]))
 	Var_sonic <- diag(Cov_sonic)
@@ -666,7 +441,7 @@ wind_statistics <- function(wind,z_canopy,z_sonic){
     )
 }
 
-
+# calculate average wind speed from MOST profile
 calcU <- function (ustar, Zo, L, z, kv = 0.4){
     zL <- z/L
     ZoL <- Zo/L
@@ -683,6 +458,7 @@ calcU <- function (ustar, Zo, L, z, kv = 0.4){
     ustar/kv * (log(z/Zo) + psiMz - psiMZo)
 }
 
+# plot time series including filtered trend
 plot.tseries <- function(dat,wind,scal,selection,color,units){
 	msg <- paste(c(format(dat[1,1],"%d.%m.%Y")," - time series"),collapse="")
 	tsbeginning <- dat[1,1]
@@ -763,12 +539,12 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
 	)  	
 }
 
+# plot covariance function
 plot_covfunc <- function(cov_func,avg_t,dynLag,fixLag, ylab=NULL, xlim = NULL, cx=1.5, cxmt=1.25, cl="black"){
 	midP <- dynLag[1] - dynLag[2]
 	n <- length(cov_func)
 	fix_cov <- cov_func[midP+fixLag]
 	dyn_cov <- cov_func[dynLag[1]]
-
 	Hz <- n/avg_t
 	if(is.null(xlim)){
 		xlim <- c(-avg_t/2,avg_t/2)
@@ -793,6 +569,7 @@ plot_covfunc <- function(cov_func,avg_t,dynLag,fixLag, ylab=NULL, xlim = NULL, c
 	}
 }
 
+# plot cospectra and ogives
 plot_cospec_ogive <- function(ogive, cospec, freq, ylab = NULL, xlim = NULL, cx = 1.5, 
     col = "lightblue", nred = floor(sqrt(sqrt(length(ogive))) * 1.5), model_par = NULL) {
 	# reduced cospec 1:
@@ -864,6 +641,7 @@ col2hex <- function(name, alpha) {
     }
 }
 
+# plot damping from fitted ogives
 plot_damping <- function(ogive_damp,freq,ylab=NULL,xlim=NULL,ylim=NULL,cx=1.5,cx.leg=1.5,col="lightblue",main=NULL){
 	ogive <- ogive_damp$ogive
 	ogive_ref_pbreg <- ogive_damp$ogive_ref_pbreg
@@ -871,13 +649,11 @@ plot_damping <- function(ogive_damp,freq,ylab=NULL,xlim=NULL,ylim=NULL,cx=1.5,cx
 	dampf_pbreg <- ogive_damp$dampf_pbreg
 	dampf_deming <- ogive_damp$dampf_deming
 	freq.limits <- ogive_damp$freq.limits
-
 	if(is.null(xlim))xlim <- rev(range(freq))
 	if(is.null(ylim))ylim <- c(min(0,ogive,ogive_ref_pbreg,ogive_ref_deming),max(0,max(ogive,ogive_ref_pbreg,ogive_ref_deming)))
 	pxlim <- pretty(log10(xlim),n=ceiling(abs(diff(log10(xlim)))))
 	pxlims <- rep(pxlim,each=9) - 1 + log10(seq(9, 1))
 	pylim <- pretty(ylim)
-
 	plot(1,xlim=xlim,ylim=ylim,main=main, cex.axis=cx, cex.lab=cx,type="n",log="x",xaxt="n",xlab="frequency [Hz]",ylab=ylab,panel.first=abline(h=0,col=col,lty=2))
 	abline(h=0,lty=2,col="darkgrey")
 	axis(1,at=10^pxlims,labels=FALSE,tck=-0.01, cex.axis=cx, cex.lab=cx)
@@ -2244,53 +2020,6 @@ process_ec_fluxes <- function(
                         list(Hz = .Hz), Covars)
                 }
 
-                ##### ~~~> sub-intervals switched off
-                # if (FALSE) {
-                #     # sub-int: sub-interval calculations (switch do data.frame since code already exists (I'm lazy))
-                #     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                #     cat("~~~\nsub-intervals (subint_n = ", subint_n, ")\n", sep = '')
-                #     sub_indices <- split_index(.N, subint_n)
-                #     sub_Data <- lapply(sub_indices, function(i, x) x[i, ], x = as.data.frame(SD))
-
-                #     # sub-int: calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
-                #     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                #     sub_wind <- lapply(sub_Data, function(x) 
-                #         rotate_detrend(x[, "u"], x[, "v"], x[, "w"], x[, "T"], 
-                #             method = subint_detrending[c("u", "v", "w", "T")], Hz_ts = .Hz))
-                #     for(sub in seq_along(sub_wind)){
-                #         sub_Data[[sub]][,c("u","v","w","T")] <- sub_wind[[sub]][c("uprot","vprot","wprot","Tdet")]
-                #     }
-
-                #     # sub-int: detrend scalars
-                #     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                #     if (length(scalars)) {
-                #         sub_detrended_scalars <- lapply(sub_Data, 
-                #             function(x) mapply(trend, y = x[, scalars, drop = FALSE], 
-                #                 method = subint_detrending[scalars], 
-                #                 MoreArgs = list(Hz_ts = .Hz), SIMPLIFY = FALSE))
-                #         for (sub in seq_along(sub_wind)) {
-                #             sub_Data[[sub]][, scalars] <- lapply(sub_detrended_scalars[[sub]], "[[", "residuals")
-                #         }
-                #     }
-
-                #     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                    
-                #     # extract covariances etc.:
-                #     # ------------------------------------------------------------------------ 
-                #     # sub-int: calculate covariances of sub-intervals
-                #     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-                #     sub_covs <- sapply(sub_wind, function(x) cov(list2DF(x[1:4]))[
-                #         cbind(
-                #             c("uprot", "vprot", "wprot", "Tdet", "uprot", "uprot", "uprot", "vprot", "vprot", "wprot"), 
-                #             c("uprot", "vprot", "wprot", "Tdet", "vprot", "wprot", "Tdet", "wprot", "Tdet", "Tdet")
-                #             )]
-                #     )
-                #     sub_cov_means <- apply(sub_covs, 1, mean)
-                #     sub_cov_sd <- apply(sub_covs, 1, sd)
-                #     names(sub_cov_means) <- paste0("mean(sub.int.", c("<u'u'>", "<v'v'>", "<w'w'>", "<T'T'>", "<u'v'>", "<u'w'>", "<u'T'>", "<v'w'>", "<v'T'>", "<w'T'>"), ")")
-                #     names(sub_cov_sd) <- paste0("sd(sub.int.", c("<u'u'>", "<v'v'>", "<w'w'>", "<T'T'>", "<u'v'>", "<u'w'>", "<u'T'>", "<v'w'>", "<v'T'>", "<w'T'>"), ")")
-                # }
-
                 ### some output and namings
                 fix_lag_out <- fix_lag
                 dyn_lag_out <- dyn_lag_max["tau", ]
@@ -2617,11 +2346,3 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 }
 
 
-
-################################ Funktionen von Marcel ####################################################
-
-################## Funktion zur Berechnung der Pfadlängen ##############################################
-Path.Length.SR <- function(Sensor,Reflektor){
-	pathLength <- sqrt((Sensor[1]-Reflektor[1])^2+(Sensor[2]-Reflektor[2])^2) 
-	return(pathLength)
-}

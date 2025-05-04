@@ -948,6 +948,9 @@ process_ec_fluxes <- function(
             wxh2o_mmolm3 = 1.5, wxco2_mmolm3 = 1.5)
         # re_rmse window
         , gamma_time_window = c(2.5, 5)
+        # damping_reference: either a specific covariance as 'wxT' or best quality ogives
+        #   such as either 'base_quality' (for best base_quality_fix/_dyn)
+        #   or 'ogive_quality' (for best ogive_quality_fix/_dyn)
 		, damping_reference = c(wxnh3_ppb = 'wxT', wxnh3_ugm3 = 'wxT', 
             wxh2o_mmolm3 = 'wxT', wxco2_mmolm3 = 'wxT')
         # lower & upper bounds of fitting ogives (in seconds)
@@ -1966,20 +1969,6 @@ process_ec_fluxes <- function(
             names(Ogive_dyn) <- covariances
 
 
-            # empirical damping estimation, dyn and fix should have best reference (dyn/fix)...
-            # ------------------------------------------------------------------------
-            if (any(scalar_covariances)) {
-                cat("\t- damping\n")
-                Damping_fix <- mapply(damp_hac5, ogive = Ogive_fix[scalar_covariances], 
-                    ogive_ref = Ogive_fix[damping_reference], freq.limits = damp_region,
-                    MoreArgs = list(freq = freq), SIMPLIFY = FALSE)
-                Damping_dyn <- mapply(damp_hac5, ogive = Ogive_dyn[scalar_covariances], 
-                    ogive_ref = Ogive_dyn[damping_reference], freq.limits = damp_region,
-                    MoreArgs = list(freq = freq), SIMPLIFY = FALSE)
-            } else {
-                Damping_dyn <- Damping_fix <- NULL
-            }
-
             # calculate low frequency contribution
             i_hi <- which(1 / freq < high_cont_sec)[1]
             if (length(i_hi) != 1) stop('check argument "high_cont_sec"!')
@@ -2108,6 +2097,36 @@ process_ec_fluxes <- function(
                 e_ogive$Covars_Out[[int_start]] <- c(
                     list(Hz = rec_Hz), Covars)
             }
+
+            # empirical damping estimation, dyn and fix should have best reference (dyn/fix)...
+            # ------------------------------------------------------------------------
+            if (any(scalar_covariances)) {
+                cat("\t- damping\n")
+                damping_reference_fix <- damping_reference
+                damping_reference_dyn <- damping_reference
+                # check qualities
+                if (any(bq <- grepl('base_quality', damping_reference))) {
+                    best_base_fix <- names(base_quality_fix)[which.max(base_quality_fix)]
+                    damping_reference_fix[bq] <- best_base_fix
+                    best_base_dyn <- names(base_quality_dyn)[which.max(base_quality_dyn)]
+                    damping_reference_dyn[bq] <- best_base_dyn
+                }
+                if (any(oq <- grepl('ogive_quality', damping_reference))) {
+                    best_ogive_fix <- names(ogive_quality_fix)[which.max(ogive_quality_fix)]
+                    damping_reference_fix[oq] <- best_ogive_fix
+                    best_ogive_dyn <- names(ogive_quality_dyn)[which.max(ogive_quality_dyn)]
+                    damping_reference_dyn[oq] <- best_ogive_dyn
+                }
+                Damping_fix <- mapply(damp_hac5, ogive = Ogive_fix[scalar_covariances], 
+                    ogive_ref = Ogive_fix[damping_reference_fix], freq.limits = damp_region,
+                    MoreArgs = list(freq = freq), SIMPLIFY = FALSE)
+                Damping_dyn <- mapply(damp_hac5, ogive = Ogive_dyn[scalar_covariances], 
+                    ogive_ref = Ogive_dyn[damping_reference_dyn], freq.limits = damp_region,
+                    MoreArgs = list(freq = freq), SIMPLIFY = FALSE)
+            } else {
+                Damping_dyn <- Damping_fix <- NULL
+            }
+
 
             ### some output and namings
             fix_lag_out <- fix_lag
@@ -2323,8 +2342,8 @@ process_ec_fluxes <- function(
                             col = plotting_covar_colors[i], 
                             model_par = ogive_par_dyn[, i]
                         )
-                        # ---------------------- empirical damping -----------------------
                         if (scalar_covariances[i]) {
+                            # ---------------------- empirical damping -----------------------
                             plot_damping(Damping_fix[[i]], freq, ylab = 
                                 paste0("ogive (fix lag) of ", i), cx = 1.5, 
                             col = plotting_covar_colors[i])
@@ -2336,8 +2355,30 @@ process_ec_fluxes <- function(
                             format(soi_utc, format = "(%H:%M:%S"), " - ", 
                             format(eoi_utc, format = "%H:%M:%S)"), 
                             if (scalar_covariances[i]) {
-                                reflab <- sub('(.+)x(.+)', "<\\1'\\2'>", 
-                                    damping_reference[i])
+                                if (damping_reference[i] == 'ogive_quality') {
+                                    reflab <- paste0(damping_reference[i], ': ',
+                                        sub('(.+)x(.+)', "<\\1'\\2'>", best_ogive_fix),
+                                        if (best_ogive_fix != best_ogive_dyn) {
+                                            paste0(
+                                                ' (fix), ',
+                                                sub('(.+)x(.+)', "<\\1'\\2'>", best_ogive_dyn),
+                                                ' (dyn) '
+                                            )
+                                        })
+                                } else if (damping_reference[i] == 'base_quality') {
+                                    reflab <- paste0(damping_reference[i], ': ',
+                                        sub('(.+)x(.+)', "<\\1'\\2'>", best_base_fix),
+                                        if (best_base_fix != best_base_dyn) {
+                                            paste0(
+                                                ' (fix), ',
+                                                sub('(.+)x(.+)', "<\\1'\\2'>", best_base_dyn),
+                                                ' (dyn) '
+                                            )
+                                        })
+                                } else {
+                                    reflab <- sub('(.+)x(.+)', "<\\1'\\2'>", 
+                                        damping_reference[i])
+                                }
                                 paste0(" - damping reference flux: ", reflab)
                             }
                         ), outer = TRUE, line = -1)

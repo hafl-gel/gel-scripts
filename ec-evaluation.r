@@ -1,5 +1,6 @@
 
 ## libraries etc. ----------------------------------------
+
 library(data.table)
 library(ibts)
 library(Rcpp)
@@ -65,14 +66,8 @@ read_ht_merged <- function(FilePath) {
         ])
 }
 
-# hard flag function
-H.flags <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){ 
-	# *****************************************************************************
-	# ***************** Detects values outside of physical range... ***************
-	# ********************** replaces them by running mean ************************ 
-	# ********************* author: Raphael Felber, 16.08.2012 ********************
-	# ********************* adpted: Raphael Felber, 25.02.2014 ********************
-	# *****************************************************************************
+# check (and optionally replace) 'hard' data limits
+check_limits <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){ 
 	nms <- names(input)
 	missing <- !(nms %in% colnames(limits))
 	if(length(nms[missing]) > 0) stop(paste0("physical limits missing for: ", paste(nms[missing], collapse=", ")), call. = TRUE, domain = NULL)
@@ -826,21 +821,31 @@ process_ec_fluxes <- function(
 		, z_ec = NULL
 		, z_canopy = NULL
         # detrending -> valid entries are blockAVG,linear,linear_robust,ma_xx (xx = time in seconds)
-        # , detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
-        , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', T = 'blockAVG', nh3_ppb = 'blockAVG', nh3_ugm3 = 'blockAVG', h2o_mmolm3 = 'blockAVG', co2_mmolm3 = 'blockAVG')
-        , hard_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
-        , hard_limits_lower = c(u = -30, v = -30, w = -10, T = 243, nh3_ppb = -100, nh3_ugm3 = -100, h2o_mmolm3 = -100, co2_mmolm3 = -100)
-        , hard_limits_upper = c(u = 30, v = 30, w = 10, T = 333, nh3_ppb = 5000, nh3_ugm3 = 5000, h2o_mmolm3 = 5000, co2_mmolm3 = 5000)
+        , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', T = 'blockAVG', 
+            nh3_ppb = 'blockAVG', nh3_ugm3 = 'blockAVG', h2o_mmolm3 = 'blockAVG', 
+            co2_mmolm3 = 'blockAVG')
+        , hard_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, 
+            nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
+            co2_mmolm3 = TRUE)
+        , hard_limits_lower = c(u = -30, v = -30, w = -10, T = 243, 
+            nh3_ppb = -100, nh3_ugm3 = -100, h2o_mmolm3 = -100, 
+            co2_mmolm3 = -100)
+        , hard_limits_upper = c(u = 30, v = 30, w = 10, T = 333, 
+            nh3_ppb = 5000, nh3_ugm3 = 5000, h2o_mmolm3 = 5000, 
+            co2_mmolm3 = 5000)
         , hard_limits_window = '5mins'
         , hard_limits_replace = FALSE
 		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 'wxco2_mmolm3')
         # fix lag in seconds
-		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, wxh2o_mmolm3 = -0.2, wxco2_mmolm3 = -0.2)
+		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, 
+            wxh2o_mmolm3 = -0.2, wxco2_mmolm3 = -0.2)
         # dyn lag in seconds around lag_fix
-		, lag_dyn = c(uxw = 0.2, wxT = 0.2, wxnh3_ppb = 1.5, wxnh3_ugm3 = 1.5, wxh2o_mmolm3 = 1.5, wxco2_mmolm3 = 1.5)
+		, lag_dyn = c(uxw = 0.2, wxT = 0.2, wxnh3_ppb = 1.5, wxnh3_ugm3 = 1.5, 
+            wxh2o_mmolm3 = 1.5, wxco2_mmolm3 = 1.5)
         # re_rmse window
         , gamma_time_window = c(2.5, 5)
-		, damping_reference = c(wxnh3_ppb = 'wxT', wxnh3_ugm3 = 'wxT', wxh2o_mmolm3 = 'wxT', wxco2_mmolm3 = 'wxT')
+		, damping_reference = c(wxnh3_ppb = 'wxT', wxnh3_ugm3 = 'wxT', 
+            wxh2o_mmolm3 = 'wxT', wxco2_mmolm3 = 'wxT')
         # lower & upper bounds of fitting ogives (in seconds)
 		, damping_lower = c(wxnh3_ppb = 2, wxnh3_ugm3 = 2, wxh2o_mmolm3 = 2, wxco2_mmolm3 = 2)
 		, damping_upper = c(wxnh3_ppb = 20, wxnh3_ugm3 = 20, wxh2o_mmolm3 = 20, wxco2_mmolm3 = 20)
@@ -856,18 +861,25 @@ process_ec_fluxes <- function(
 		, create_graphs = TRUE
 		, graphs_directory = NULL
 		, add_name = ''
-        , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, ht_oss = TRUE, nh3_ppb = FALSE, nh3_ugm3 = TRUE, li_co2ss = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
-        , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', T = 'K', ht_oss = '-', nh3_ppb = 'ppb', nh3_ugm3 = 'ug/m3', li_co2ss = '-', h2o_mmolm3 = 'mmol/m3', co2_mmolm3 = 'mmol/m3')
-        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', ht_oss = 'grey', nh3_ppb = 'indianred', nh3_ugm3 = 'indianred', li_co2ss = 'grey', h2o_mmolm3 = '#8FC1E6', co2_mmolm3 = 'seagreen4')
-        , plotting_covar_units = c(uxw = 'm2/s2', wxT = 'K*m/s', wxnh3_ppb = 'ppb*m/s', wxnh3_ugm3 = 'ug/m2/s', wxh2o_mmolm3 = 'mmol/m2/s', wxco2_mmolm3 = 'mmol/m2/s')
-        , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred', wxnh3_ugm3 = 'indianred', wxh2o_mmolm3 = '#8FC1E6', wxco2_mmolm3 = 'seagreen4')
+        , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, 
+            ht_oss = TRUE, nh3_ppb = FALSE, nh3_ugm3 = TRUE, 
+            li_co2ss = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
+        , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', T = 'K', 
+            ht_oss = '-', nh3_ppb = 'ppb', nh3_ugm3 = 'ug/m3', 
+            li_co2ss = '-', h2o_mmolm3 = 'mmol/m3', co2_mmolm3 = 'mmol/m3')
+        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', 
+            ht_oss = 'grey', nh3_ppb = 'indianred', nh3_ugm3 = 'indianred', 
+            li_co2ss = 'grey', h2o_mmolm3 = '#8FC1E6', co2_mmolm3 = 'seagreen4')
+        , plotting_covar_units = c(uxw = 'm2/s2', wxT = 'K*m/s', wxnh3_ppb = 'ppb*m/s', 
+            wxnh3_ugm3 = 'ug/m2/s', wxh2o_mmolm3 = 'mmol/m2/s', wxco2_mmolm3 = 'mmol/m2/s')
+        , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred', 
+            wxnh3_ugm3 = 'indianred', wxh2o_mmolm3 = '#8FC1E6', wxco2_mmolm3 = 'seagreen4')
 		, ogives_out = FALSE
         , as_ibts = TRUE
 	){
 
-	script.start <- Sys.time()
-	################################################################################
-	# ----------------------------- read config file -------------------------------
+    # start processing
+	script_start <- Sys.time()
 
     # check input
     if (create_graphs) {
@@ -973,7 +985,7 @@ process_ec_fluxes <- function(
         ts_vars <- c(ts_vars, 'li_co2ss')
     }
     # extend & sort ts_vars
-    ts_vars <- union(names(plot_timeseries), ts_vars)
+    # ts_vars <- union(names(plot_timeseries), ts_vars)
     plot_timeseries <- fix_defaults(plot_timeseries, ts_vars)
     # only take TRUE
     plot_timeseries <- plot_timeseries[plot_timeseries]
@@ -1164,11 +1176,11 @@ process_ec_fluxes <- function(
         } else if (licor_with_sonic) {
             cat('LI-7500: raw data provided with sonic input...\n')
         }
-    } else {
+    # } else {
         # check if ht available
-        if (!ht_provided) {
-            stop('neither ht8700 nor licor data or directory has been provided -> cannot process fluxes without concentration data!')
-        }
+        # if (!ht_provided) {
+        #     stop('neither ht8700 nor licor data or directory has been provided -> cannot process fluxes without concentration data!')
+        # }
     }
 
     cat("************************************************************\n")
@@ -1581,7 +1593,11 @@ process_ec_fluxes <- function(
                 # --------------------------------------------------------------------------
                 cat("~~~\nchecking hard limits...\n")
                 if (any(hard_limits)) {
-                    SD[, variables[hard_limits] := H.flags(mget(variables[hard_limits]), Time, .Hz, lim_range[, variables[hard_limits], drop = FALSE], hard_limits_window, hl_method)]
+                    SD[, variables[hard_limits] := check_limits(
+                        mget(variables[hard_limits]), Time, .Hz, 
+                        lim_range[, variables[hard_limits], drop = FALSE], 
+                        hard_limits_window, hl_method
+                        )]
                 } 
 
                 # check NA values in scalars
@@ -1671,9 +1687,9 @@ process_ec_fluxes <- function(
                             detrended_scalars[[nms]]$residuals
                         }
                         })]
-                } else {
-                    cat('No scalars available -> skipping interval!\n')
-                    next
+                # } else {
+                    # cat('No scalars available -> skipping interval!\n')
+                    # next
                 }
 
                 # start of flux relevant data manipulation
@@ -2040,7 +2056,6 @@ process_ec_fluxes <- function(
 
                 # write results:
                 # -------------------------------------------------------------------------- 
-
                 out <- c(
                     list(
                         st = Int_Start
@@ -2068,8 +2083,14 @@ process_ec_fluxes <- function(
                     , as.list(c(
                         wind_stats
                         # scalar avg & sd
-                        , setNames(scalar_means[input_scalars], paste0('avg_', input_scalars))
-                        , setNames(scalar_sd[input_scalars], paste0('sd_', input_scalars))
+                        , if (length(input_scalars) > 0) {
+                            list(
+                                setNames(scalar_means[input_scalars], 
+                                    paste0('avg_', input_scalars))
+                                , setNames(scalar_sd[input_scalars], 
+                                    paste0('sd_', input_scalars))
+                            )
+                        }
                         # fluxes
                         , setNames(
                             flux_fix_lag[input_covariances],
@@ -2142,7 +2163,7 @@ process_ec_fluxes <- function(
                             ogive_bias_dyn[input_covariances],
                             paste0('ogive_bias_dyn_', input_covariances)
                         )
-                        , if (!is.null(Damping_fix)) {
+                        , if (!is.null(Damping_fix) && length(scalar_covariances_only) > 0) {
                             c(
                                 setNames(
                                     fix_damping_pbreg[scalar_covariances_only],
@@ -2154,7 +2175,7 @@ process_ec_fluxes <- function(
                                 )
                             )
                         }
-                        , if (!is.null(Damping_dyn)) {
+                        , if (!is.null(Damping_dyn) && length(scalar_covariances_only) > 0) {
                             c(
                                 setNames(
                                     dyn_damping_pbreg[scalar_covariances_only],
@@ -2264,7 +2285,7 @@ process_ec_fluxes <- function(
 
 	cat("************************************************************\n") 
 	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
-        "time elapsed: ", difftime(Sys.time(), script.start, unit = "mins"),
+        "time elapsed: ", difftime(Sys.time(), script_start, unit = "mins"),
         "minutes\n")
 	cat("************************************************************\n")  
 

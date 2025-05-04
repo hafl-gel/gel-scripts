@@ -1455,7 +1455,7 @@ process_ec_fluxes <- function(
     if (licor_provided && licor_has_data) {
         cat('Subsetting LI-7500 data - ')
         # copy
-        licor <- licor_directory[Time >= start_time & Time < tail(end_time, 1), ]
+        licor <- licor_directory[Time >= start_time[1] & Time < tail(end_time, 1), ]
         cat('done\n')
     } else if (licor_provided && !licor_with_sonic) {
         cat('Reading LI-7500 files\n')
@@ -1502,7 +1502,7 @@ process_ec_fluxes <- function(
             paste(names(daily_data), collapse = ", ")
         )
     }
-        
+
     # define bins & subset again & just make sure sonic has no missing data
     daily_data <- daily_data[, bin := getIntervals(Time, start_time, end_time)][
         bin != 0L & is.finite(u) & is.finite(v) & is.finite(w) & is.finite(T) &

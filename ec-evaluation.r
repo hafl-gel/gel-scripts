@@ -583,7 +583,7 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
         # add residuals
         res <- setdiff(selection, names(dat3))
         if (length(res) > 0) {
-            dat3 <- cbind(dat3, dat[, res])
+            dat3 <- cbind(dat3, dat[, res, drop = FALSE])
         }
 	}
 	dat3 <- dat3[,selection]

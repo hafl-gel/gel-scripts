@@ -964,6 +964,7 @@ process_ec_fluxes <- function(
         # , subint_n = 5
         # , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
         , oss_threshold = 0
+        , co2ss_threshold = 0
         , na_alarm_code = c(1:3, 5:8, 11, 13)
         , thresh_period = 0.75
 		, create_graphs = TRUE
@@ -1652,17 +1653,24 @@ process_ec_fluxes <- function(
                 # check alarms and set nh3 NA
                 nh3_vars <- grep('nh3', names(SD), value = TRUE)
                 na0 <- SD[, sum(is.na(get(nh3_vars[1])))]
-                SD[grepl(na_alarm_pattern, ht_alarm_code),
-                    (nh3_vars) := NA_real_]
+                SD[grepl(na_alarm_pattern, ht_alarm_code), (nh3_vars) := NA_real_]
                 na1 <- SD[, sum(is.na(get(nh3_vars[1])))]
                 # check oss
-                SD[ht_oss < oss_threshold,
-                    (nh3_vars) := NA_real_]
+                SD[ht_oss < oss_threshold, (nh3_vars) := NA_real_]
                 cat('done\nBad alarms:', na1 - na0, '\nValues below OSS threshold:', 
                     SD[, sum(ht_oss < oss_threshold, na.rm = TRUE)], '\n')
             }
 
-            # TODO: check licor ss!
+            # check licor ss
+            if (licor_provided) {
+                cat('~~~\nChecking LI-7500 signal strength - ')
+                # get variables
+                li_vars <- grep('^(co2|h2o)_', names(SD), value = TRUE)
+                # check li_co2ss
+                SD[li_co2ss < co2ss_threshold, (li_vars) := NA_real_]
+                cat('done\nValues below "co2ss" threshold:', 
+                    SD[, sum(li_co2ss < co2ss_threshold, na.rm = TRUE)], '\n')
+            }
 
             # get start of interval
             Int_Start <- start_time[.BY[[1]]]

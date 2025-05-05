@@ -630,32 +630,53 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
 }
 
 # plot covariance function
-plot_covfunc <- function(cov_func,avg_t,dynLag,fixLag, ylab=NULL, xlim = NULL, cx=1.5, cxmt=1.25, cl="black"){
+plot_covfunc <- function(cov_func, avg_t, dynLag, fixLag, ylab = NULL, xlim = NULL, 
+    cx = 1.5, cxmt = 1.25, cl = "black", re = NULL) {
 	midP <- dynLag[1] - dynLag[2]
 	n <- length(cov_func)
-	fix_cov <- cov_func[midP+fixLag]
+	fix_cov <- cov_func[midP + fixLag]
 	dyn_cov <- cov_func[dynLag[1]]
-	Hz <- n/avg_t
-	if(is.null(xlim)){
-		xlim <- c(-avg_t/2,avg_t/2)
-		x <- seq(-avg_t/2,avg_t/2,length.out=n)
+	Hz <- n / avg_t
+	if (is.null(xlim)) {
+		xlim <- c(-avg_t / 2, avg_t / 2)
+		x <- seq(-avg_t / 2, avg_t / 2, length.out = n)
 	} else {
-		xlim2 <- round(xlim*Hz)
-		x_hi <- intersect(seq(xlim2[1],xlim2[2]),seq(n)-midP)
-		x <- x_hi/Hz
+		xlim2 <- round(xlim * Hz)
+		x_hi <- intersect(seq(xlim2[1], xlim2[2]), seq(n) - midP)
+		x <- x_hi / Hz
 		cov_func <- cov_func[midP + x_hi]
 	}
-	plot(0, type="n", xlim=xlim, ylim=range(cov_func,na.rm=TRUE), xlab=expression(paste(italic(tau)," (s)")), ylab=ylab, cex.axis=cx, cex.lab=cx)
-	abline(h=0, lwd=1.5, lty=2, col="gray60"); abline(v=0, lwd=1.5, lty=2, col="gray60")
-	# abline(h=fix_cov,lty=3,col="lightgrey")
-	# abline(h=dyn_cov,lty=4,col="lightgrey")
-	abline(v=fixLag/Hz,lty=3,col="lightgrey")
-	abline(v=dynLag[2]/Hz,lty=4,col="lightgrey")
-	lines(x, cov_func, lwd=2, col=cl)
-	if(fixLag==dynLag[2]){
-		mtext(substitute(paste(italic(tau)==a,"s: ",y),list(y=sprintf("%1.8f",dyn_cov),a=sprintf("%1.1f",fixLag/Hz))),side=3,cex=cxmt)
+    ylim <- range(cov_func, na.rm = TRUE)
+    if (add_re <- !is.null(re)) {
+        re2 <- c(-1.96, 1.96) * re
+        ylim <- range(ylim, re2, na.rm = TRUE)
+    }
+	plot(0, type = "n", xlim = xlim, ylim = ylim, ylab = ylab, cex.axis = cx, 
+        xlab = expression(paste(italic(tau), " (s)")), cex.lab = cx)
+	abline(h = 0, lwd = 1.5, lty = 2, col = "gray60")
+    abline(v = 0, lwd = 1.5, lty = 2, col = "gray60")
+	abline(v = fixLag / Hz, lty = 3, col = "lightgrey")
+	abline(v = dynLag[2] / Hz, lty = 4, col = "lightgrey")
+    # add random error indication
+    if (!is.null(re)) {
+        abline(h = re2, col = cl, lty = 3)
+    }
+    # draw cov lines
+	lines(x, cov_func, lwd = 2, col = cl)
+	if (fixLag == dynLag[2]) {
+		mtext(substitute(paste(italic(tau) == a, "s: ", y), 
+                list(y = sprintf("%1.8f", dyn_cov), a = sprintf("%1.1f", fixLag / Hz))), 
+            side = 3, cex = cxmt)
 	} else {
-		mtext(substitute(paste(italic(tau)[fix]==a,"s: ",x," / ",italic(tau)[dyn]==b,"s: ",y),list(x=sprintf("%1.8f",fix_cov),y=sprintf("%1.8f",dyn_cov),a=sprintf("%1.1f",fixLag/Hz),b=sprintf("%1.1f",dynLag[2]/Hz))),side=3,cex=cxmt)
+		mtext(substitute(
+                paste(italic(tau)[fix] == a, "s: ", x, " / ", 
+                    italic(tau)[dyn] == b, "s: ", y), 
+                list(x = sprintf("%1.8f", fix_cov), 
+                    y = sprintf("%1.8f", dyn_cov), 
+                    a = sprintf("%1.1f", fixLag / Hz), 
+                    b = sprintf("%1.1f", dynLag[2] / Hz)
+                    )), 
+            side = 3, cex = cxmt)
 	}
 }
 
@@ -2338,7 +2359,7 @@ process_ec_fluxes <- function(
                         # ----------------------- Covariance -----------------------
                         plot_covfunc(Covars[[i]], n_period / rec_Hz, dyn_lag_max[, i], 
                             fix_lag[i], ylab = ylab, xlim = c(-50, 50), cx = 1.5, 
-                            cxmt = 1.25, cl = plotting_covar_colors[i])
+                            cxmt = 1.25, cl = plotting_covar_colors[i], re = re_rmse[i])
                         # ---------------------- Co-Spec/Ogive fix lag -----------------------
                         plot_cospec_ogive(Ogive_fix[[i]], Cospec_fix[[i]], freq, 
                             ylab = paste0("ogive (fix lag) of ", ylab), cx = 1.5, 

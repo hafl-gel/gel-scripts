@@ -443,16 +443,17 @@ pf_fit <- function(u, v, w, FUN = MASS::rlm, method = c("Wilczak2001", "vanDik20
 }
 
 # find the dynamic lag time (search for max in cov fun)
-find_dynlag <- function(x,dyn){
+find_dynlag <- function(x, dyn) {
 	n <- length(x)
-	if(n%%2){
+	if (n %% 2) {
 		# ungerade
-		m <- (n+1)/2
+		m <- (n + 1) / 2
 	} else {
 		# gerade
-		m <- n/2 + 1
+		m <- n / 2 + 1
 	}
-	ind <- seq(dyn[1],dyn[2]) + m
+    # get searching window
+	ind <- seq(dyn[1], dyn[2]) + m
 	# find max relative to baseline (average):
     avg <- mean(x[m + seq(-500, 500)])
 	maxis <- ind[which.max(abs(x[ind] - avg))]

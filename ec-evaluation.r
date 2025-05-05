@@ -1807,8 +1807,9 @@ process_ec_fluxes <- function(
             # get fft (keep list format)
             FFTs <- SD[, I(lapply(.SD, \(x) fft(na.omit(x)) / .N)), .SDcols = flux_variables]
 
-            # ### testing auto-covariances
-            # AutoCovars <- lapply(names(FFTs), \(i) {
+            # # calculate auto-covariances
+            # # -------------------------------------------------------------------------- 
+            # Power <- lapply(names(FFTs), \(i) {
             #     # check scalars
             #     if (i %in% scalars && !is.null(na_ind <- na.action(FFTs[[i]]))) {
             #         # fix lengths
@@ -1845,7 +1846,33 @@ process_ec_fluxes <- function(
             #         out[ind]
             #     }
             # })
-            # names(AutoCovars) <- paste(flux_variables, flux_variables, sep = 'x')
+            # names(Power) <- flux_variables
+
+            # # power-spectra for flux variables
+            # # ------------------------------------------------------------------------ 			
+            # cat("\t- power-spectra\n")
+            # PowerSpec <- lapply(flux_variables, function(i) {
+            #         # check scalars
+            #         N <- .N
+            #         if (i %in% scalars) {
+            #             if (!is.null(na_ind <- na.action(scalar_list[[i]]))) {
+            #                 # fix lengths
+            #                 FFTs[[i]] <- FFTs[[i]][-na_ind]
+            #                 # get N
+            #                 N <- length(FFTs[[i]])
+            #             }
+            #         }
+            #         re <- Re(Conj(FFTs[[i]]) * FFTs[[i]])[seq(N / 2) + 1] * N / 
+            #             (N - 1) * 2
+            #         # get missing
+            #         n_missing <- n_period / 2 - length(re)
+            #         if (sign(n_missing) >= 0) {
+            #             c(re, rep(NA_real_, n_missing))
+            #         } else {
+            #             re[seq_len(n_period / 2)]
+            #         }
+            #     })
+            # names(PowerSpec) <- names(Power)
 
             # calculate covariances with fix lag time:
             # -------------------------------------------------------------------------- 
@@ -1915,19 +1942,6 @@ process_ec_fluxes <- function(
             re_rmse <- sqrt(0.5 * (sd_cov_lo ^ 2 + avg_cov_lo ^ 2 +
                     sd_cov_hi ^ 2 + avg_cov_hi ^ 2))
 
-            # ## auto-covariances
-            # sd_acov_lo <- sapply(AutoCovars, \(x) sd(x[lo_range]))
-            # # avg_acov_lo <- sapply(AutoCovars, \(x) mean(x[lo_range]))
-            # sd_acov_hi <- sapply(AutoCovars, \(x) sd(x[hi_range]))
-            # # avg_acov_hi <- sapply(AutoCovars, \(x) mean(x[hi_range]))
-            # # re_rmse_acov <- sqrt(0.5 * (sd_acov_lo ^ 2 + avg_acov_lo ^ 2 +
-            # #         sd_acov_hi ^ 2 + avg_acov_hi ^ 2))
-            # re_rmse_acov <- sqrt(0.5 * (sd_acov_lo ^ 2 + sd_acov_hi ^ 2))
-
-            # covariance function values +/- tau.off.sec of fix lag
-            # ------------------------------------------------------------------------
-            # not implemented...
-
             # cospectra for fixed & dynamic lags
             # ------------------------------------------------------------------------ 			
             cat("\t- co-spectra\n")
@@ -1985,7 +1999,7 @@ process_ec_fluxes <- function(
                 }, i = covariances_variables, lag = dyn_lag_max[2, ],
                 MoreArgs = list(ffts = FFTs), SIMPLIFY = FALSE)
             names(Cospec_dyn) <- covariances
-    
+
             # ogives for fixed & dynamic lags 
             # ------------------------------------------------------------------------ 
             Ogive_fix <- lapply(Cospec_fix, function(x) {

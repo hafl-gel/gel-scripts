@@ -234,7 +234,8 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
                 )
             } else {
                 stop(
-                    'detrending method not valid! Should be one of "blockAVG",',
+                    'detrending method "', method,'" is not valid!\n',
+                    'Valid methods are one of "blockAVG",',
                     ' "linear", "linear_robust", "ma_xxx" or ',
                     'any valid filter name yyy_xxx from the "filter_list" where',
                     ' xxx represents the moving average or filter range in seconds'

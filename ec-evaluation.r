@@ -970,7 +970,7 @@ process_ec_fluxes <- function(
 		, lag_dyn = c(uxw = 0.2, wxT = 0.2, wxnh3_ppb = 1.5, wxnh3_ugm3 = 1.5, 
             wxh2o_mmolm3 = 1.5, wxco2_mmolm3 = 1.5)
         # re_rmse window
-        , gamma_time_window = c(2.5, 5)
+        , gamma_time_window = c(5, 10)
         # damping_reference: either a specific covariance as 'wxT' or best quality ogives
         #   such as either 'base_quality' (for best base_quality_fix/_dyn)
         #   or 'ogive_quality' (for best ogive_quality_fix/_dyn)
@@ -1900,7 +1900,6 @@ process_ec_fluxes <- function(
             # ------------------------------------------------------------------------
             # RE_RMSE (Eq. 9 in Langford et al. 2015)
             # -> ranges lo/hi (-/+180 to -/+150 secs? => define range as argument)
-            # gamma_time_window <- c(2.5, 5)
             n <- length(Covars[[1]])
             m <- ifelse(n %% 2, (n + 1) / 2, n / 2 + 1)
             lo_range <- m - rev(gamma_time_window) * 60 * rec_Hz
@@ -1915,6 +1914,7 @@ process_ec_fluxes <- function(
             avg_cov_hi <- sapply(Covars, \(x) mean(x[hi_range]))
             re_rmse <- sqrt(0.5 * (sd_cov_lo ^ 2 + avg_cov_lo ^ 2 +
                     sd_cov_hi ^ 2 + avg_cov_hi ^ 2))
+
             # ## auto-covariances
             # sd_acov_lo <- sapply(AutoCovars, \(x) sd(x[lo_range]))
             # # avg_acov_lo <- sapply(AutoCovars, \(x) mean(x[lo_range]))

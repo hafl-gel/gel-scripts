@@ -883,18 +883,18 @@ fix_defaults <- function(x, vars) {
     # find vars not in x
     missing_vars <- vars[!(vars %in% nms)]
     if (length(missing_vars)) {
-        # get formals
-        frms <- formals(sys.function(sys.parent(1L)))
-        # get formal name
-        fname <- as.character(substitute(x))
-        # get default values
-        default <- eval(frms[[fname]])
         # extend/replace x with default
         if (nms[1] == '') {
-            # replace
-            x <- default[missing_vars]
+            # replace all
+            x <- setNames(rep(x, length(missing_vars)), missing_vars)
         } else {
-            # extend
+            # get formals
+            frms <- formals(sys.function(sys.parent(1L)))
+            # get formal name
+            fname <- as.character(substitute(x))
+            # get default values
+            default <- eval(frms[[fname]])
+            # extend with defaults
             x <- c(x, default[missing_vars])
         }
     }
@@ -1522,7 +1522,7 @@ process_ec_fluxes <- function(
     freq <- rec_Hz * seq(floor(n_period / 2)) / floor(n_period / 2)
 
 	# remove incomplete intervals
-    cat('Check given "thresh_period"\n')
+    cat('checking interval data threshold...\n')
     np0 <- daily_data[, uniqueN(bin)]
 	daily_data <- daily_data[, keep := .N >= n_threshold, by = bin][(keep)][,
         keep := NULL]

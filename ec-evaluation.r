@@ -1630,8 +1630,12 @@ process_ec_fluxes <- function(
     # loop over bins
     results <- daily_data[, {
 
+        # get start of interval
+        interval_start <- start_time[.BY[[1]]]
+        # TODO (maybe for later): include NA where d_t>2*mean, remove entries where d_t < 0.5*mean
+
         # be verbose
-        cat("\n\n~~~~~~~~\n", format(start_time[.BY[[1]]]), " - interval ", .GRP, 
+        cat("\n\n~~~~~~~~\n", format(interval_start), " - interval ", .GRP, 
             " of ", .NGRP, "\n", sep = '')
 
         # check number of data
@@ -1671,10 +1675,6 @@ process_ec_fluxes <- function(
                 cat('done\nValues below "co2ss" threshold:', 
                     SD[, sum(li_co2ss < co2ss_threshold, na.rm = TRUE)], '\n')
             }
-
-            # get start of interval
-            Int_Start <- start_time[.BY[[1]]]
-            # TODO (maybe for later): include NA where d_t>2*mean, remove entries where d_t < 0.5*mean
 
             # check NA values in scalars
             scalars <- input_scalars
@@ -2094,7 +2094,7 @@ process_ec_fluxes <- function(
 
             # should ogives be provided with output
             if (ogives_out) {
-                int_start <- format(Int_Start)
+                int_start <- format(interval_start)
                 e_ogive$Cospec_fix_Out[[int_start]] <- c(
                     list(freq = freq, model_coef = ogive_par_fix), Cospec_fix)
                 e_ogive$Cospec_dyn_Out[[int_start]] <- c(
@@ -2159,7 +2159,7 @@ process_ec_fluxes <- function(
             # -------------------------------------------------------------------------- 
             out <- c(
                 list(
-                    st = Int_Start
+                    st = interval_start
                     , et = end_time[.BY[[1]]]
                     , n_values = .N
                     #, SubInts =  subint_n
@@ -2299,7 +2299,7 @@ process_ec_fluxes <- function(
                     dir.create(path_folder, recursive = FALSE)
                 }
                 # get end of current interval time in UTC
-                soi_utc <- start_time[.BY[[1]]]
+                soi_utc <- interval_start
                 eoi_utc <- end_time[.BY[[1]]]
                 # get date in correct format
                 date_formatted <- format(soi_utc, '%Y%m%d')

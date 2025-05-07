@@ -2,6 +2,9 @@
 library(data.table)
 library(ibts)
 library(Rcpp)
+library(sodium)
+
+## helper functions ----------------------------------------
 
 # check (and optionally replace) 'hard' data limits
 check_limits <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){ 
@@ -786,112 +789,6 @@ plot_damping <- function(ogive_damp,freq,ylab=NULL,xlim=NULL,ylim=NULL,cx=1.5,cx
 	legend(pos,legend=c("damped","scaled reference (pbreg)","scaled reference (deming)",sprintf("damping (pbreg): %1.1f%%",(1 - dampf_pbreg)*100),sprintf("damping (deming): %1.1f%%",(1 - dampf_deming)*100)),col=c(col,"lightgrey","darkgrey",NA,NA),bty="n",lty=1,lwd=2,cex=cx.leg)
 }
 
-# wpl function
-correct_wpl <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'), 
-    dynamic_lag = TRUE, return_extra_cols = FALSE, water = 'h2o_mmolm3', 
-    temperature = 'li_temp_amb', pressure = 'li_press_amb',
-    coefs = list(ht8700 = c(A = 1, B = 1, C = 1), licor = c(A = 1, B = 1, C = 1))) {
-    # switch to data.table
-    if (is_ibts <- is.ibts(ec_dat)) {
-        ec_dat <- as.data.table(ec_dat)
-    }
-    out <- copy(ec_dat)
-    dynfix <- ifelse(dynamic_lag, 'dyn_', 'fix_')
-    cat('using', ifelse(dynamic_lag, 'dynamic', 'fixed'), 'lag fluxes\n')
-    # get pressure in Pa
-    f_press <- switch(pressure
-        , li_press_amb = 1e3
-        , ht_press_amb = 1e2
-        , stop('unknown pressure variable: ', pressure)
-    )
-    out[, p_pa := get(pressure) * f_press]
-    # get temperature in K
-    o_temp <- switch(temperature
-        , li_temp_amb = 
-        , ht_temp_amb = 273.15
-        , T_sonic = 0
-        , stop('unknown temperature variable: ', temperature)
-    )
-    out[, t_k := get(temperature) + o_temp]
-    # dry air molar mass (g/mol)
-    M_dry <- 28.965
-    # molar gas constant
-    R <- 8.31446
-    # get dry air density in g/m3 (p*V=m/M*R*T->m/V=p*M/R/T)
-    out[, rho_dry := p_pa * M_dry / R / t_k]
-    # h2o molar mass (g/mol)
-    M_h2o <- 18.015
-    # get h2o density/flux in g/m3
-    f_h2o <- switch(water
-        , h2o_mmolm3 = M_h2o * 1e-3
-        , stop('only h2o_mmolm3 accepted by now')
-    )
-    # density
-    out[, rho_h2o := get(paste0('avg_', water)) * f_h2o]
-    # flux
-    out[, flux_h2o := get(paste0('flux_', dynfix, 'wx', water)) * f_h2o]
-    # get nh3 density/flux in g/m3
-    if (nh3_ppb <- 'nh3_ppb' %in% fluxes) {
-        stop('nh3_ppb is not implemented yet...')
-    }
-    if (nh3_ugm3 <- 'nh3_ugm3' %in% fluxes) {
-        f_nh3 <- 1e-6
-        # density
-        out[, rho_nh3 := avg_nh3_ugm3 * f_nh3]
-        # raw flux
-        out[, flux_nh3_raw := get(paste0('flux_', dynfix, 'wxnh3_ugm3')) * f_nh3]
-        # corrected flux
-        out[, flux_nh3_gm2s := coefs$ht8700['A'] * (
-            # first term
-            flux_nh3_raw +
-            # second term
-            coefs$ht8700['B'] * rho_nh3 / rho_dry * flux_h2o +
-            # third term
-            coefs$ht8700['C'] * (1 + M_dry / M_h2o * rho_h2o / rho_dry) * 
-                rho_nh3 / t_k * cov_wT
-            )]
-        # get wpl factor
-        out[, flux_nh3_wpl_factor := flux_nh3_gm2s / flux_nh3_raw]
-        # convert back to ug/m3
-        out[, flux_wpl_nh3 := flux_nh3_gm2s / f_nh3]
-    }
-    # get co2 density/flux in g/m3
-    if (co2_mmolm3 <- 'co2_mmolm3' %in% fluxes) {
-        M_co2 <- 44.01
-        f_co2 <- M_co2 * 1e-3
-        # density
-        out[, rho_co2 := avg_co2_mmolm3 * f_co2]
-        # raw flux
-        out[, flux_co2_raw := get(paste0('flux_', dynfix, 'wxco2_mmolm3')) * f_co2]
-        # corrected flux
-        out[, flux_co2_gm2s := coefs$licor['A'] * (
-            # first term
-            flux_co2_raw +
-            # second term
-            coefs$licor['B'] * rho_co2 / rho_dry * flux_h2o +
-            # third term
-            coefs$licor['C'] * (1 + M_dry / M_h2o * rho_h2o / rho_dry) * 
-                rho_co2 / t_k * cov_wT
-            )]
-        # get wpl factor
-        out[, flux_co2_wpl_factor := flux_co2_gm2s / flux_co2_raw]
-        # convert back to mmol/m3
-        out[, flux_wpl_co2 := flux_co2_gm2s / f_co2]
-    }
-    if (!return_extra_cols) {
-        out <- out[, .SD, .SDcols = c(
-            names(ec_dat)
-            , if (nh3_ugm3) 'flux_wpl_nh3'
-            , if (co2_mmolm3) 'flux_wpl_co2'
-            )]
-    }
-    # switch back to ibts
-    if (is_ibts) {
-        out <- as.ibts(out)
-    }
-    out
-}
-
 # helper function for process_ec_fluxes()
 fix_defaults <- function(x, vars) {
     nms <- names(x)
@@ -923,6 +820,8 @@ fix_defaults <- function(x, vars) {
     # return
     x[vars]
 }
+
+## main flux processing function ----------------------------------------
 
 ## main flux processing function
 process_ec_fluxes <- function(
@@ -2521,4 +2420,253 @@ cospec_model <- function(fx, m, mu, A0, f = freq) {
 ogive_model <- function(fx, m, mu, A0, f = freq) {
     rev(cumsum(rev(cospec_model(fx, m, mu, A0, f))))
 }
+
+## wpl post-processing ----------------------------------------
+
+# wpl function
+# TODO: add units to output & improve output var names (self-explanatory)
+wpl_correction <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'), 
+    dynamic_lag = TRUE, return_extra_cols = FALSE, water = 'h2o_mmolm3', 
+    temperature = 'li_temp_amb', pressure = 'li_press_amb') {
+    # switch to data.table
+    if (is_ibts <- is.ibts(ec_dat)) {
+        ec_dat <- as.data.table(ec_dat)
+    }
+    out <- copy(ec_dat)
+    dynfix <- ifelse(dynamic_lag, 'dyn_', 'fix_')
+    cat('using', ifelse(dynamic_lag, 'dynamic', 'fixed'), 'lag fluxes\n')
+    # get pressure in Pa
+    f_press <- switch(pressure
+        , li_press_amb = 1e3
+        , ht_press_amb = 1e2
+        , stop('unknown pressure variable: ', pressure)
+    )
+    out[, p_pa := get(pressure) * f_press]
+    # get temperature in K
+    o_temp <- switch(temperature
+        , li_temp_amb = 
+        , ht_temp_amb = 273.15
+        , T_sonic = 0
+        , stop('unknown temperature variable: ', temperature)
+    )
+    out[, t_k := get(temperature) + o_temp]
+    # dry air molar mass (g/mol)
+    M_dry <- 28.965
+    # molar gas constant
+    R <- 8.31446
+    # get dry air density in g/m3 (p*V=m/M*R*T->m/V=p*M/R/T)
+    out[, rho_dry := p_pa * M_dry / R / t_k]
+    # h2o molar mass (g/mol)
+    M_h2o <- 18.015
+    # get h2o density/flux in g/m3
+    f_h2o <- switch(water
+        , h2o_mmolm3 = M_h2o * 1e-3
+        , stop('only h2o_mmolm3 accepted by now')
+    )
+    # density
+    out[, rho_h2o := get(paste0('avg_', water)) * f_h2o]
+    # flux
+    out[, flux_h2o := get(paste0('flux_', dynfix, 'wx', water)) * f_h2o]
+    # get nh3 density/flux in g/m3
+    if (nh3_ppb <- 'nh3_ppb' %in% fluxes) {
+        stop('nh3_ppb is not implemented yet...')
+    }
+    if (nh3_ugm3 <- 'nh3_ugm3' %in% fluxes) {
+        # get coefficients A, B & C
+        coef_a <- 1
+        coef_b <- 1
+        coef_c <- 1
+        f_nh3 <- 1e-6
+        # density
+        out[, rho_nh3 := avg_nh3_ugm3 * f_nh3]
+        # raw flux
+        out[, flux_nh3_raw := get(paste0('flux_', dynfix, 'wxnh3_ugm3')) * f_nh3]
+        # corrected flux
+        out[, flux_nh3_gm2s := coef_a * (
+            # first term
+            flux_nh3_raw +
+            # second term
+            coef_b * rho_nh3 / rho_dry * flux_h2o +
+            # third term
+            coef_c * (1 + M_dry / M_h2o * rho_h2o / rho_dry) * 
+                rho_nh3 / t_k * cov_wT
+            )]
+        # get wpl factor
+        out[, flux_nh3_wpl_factor := flux_nh3_gm2s / flux_nh3_raw]
+        # convert back to ug/m3
+        out[, flux_wpl_nh3 := flux_nh3_gm2s / f_nh3]
+    }
+    # get co2 density/flux in g/m3
+    if (co2_mmolm3 <- 'co2_mmolm3' %in% fluxes) {
+        M_co2 <- 44.01
+        f_co2 <- M_co2 * 1e-3
+        # density
+        out[, rho_co2 := avg_co2_mmolm3 * f_co2]
+        # raw flux
+        out[, flux_co2_raw := get(paste0('flux_', dynfix, 'wxco2_mmolm3')) * f_co2]
+        # corrected flux
+        out[, flux_co2_gm2s :=
+            # first term
+            flux_co2_raw +
+            # second term
+            rho_co2 / rho_dry * flux_h2o +
+            # third term
+            (1 + M_dry / M_h2o * rho_h2o / rho_dry) * 
+                rho_co2 / t_k * cov_wT
+            ]
+        # get wpl factor
+        out[, flux_co2_wpl_factor := flux_co2_gm2s / flux_co2_raw]
+        # convert back to mmol/m3
+        out[, flux_wpl_co2 := flux_co2_gm2s / f_co2]
+    }
+    if (!return_extra_cols) {
+        out <- out[, .SD, .SDcols = c(
+            names(ec_dat)
+            , if (nh3_ugm3) 'flux_wpl_nh3'
+            , if (co2_mmolm3) 'flux_wpl_co2'
+            )]
+    }
+    # add dyn/fix to names
+    new_cols <- setdiff(names(out), names(ec_dat))
+    flux_cols <- grep('flux', new_cols, value = TRUE)
+    setnames(out, new_cols, sub('flux_', paste0('flux_', dynfix), new_cols))
+    # switch back to ibts
+    if (is_ibts) {
+        out <- as.ibts(out)
+    }
+    out
+}
+
+## add kappa values for HT ----------------------------------------
+
+dat2string <- function(x) {
+    key <- keygen(as.raw(rep(1, 32)))
+    nonce <- as.raw(rep(1, 24))
+    xs <- qs2::qd_serialize(x)
+    xr <- data_encrypt(xs, key, nonce = nonce)
+    paste0(xr, collapse = '')
+}
+string2dat <- function(x) {
+    key <- keygen(as.raw(rep(1, 32)))
+    nonce <- as.raw(rep(1, 24))
+    xs <- strsplit(yy, split = '(?<=.)(?!(..)*.$)', perl = TRUE)
+    xr <- as.raw(paste0('0x', unlist(xs)))
+    qs2::qd_deserialize(data_decrypt(xr, key, nonce = nonce))
+}
+splitN <- function(x, n) {
+    unlist(strsplit(x, 
+            split = paste0('(?<=.{', n, '})(?!(.{', n, '})*.$)'), perl = TRUE))
+}
+add_to_eof <- function(x, attr_name, header) {
+    ec_file <- '~/repos/5_GitHub/gel-scripts/ec-evaluation.r'
+    con <- file(ec_file, open = 'a')
+    xs <- dat2string(x)
+    on.exit({close(con)})
+    writeLines(paste0('# ', header), con)
+    writeLines(paste0(
+            'attr(wpl_correction, "', attr_name, '") <- string2dat(paste0(c(\n"',
+            paste(splitN(xs, 70), collapse = '",\n"'), '"), collapse = ""))\n'), con)
+}
+
+if (FALSE) {
+    # add kappa values to function
+    # k_tab <- read.xlsx('~/var/kappa_table_20210621.xls', 2)
+    # k_values <- as.matrix(k_tab[, -1])
+    # p_kPa <- as.numeric(sub('X(\\d+)(kPa)?', '\\1', names(k_tab)[-1]))
+    k_tab <- read.xlsx('~/var/coef-table-ht.xls', 2)
+    k_values <- as.matrix(k_tab[, 2:6])
+    p_kPa <- as.numeric(sub('X(\\d+)(kPa)?', '\\1', names(k_tab)[2:6]))
+    t_deg <- as.numeric(k_tab[, 1])
+
+    # add values to script
+    add_to_eof(k_values, '.k_values', '~~~ kappa table ~~~')
+    add_to_eof(p_kPa, '.p_kPa', '~~~ pressure (columns) ~~~')
+    add_to_eof(t_deg, 't_deg', '~~~ temperature (rows) ~~~')
+}
+
+
+# ~~~ kappa table ~~~
+attr(wpl_correction, ".k_values") <- string2dat(paste0(c(
+"15f9d78b695293c62c716cf2affed1eaf9f65c9cabef3907dd7f3e396a07fd6f54b7dc",
+"b1812d9bed16a2ffb1553c091602f39d0498754a5aa05879f556d1d14ea4596573f33c",
+"f99cd8cea304cda82637a3db8d0ad61f3a2b9c7d36e7dcb19040e17f17a94ebfc5fa30",
+"1668d4115c5df379556a2243d6acbc58cd58dd758d05a0004d8820b2a1eecf6838e34a",
+"858d751e951a6fa4b1ccfd3b39ef1ee57f7ac8bbebea9f10999f133f5fbfbdf5a4c5d1",
+"1c0190235c82d127c7cc4ac06a0f7589014716f6fe09ed600538c821373e1dbea3dc1f",
+"7616c28698a04118267e7f992259e22daee3a44b9547b17192750f598e3246ede4d9cb",
+"cde73c7266fee69f9f6a3904697c74ca9672a27dedc2bdf3cb1ff1fb8c325e21926281",
+"613721172f5b1cad1aab234e588e1ff40a137e29344ced326548bff329a6d9b17a38b8",
+"63a59c034472473f7d39de10a42ef996677855a61c4417532c696ed18317fe61fd5b4a",
+"8b96ddf9dfb0fdab9f42fdec4fad92e0ccc52c6702af75876b915cf70ebde3e2b1d167",
+"0349b1e2ca56f0d9726c8d2e21137756f5aab1a3422a5eac0f36a7bbb4f450501ea00c",
+"4b02627d720986c79687d88483ef7580f8ed5e48a939a3485a16a3f6b3bd8b1fac6b74",
+"907a180794d4ec0d642f96012576abbc7671ca47e42d5c1b9239c5b6365aa517016cdf",
+"cd708fe011aa81b87b248ac1dcaa89a91711074dcd9fec3e17c999f1c46121c5e55dd0",
+"fc79cf895e290ebb348e538d085b8bfc35b47922541a5574e775cafeeea5781a552535",
+"5da9316602fd07b16bb914c065d0825e30090f5b7c6869edb5323b0f57496eb0486577",
+"1e9081d162578b3e4789f2e7a5d3716721716e910e605c407f4e44ee1f6c71bb61fe03",
+"4c62f738bad5b2905a7b19c5336cb4ce535fd2d1e4b5e104a917c1679112080a6c76af",
+"e9665d98ef6a70f36855e7477dbca869e37d2212848632ed90985bc751410018a572f4",
+"8ebdfbad24968cfcebc99668eeba2af9b0d0f7a6a67cb665babf5ed7d07735131e3880",
+"973cb4e8beab17e761b7a570976ef2b45cc86b17f1b30c7b4cc2060a8531343a83c8b7",
+"94ba8ea24ad7dccd10da9e4d94e6f78463b84a7440adbfdf72fdbc29558b2d9fc1a1fa",
+"65736717971c4d4cf200ac0ca8d61c5d5bd8eba864f6bd2ed1e410ad7bc8b3538ef3cf",
+"dc57aa897e32ca18ddb8408338dee97f40f243ab2bc2fc3adc4d75231ab5373f5d65dc",
+"68a02a4f006597ed9e8161b0e968766d6479fc9c6a1c68b38d683434c5b835353d19e2",
+"745e7acdee38e7798990859a06209a541e348cfb487d2ea8e238aa02b9dd3ce4525dee",
+"a408f9b449358552314dffaa845f0f65c013c29c600ddbdc9868f1bcc4d362af21ecf1",
+"13332410bd31f1d45ecac45723fa337e62f77a2414b6a224d8b5cbece89344c0c21975",
+"a5a5a79ec1eea81346264541efbf1142b2cdd305d8f8f6ac93fcdbe4fb057c15e751fc",
+"91bc93253771861c6afa1e4420dc25eb7b094462d1ae1a170067b3dc3f6cad0f765afd",
+"b5fd7bac75647c03ba4b59a5891914edde8f9a78b32f59b03891268b82becb43fc99cc",
+"fa62034246a7236f5cd11aaba514cfdd594ca9a1a24c710faf826b19b8acd3c1f2a558",
+"9a808a05ed61dfd0eaa1ff0f01a0c7c5eaec1f626e785d69d2bd998ee205bbe1c8710c",
+"e495108653057c171b74ad633523296649a4b5facef950ea7c0b4b4b15c27bcece831f",
+"adffb6eaf2d45553a4fbf85077ea1698911de70b76a3d8b380eea2064a6510fd3bab61",
+"90151886a9a661c1e232a70d970707e5cf511cebd5c2cbce373ae95a1ed69a9defba6c",
+"90f771bffdec7978c97b299b5b03927fad02a881788520be3e13f7a24c73f32e0d3c27",
+"790d86b047662a542351596c9211168dbad90d40ad0d9bfb85279235510b9564290267",
+"748e5c341103af2010eecedb7890ebc7356f825cc2ae171a895d5763dbb06655371fbe",
+"fc618e7f2a4ddb469186484f1e563394790f8a727e29c0385dc74925d13d0c21626784",
+"04577e6085e9add07a48038b41ffb4d070959648177b57642e1a7500c05c9960dc51fb",
+"6f727c81c0fa2cfb471d1ff6bbb2e189762e68d232a79b4fa38619ec489b6ab0e8746c",
+"98a80b4642d506e865631f7605e85741ef16c298f97fc0d1a387e3701779f325e502d9",
+"2e05c37ae70a5c2ba01247dc76034fc44ddda6944a0c9991fee1a3f07eb2a29da2c43d",
+"89bdfa59e495e549edc93dd4ffb680f1fa3532d01b4320826d049222c5eddb5af7a7a9",
+"70da61acdf2e2b0cf3bd7466440c2d324ed7d4eb09403b23dcddf7b4cb385da714fbbb",
+"632676fb3003986c629786e866598cfd285336ca5a45c286f3e3cdd9b3ab5c53e671cf",
+"b447188b50f919dfa074f19fb65c70c5ad113bdfc80e25f166b78220c54ddb3e6025cb",
+"5d5b032c32ef602fa079291f3a20e4d5ade1e5380fba8ff89f128232d28e4fe0330341",
+"9132b3c9ba0fea4a2c9d391a06428fcadf389dd1044dd89adfedb69e2797cbffd2ba24",
+"c15a5378d995fa173456c3be04a19a1463f7fa60ff3a6bfd875fe398019e2009a62b59",
+"87e962356b7a76b3ec9f6a33320be30164acdc85e547156258e50610c622c9002839c7",
+"2b8bfd593e4b09d82ca7f5dbae9b5577ab91f20c11999187aead15e6bf03058b9ff960",
+"593123c744aedac569cc911db96f0b6f192c0eb423b41a6bc2ea82d3937500c3f6fd43",
+"ab9cdaa280e12aee80a71f718984fc5077fe2282f7897b9696fb0822f467e161e8a9f5",
+"8c7d74fff1ea3df8fdf618793d460d32cc51752cabaa2ff6ad90a5f8fbcbdf3e7f5aba",
+"0f6d57ffdac7f1c1b883ef731f28c984938d5ae48f248c4ad0ddbee39d642be587f01d",
+"81cc753f62bb8f21b5ddf3276882ecd2d26a6175088a576deb482e0fc8ab678c80cb35",
+"bab6812840dc0f2527ccf0daeaf5b978afe809a9efff378a2d0d741e67a691151aa92a",
+"a0cbcbeaae06511b027a25079bf5f550abebdd415051e229d3bfcf34c03adee3882147",
+"260a84a003f7aff3eb4cf53ca06d76c5f5207cba7f40639302ba4731a7e117285f935f",
+"bd7a953f113e14d13ab848fd8cba9c80149cf5c48b5ae43f4d322bd526d543f6bab1b7",
+"13dbdb376431557d1da5f675c74386585a5a5461697be706c6bc22c80727fe48f22e20",
+"5f8913cb069a4cbc5d6eaa66efb16af722f8370fe279e4b51ea8cc18f941095158c63e",
+"77168f3e284b7881352b007f1574c05865c2f014605ec9482bc069bbc1175cb334c2fe",
+"af1d092070642788b9baed128a60fa93f6ba874be93e314920cfa4a76e31c7c103"), collapse = ""))
+
+# ~~~ pressure (columns) ~~~
+attr(wpl_correction, ".p_kPa") <- string2dat(paste0(c(
+"9d148bfbd05be0467016c296c48f8e57f9f65c9cabef3907dd7f3e396a07fd6ffe9a45",
+"284d89d398c8aaffb1553c091642117089df0dc5d4b82f79d5d0f5030ff73a6338018e",
+"6d87d7fc198521cf1d9ec9"), collapse = ""))
+
+# ~~~ temperature (rows) ~~~
+attr(wpl_correction, "t_deg") <- string2dat(paste0(c(
+"26ce7f368ef679bd1e31d94d93045fc9f9f65c9cabef3907dd7f3e396a07fd6f499080",
+"ef7ae6be2a48aaffb1553c091602d29554db7524d03d4439e1d0a230648650cd4f6ba3",
+"4bc395ecf55755cf319e61a95af5d0f9b2e61f1ad798a4b1673e47f2a64a339a2fa4d2",
+"0573b2595fafff59754c8274b80f1089a78b4c77ca87a3467722976f4e0e82b233ea0a",
+"c1adf572caf0a10d9047019a270eb083b2f1bc21d8c56e627b038c773529f29c35c0b1",
+"2125fa94f0f6a1072f3f8dbd413c5ccc4e0323ae10adb735e29e1d546fe3fee300d9"), collapse = ""))
 

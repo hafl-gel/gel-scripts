@@ -11,29 +11,15 @@
 
 library(data.table)
 library(ibts)
-
-switch(Sys.info()['user']
-    , christoph = 
-    , hac5 = {
-        options(gel.scripts.path = '~/repos/5_GitHub/gel-scripts')
-    }
-    , stefan = {
-      options(gel.scripts.path = '~/git/gel-scripts')
-    }
-)
+library(sodium)
 
 ## 1. functions ----------------------------------------
 
 #
-read_frequi <- function(path_data, rds_fan_calib,
-    from = NULL, to = NULL, time_zone = 'UTC', V_crit = 3, 
-    max_interval_secs = 90, as_ibts = TRUE, fan_dia = NULL) {
+read_frequi <- function(path_data, from = NULL, to = NULL, time_zone = 'UTC', 
+    V_crit = 3, max_interval_secs = 90, as_ibts = TRUE, fan_dia = NULL) {
     # check path_data
     if (!file.exists(path_data)) stop('path_data: ', path_data, ' is not accessible')
-    if (missing(rds_fan_calib)) {
-        rds_fan_calib <- file.path(getOption('gel.scripts.path', ''), 'meas.fan/fan-calibration.rds')
-    }
-    if (!file.exists(rds_fan_calib)) stop('rds_fan_calib: ', rds_fan_calib, ' is not accessible')
     # get files
     files_fan <- dir(path_data, full.names = TRUE)
     # get dates
@@ -114,15 +100,15 @@ read_frequi <- function(path_data, rds_fan_calib,
     # select from/to range
     fan_data <- fan_data[st >= from & et <= to]
     # get coefficients
-    fan_cfs <- readRDS(rds_fan_calib)[[as.character(fan_dia)]]
+    fan_coefficients <- attr(read_frequi, 'fan_coefficients')[[as.character(fan_dia)]]
     # add speed (m/s) & air flow (m3/s)
     fan_data[, c('speed_m_s', 'flow_m3_s', 'extrapol') := {
-        speed <- Hz * fan_cfs[2] + fan_cfs[1]
+        speed <- Hz * fan_coefficients[2] + fan_coefficients[1]
         speed[Hz == 0] <- 0
         list(
             speed,
             speed * pi * (fan_dia / 200) ^ 2,
-            Hz > 0 & (Hz < attr(fan_cfs, 'limits')[1] | Hz > attr(fan_cfs, 'limits')[2])
+            Hz > 0 & (Hz < attr(fan_coefficients, 'limits')[1] | Hz > attr(fan_coefficients, 'limits')[2])
         )
     }]
     # set flow values below critical V to NA
@@ -139,22 +125,45 @@ read_frequi <- function(path_data, rds_fan_calib,
 
 ## 2. Calibration data ----------------------------------------
 
+dat2string <- function(x) {
+    key <- keygen(as.raw(rep(1, 32)))
+    nonce <- as.raw(rep(1, 24))
+    xs <- qs2::qd_serialize(x)
+    xr <- data_encrypt(xs, key, nonce = nonce)
+    paste0(xr, collapse = '')
+}
+string2dat <- function(x) {
+    key <- keygen(as.raw(rep(1, 32)))
+    nonce <- as.raw(rep(1, 24))
+    xs <- strsplit(x, split = '(?<=.)(?!(..)*.$)', perl = TRUE)
+    xr <- as.raw(paste0('0x', unlist(xs)))
+    qs2::qd_deserialize(data_decrypt(xr, key, nonce = nonce))
+}
+splitN <- function(x, n) {
+    unlist(strsplit(x, 
+            split = paste0('(?<=.{', n, '})(?!(.{', n, '})*.$)'), perl = TRUE))
+}
+add_to_eof <- function(x, attr_name, header, f_name, ec_file) {
+    con <- file(ec_file, open = 'a')
+    xs <- dat2string(x)
+    on.exit({close(con)})
+    writeLines(paste0('# ', header), con)
+    writeLines(paste0(
+            'attr(', f_name, ', "', attr_name, '") <- string2dat(paste0(c(\n"',
+            paste(splitN(xs, 70), collapse = '",\n"'), '"), collapse = ""))\n'), con)
+}
+
 ##  • fan calibration ====================
 
 if (FALSE) {
-    if (Sys.info()['sysname'] == 'Linux') {
-        # Christoph
-        path_calibration <- '~/repos/5_GitHub/gel-scripts/meas.fan'
-    } else {
-        # Steffu
-        path_calibration <- '~/git/gel-scripts/meas.fan'
-    }
-    library(tabulizer)
+    # remotes::install_github(c("ropensci/tabulizerjars", "ropensci/tabulizer"))
+    # library(tabulizer)
+    library(tabulapdf)
     path_manual <- '~/LFE/02_Daten/9-Messventilator/AQC-HZ-G-B-AL00006.pdf'
     all_tabs <- extract_tables(file = path_manual)
     # str(all_tabs)
     tabs_mat <- cbind(all_tabs[[11]][, 8], all_tabs[[12]][, 4:5])
-    fan_cfs <- apply(tabs_mat, 2, function(x) {
+    fan_coefficients <- apply(tabs_mat, 2, function(x) {
         tab <- apply(do.call(rbind, strsplit(
                 sub(',', '.', x[-(1:4)])
                     , split = ' ')), 2, as.numeric)
@@ -164,18 +173,35 @@ if (FALSE) {
         abline(m)
         cfs <- coef(m)
         names(cfs)[2] <- 'Hz'
-        attr(cfs, 'limits') <- range(tab[, 2])
+        attr(cfs, 'limits') <- range(tab[, 2], na.rm = TRUE)
         cfs
     }, simplify = FALSE)
-    fan_cfs <- setNames(fan_cfs, sub('0', '', tabs_mat[1, ]))
-    saveRDS(fan_cfs, file.path(path_calibration, 'fan-calibration.rds'))
+    fan_coefficients <- setNames(fan_coefficients, sub('0', '', colnames(tabs_mat)))
+    # path_calibration <- '~/repos/5_GitHub/gel-scripts/meas.fan'
+    # saveRDS(fan_coefficients, file.path(path_calibration, 'fan-calibration.rds'))
+    # readRDS(file.path(path_calibration, 'fan-calibration.rds'))
+    # add coefficients to function
+    # add values to script
+    add_to_eof(fan_coefficients, 'fan_coefficients', '~~~ fan coefficients ~~~', 
+        'read_frequi', '~/repos/5_GitHub/gel-scripts/meas.fan-functions.r')
 }
     
-## 3. testing ----------------------------------------
+## 3. Testing ----------------------------------------
 
 # path_lfe <- '~/LFE/02_Daten/9-Messventilator'
 # id <- '1'
 # file_calib <- '~/repos/5_GitHub/gel-scripts/meas.fan/fan-calibration.rds'
 
 # xx <- read_frequi(path_lfe, '14.11.2023 12:00', '16.11.2023 20:00', file_calib, id)
+
+## 4. Calibration Results ----------------------------------------
+
+# ~~~ fan coefficients ~~~
+attr(read_frequi, "fan_coefficients") <- string2dat(paste0(c(
+"1c15782abf437a97048e915491c9e4cff9f65c9cabef3907dd7f3e396a07fd6f882ef0",
+"2b49c0c9ec66aaffb1553c091642ea808ddfd186351b7c57b47dc770f5552241652de2",
+"008ec3bfab4d77ec3ba6a31493f8db91fb807b6bbde7e1e337316d90f0643beb1dc5a6",
+"3055a7490353625ab49c45a9eecf9536a7ff4c21c99920c456e83d39a66d867f53f945",
+"01fcc303d5d21d5a138e45057e7654e8c800592b5528a52e389dc76497e6c997f83442",
+"d90aad76776493e6"), collapse = ""))
 

@@ -3,6 +3,7 @@ library(data.table)
 library(ibts)
 library(Rcpp)
 library(sodium)
+library(fields)
 
 ## helper functions ----------------------------------------
 
@@ -2472,10 +2473,25 @@ wpl_correction <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'),
         stop('nh3_ppb is not implemented yet...')
     }
     if (nh3_ugm3 <- 'nh3_ugm3' %in% fluxes) {
-        # get coefficients A, B & C
-        coef_a <- 1
-        coef_b <- 1
-        coef_c <- 1
+        # calculate water vapor mole fraction
+        out[, xv_avg := get(paste0('avg_', water)) * 8.314 * t_k / p_pa / 1000]
+        # calculate Pe in kPa
+        out[, alpha_v := 2.48]
+        out[, pe_kPa := p_pa / 1000 * (1 + alpha_v * xv_avg)]
+        # get kappa values
+        out[, c('kappa_p', 'dkappa_p_at_t', 'dkappa_t_at_p') := 
+            as.data.table(t(mapply(get_kappa, tval = t_k - 273.14, pval = p_pa / 1000)))]
+        out[, c('kappa_pe', 'dkappa_pe_at_t', 'dkappa_t_at_pe') := 
+            as.data.table(t(mapply(get_kappa, tval = t_k - 273.14, pval = pe_kPa)))]
+        # calculate coefficients A, B & C
+        out[, paste0('coef_', letters[1:3]) := {
+            coef_a <- kappa_p
+            coef_b <- 1 + (1 - (alpha_v + 1) * xv_avg) * alpha_v * (pe_kPa * 1000) * 
+                dkappa_pe_at_t / coef_a
+            coef_c <- 1 + (1 - xv_avg) * out[, t_k] * 
+                dkappa_t_at_pe / coef_a + xv_avg * (coef_b - 1)
+            .(coef_a, coef_b, coef_c)
+        }]
         f_nh3 <- 1e-6
         # density
         out[, rho_nh3 := avg_nh3_ugm3 * f_nh3]
@@ -2537,6 +2553,22 @@ wpl_correction <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'),
     out
 }
 
+# get kappa value
+get_kappa <- function(tval, pval) {
+    tout <- tval + (-1:1) * 0.01
+    pout <- pval + (-1:1) * 0.05
+    t_deg <- attr(get_kappa, 't_deg')
+    p_kPa <- attr(get_kappa, 'p_kPa')
+    k_values <- attr(get_kappa, 'k_values')
+    out <- fields::interp.surface.grid(list(x = t_deg, y = p_kPa, z = k_values),
+        list(x = tout, y = pout))
+    c(
+        kappa = out$z[2, 2],
+        dkappa_P_at_T = (out$z[2, 3] - out$z[2, 1]) / (out$y[3] - out$y[1]) / 1000,
+        dkappa_T_at_P = (out$z[3, 2] - out$z[1, 2]) / (out$x[3] - out$x[1])
+    )
+}
+
 ## add kappa values for HT ----------------------------------------
 
 ### get data to script
@@ -2580,14 +2612,13 @@ if (FALSE) {
 
     # add values to script
     ec_file <- '~/repos/5_GitHub/gel-scripts/ec-evaluation.r'
-    add_to_eof(k_values, '.k_values', '~~~ kappa table ~~~', 'wpl_correction', ec_file)
-    add_to_eof(p_kPa, '.p_kPa', '~~~ pressure (columns) ~~~', 'wpl_correction', ec_file)
-    add_to_eof(t_deg, 't_deg', '~~~ temperature (rows) ~~~', 'wpl_correction', ec_file)
+    add_to_eof(k_values, 'k_values', '~~~ kappa table ~~~', 'get_kappa', ec_file)
+    add_to_eof(p_kPa, 'p_kPa', '~~~ pressure (columns) ~~~', 'get_kappa', ec_file)
+    add_to_eof(t_deg, 't_deg', '~~~ temperature (rows) ~~~', 'get_kappa', ec_file)
 }
 
-
 # ~~~ kappa table ~~~
-attr(wpl_correction, ".k_values") <- string2dat(
+attr(get_kappa, "k_values") <- string2dat(
 c("15","f9","d7","8b","69","52","93","c6","2c","71","6c","f2","af","fe","d1","ea","f9","f6","5c","9c","ab","ef","39","07","dd","7f","3e","39","6a","07",
 "fd","6f","54","b7","dc","b1","81","2d","9b","ed","16","a2","ff","b1","55","3c","09","16","02","f3","9d","04","98","75","4a","5a","a0","58","79","f5",
 "56","d1","d1","4e","a4","59","65","73","f3","3c","f9","9c","d8","ce","a3","04","cd","a8","26","37","a3","db","8d","0a","d6","1f","3a","2b","9c","7d",
@@ -2669,13 +2700,13 @@ c("15","f9","d7","8b","69","52","93","c6","2c","71","6c","f2","af","fe","d1","ea
 "c7","c1","03"))
 
 # ~~~ pressure (columns) ~~~
-attr(wpl_correction, ".p_kPa") <- string2dat(
+attr(get_kappa, "p_kPa") <- string2dat(
 c("9d","14","8b","fb","d0","5b","e0","46","70","16","c2","96","c4","8f","8e","57","f9","f6","5c","9c","ab","ef","39","07","dd","7f","3e","39","6a","07",
 "fd","6f","fe","9a","45","28","4d","89","d3","98","c8","aa","ff","b1","55","3c","09","16","42","11","70","89","df","0d","c5","d4","b8","2f","79","d5",
 "d0","f5","03","0f","f7","3a","63","38","01","8e","6d","87","d7","fc","19","85","21","cf","1d","9e","c9"))
 
 # ~~~ temperature (rows) ~~~
-attr(wpl_correction, "t_deg") <- string2dat(
+attr(get_kappa, "t_deg") <- string2dat(
 c("26","ce","7f","36","8e","f6","79","bd","1e","31","d9","4d","93","04","5f","c9","f9","f6","5c","9c","ab","ef","39","07","dd","7f","3e","39","6a","07",
 "fd","6f","49","90","80","ef","7a","e6","be","2a","48","aa","ff","b1","55","3c","09","16","02","d2","95","54","db","75","24","d0","3d","44","39","e1",
 "d0","a2","30","64","86","50","cd","4f","6b","a3","4b","c3","95","ec","f5","57","55","cf","31","9e","61","a9","5a","f5","d0","f9","b2","e6","1f","1a",

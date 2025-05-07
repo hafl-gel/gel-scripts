@@ -2549,7 +2549,7 @@ dat2string <- function(x) {
 string2dat <- function(x) {
     key <- keygen(as.raw(rep(1, 32)))
     nonce <- as.raw(rep(1, 24))
-    xs <- strsplit(yy, split = '(?<=.)(?!(..)*.$)', perl = TRUE)
+    xs <- strsplit(x, split = '(?<=.)(?!(..)*.$)', perl = TRUE)
     xr <- as.raw(paste0('0x', unlist(xs)))
     qs2::qd_deserialize(data_decrypt(xr, key, nonce = nonce))
 }

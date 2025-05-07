@@ -2459,6 +2459,8 @@ wpl_correction <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'),
     out[, rho_dry := p_pa * M_dry / R / t_k]
     # h2o molar mass (g/mol)
     M_h2o <- 18.015
+    # define mu (due to paper formulae
+    mu <- M_dry / M_h2o 
     # get h2o density/flux in g/m3
     f_h2o <- switch(water
         , h2o_mmolm3 = M_h2o * 1e-3
@@ -2504,7 +2506,7 @@ wpl_correction <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'),
             # second term
             coef_b * rho_nh3 / rho_dry * flux_h2o +
             # third term
-            coef_c * (1 + M_dry / M_h2o * rho_h2o / rho_dry) * 
+            coef_c * (1 + mu * rho_h2o / rho_dry) * 
                 rho_nh3 / t_k * cov_wT
             )]
         # get wpl factor
@@ -2527,7 +2529,7 @@ wpl_correction <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'),
             # second term
             rho_co2 / rho_dry * flux_h2o +
             # third term
-            (1 + M_dry / M_h2o * rho_h2o / rho_dry) * 
+            (1 + mu * rho_h2o / rho_dry) * 
                 rho_co2 / t_k * cov_wT
             ]
         # get wpl factor

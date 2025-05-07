@@ -2557,14 +2557,13 @@ splitN <- function(x, n) {
     unlist(strsplit(x, 
             split = paste0('(?<=.{', n, '})(?!(.{', n, '})*.$)'), perl = TRUE))
 }
-add_to_eof <- function(x, attr_name, header) {
-    ec_file <- '~/repos/5_GitHub/gel-scripts/ec-evaluation.r'
+add_to_eof <- function(x, attr_name, header, f_name, ec_file) {
     con <- file(ec_file, open = 'a')
     xs <- dat2string(x)
     on.exit({close(con)})
     writeLines(paste0('# ', header), con)
     writeLines(paste0(
-            'attr(wpl_correction, "', attr_name, '") <- string2dat(paste0(c(\n"',
+            'attr(', f_name, ', "', attr_name, '") <- string2dat(paste0(c(\n"',
             paste(splitN(xs, 70), collapse = '",\n"'), '"), collapse = ""))\n'), con)
 }
 
@@ -2579,9 +2578,10 @@ if (FALSE) {
     t_deg <- as.numeric(k_tab[, 1])
 
     # add values to script
-    add_to_eof(k_values, '.k_values', '~~~ kappa table ~~~')
-    add_to_eof(p_kPa, '.p_kPa', '~~~ pressure (columns) ~~~')
-    add_to_eof(t_deg, 't_deg', '~~~ temperature (rows) ~~~')
+    ec_file <- '~/repos/5_GitHub/gel-scripts/ec-evaluation.r'
+    add_to_eof(k_values, '.k_values', '~~~ kappa table ~~~', 'wpl_correction', ec_file)
+    add_to_eof(p_kPa, '.p_kPa', '~~~ pressure (columns) ~~~', 'wpl_correction', ec_file)
+    add_to_eof(t_deg, 't_deg', '~~~ temperature (rows) ~~~', 'wpl_correction', ec_file)
 }
 
 

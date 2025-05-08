@@ -1704,9 +1704,6 @@ process_ec_fluxes <- function(
             # -------------------------------------------------------------------------- 
             cat("~~~\nstarting flux evaluation...\n")
 
-            # get fft (keep list format)
-            FFTs <- SD[, I(lapply(.SD, \(x) fft(na.omit(x)) / .N)), .SDcols = flux_variables]
-
             # # calculate auto-covariances
             # # -------------------------------------------------------------------------- 
             # Power <- lapply(names(FFTs), \(i) {
@@ -1777,25 +1774,28 @@ process_ec_fluxes <- function(
             # calculate covariances with fix lag time:
             # -------------------------------------------------------------------------- 
             cat("\t- covariances\n")
-            Covars <- lapply(covariances_variables, function(i, ffts) {
-                # check scalars
-                if (i[2] %in% scalars && !is.null(na_ind <- na.action(ffts[[i[2]]]))) {
-                    # fix lengths
-                    ffts[[i[1]]] <- ffts[[i[1]]][-na_ind]
-                    # get N
-                    N <- length(ffts[[i[1]]])
-                } else {
-                    N <- .N
-                }
+            Covars <- SD[, I(lapply(covariances_variables, function(i) {
+                # TODO -> get ffts here and add to output
+                # get x
+                x <- get(i[1])
+                # get y
+                y <- get(i[2])
+                # get NA values
+                isfinite <- is.finite(x) & is.finite(y)
+                # get N
+                N <- sum(isfinite)
+                # get ffts
+                xfft <- fft(x[isfinite] / N)
+                yfft <- fft(y[isfinite] / N)
                 # get Re
-                re <- Re(fft(Conj(ffts[[i[2]]]) * ffts[[i[1]]], inverse = TRUE))
-                # get missing
+                re <- Re(fft(Conj(yfft) * xfft, inverse = TRUE))
                 # subset
                 if (N %% 2) {
                     out <- re[c(((N + 1) / 2 + 1):N, 1:((N + 1) / 2))] * N / (N - 1)
                 } else {
                     out <- re[c((N / 2 + 1):N, 1:(N / 2))] * N / (N - 1)
                 }
+                # get missing
                 n_missing <- n_period - N
                 if (sign(n_missing) >= 0) {
                     if (n_missing %% 2) {
@@ -1804,16 +1804,18 @@ process_ec_fluxes <- function(
                     } else {
                         n1 <- n2 <- rep(NA_real_, n_missing / 2)
                     }
-                    c(n1, out, n2)
+                    out <- c(n1, out, n2)
                 } else {
                     if (-n_missing %% 2) {
                         ind <- ((1 - n_missing) / 2 + 1):(N - (-n_missing - 1) / 2)
                     } else {
                         ind <- (1 - n_missing / 2):(N + n_missing / 2)
                     }
-                    out[ind]
+                    out <- out[ind]
                 }
-            }, ffts = FFTs)
+                # attach ffts
+                structure(out, ffts = list(x = xfft, y = yfft), isfinite = isfinite)
+            }))]
             names(Covars) <- covariances
 
             # find maximum in dynamic lag time range:
@@ -1827,8 +1829,7 @@ process_ec_fluxes <- function(
             # ------------------------------------------------------------------------
             # RE_RMSE (Eq. 9 in Langford et al. 2015)
             # -> ranges lo/hi (-/+180 to -/+150 secs? => define range as argument)
-            n <- length(Covars[[1]])
-            m <- ifelse(n %% 2, (n + 1) / 2, n / 2 + 1)
+            m <- ifelse(n_period %% 2, (n_period + 1) / 2, n_period / 2 + 1)
             lo_range <- m - rev(gamma_time_window) * 60 * rec_Hz
             hi_range <- m + gamma_time_window * 60 * rec_Hz
             # -> sd_cov_low
@@ -1845,70 +1846,59 @@ process_ec_fluxes <- function(
             # cospectra for fixed & dynamic lags
             # ------------------------------------------------------------------------ 			
             cat("\t- co-spectra\n")
-            Cospec_fix <- mapply(function(i, lag, ffts) {
-                    # check scalars
-                    N <- .N
-                    if (i[2] %in% scalars) {
-                        if (!is.null(na_ind <- na.action(scalar_list[[i[2]]]))) {
-                            # fix lengths
-                            ffts[[i[1]]] <- ffts[[i[1]]][-na_ind]
-                            # get N
-                            N <- length(ffts[[i[1]]])
-                        }
-                        x <- scalar_list[[i[2]]]
-                    } else {
-                        x <- SD[, get(i[2])]
-                    }
-                    xs <- fft(data.table::shift(x, lag, type = 'cyclic')) / N
-                    re <- Re(Conj(xs) * ffts[[i[1]]])[seq(N / 2) + 1] * N / 
-                        (N - 1) * 2
+            Cospec_fix <- mapply(function(var) {
+                    # get covar
+                    covars <- Covars[[paste(var, collapse = 'x')]]
+                    # get ffts
+                    xfft <- attr(covars, 'ffts')$x
+                    # get length
+                    N <- length(xfft)
+                    # get y
+                    yfft <- attr(covars, 'ffts')$y
+                    # get cospec
+                    re <- Re(Conj(yfft) * xfft)[seq(N / 2) + 1] * N / (N - 1) * 2
                     # get missing
                     n_missing <- n_period / 2 - length(re)
                     if (sign(n_missing) >= 0) {
-                        c(re, rep(NA_real_, n_missing))
+                        c(re, rep(0, n_missing))
                     } else {
                         re[seq_len(n_period / 2)]
                     }
-                }, i = covariances_variables, lag = fix_lag, 
-                MoreArgs = list(ffts = FFTs), SIMPLIFY = FALSE)
+                }, var = covariances_variables, SIMPLIFY = FALSE)
             names(Cospec_fix) <- covariances
-            Cospec_dyn <- mapply(function(i, lag, ffts) {
-                    # check scalars
-                    N <- .N
-                    if (i[2] %in% scalars) {
-                        if (!is.null(na_ind <- na.action(scalar_list[[i[2]]]))) {
-                            # fix lengths
-                            ffts[[i[1]]] <- ffts[[i[1]]][-na_ind]
-                            # get N
-                            N <- length(ffts[[i[1]]])
-                        }
-                        x <- scalar_list[[i[2]]]
+            Cospec_dyn <- mapply(function(var, lag) {
+                    # get covar
+                    covars <- Covars[[paste(var, collapse = 'x')]]
+                    # get ffts
+                    xfft <- attr(covars, 'ffts')$x
+                    # get length
+                    N <- length(xfft)
+                    # get y
+                    if (lag != 0) {
+                        y <- SD[attr(covars, 'isfinite'), get(var[2])]
+                        yfft <- fft(data.table::shift(y, lag, type = 'cyclic')) / N
                     } else {
-                        x <- SD[, get(i[2])]
+                        yfft <- attr(covars, 'ffts')$y
                     }
-                    xs <- fft(data.table::shift(x, lag, type = 'cyclic')) / N
-                    re <- Re(Conj(xs) * ffts[[i[1]]])[seq(N / 2) + 1] * N / 
-                        (N - 1) * 2
+                    # get cospec
+                    re <- Re(Conj(yfft) * xfft)[seq(N / 2) + 1] * N / (N - 1) * 2
                     # get missing
                     n_missing <- n_period / 2 - length(re)
                     if (sign(n_missing) >= 0) {
-                        c(re, rep(NA_real_, n_missing))
+                        c(re, rep(0, n_missing))
                     } else {
                         re[seq_len(n_period / 2)]
                     }
-                }, i = covariances_variables, lag = dyn_lag_max[2, ],
-                MoreArgs = list(ffts = FFTs), SIMPLIFY = FALSE)
+                }, var = covariances_variables, lag = dyn_lag_max[2, ], SIMPLIFY = FALSE)
             names(Cospec_dyn) <- covariances
 
             # ogives for fixed & dynamic lags 
             # ------------------------------------------------------------------------ 
             Ogive_fix <- lapply(Cospec_fix, function(x) {
-                x[is.na(x)] <- 0
                 rev(cumsum(rev(x)))
             })
             names(Ogive_fix) <- covariances
             Ogive_dyn <- lapply(Cospec_dyn, function(x) {
-                x[is.na(x)] <- 0
                 rev(cumsum(rev(x)))
             })
             names(Ogive_dyn) <- covariances

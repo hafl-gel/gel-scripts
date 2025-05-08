@@ -2226,10 +2226,10 @@ process_ec_fluxes <- function(
                     dir.create(path_folder, recursive = FALSE)
                 }
                 # get end of current interval time in UTC
-                soi_utc <- interval_start
-                eoi_utc <- end_time[.BY[[1]]]
+                soi_user <- with_tz(interval_start, tz_user)
+                eoi_user <- with_tz(end_time[.BY[[1]]], tz_user)
                 # get date in correct format
-                date_formatted <- format(soi_utc, '%Y%m%d')
+                date_formatted <- format(soi_user, '%Y%m%d')
                 # plotting:
                 # -------------------------------------------------------------------------- 
                 # -------------------------------------------------------------------------- 
@@ -2239,7 +2239,7 @@ process_ec_fluxes <- function(
                 # plot and save (rotated) data time series with raw-data trends...
                 # ------------------------------------------------------------------------
                 ## TODO: -> fix tz!!! -> use UTC but indicate in name!!!
-                time2 <- format(soi_utc, format = "%H%M")
+                time2 <- format(soi_user, format = "%H%M")
                 plotname <- paste("timeseries", date_formatted, time2, sep="-") 
                 ts_vars <- names(plot_timeseries)[plot_timeseries]
                 jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), width = 600, 
@@ -2248,6 +2248,8 @@ process_ec_fluxes <- function(
                         cbind(st = Time, as.data.frame(SD)),
                         wind, detrended_scalars, ts_vars,
                         plotting_var_colors, plotting_var_units)
+                    # fix time zone
+                    attr(ts_plot$x.limits, 'tzone') <- tz_user
                     print(ts_plot)
                 dev.off()
 
@@ -2255,6 +2257,7 @@ process_ec_fluxes <- function(
                 # ------------------------------------------------------------------------
                 for(i in covariances){
                     # i <- "w'TDL CH4'"
+                    # i <- covariances[3]
                     plotname <- paste("plots", date_formatted, time2, 
                         covariances_plotnames[i], sep = "-")
                     # fix ylab
@@ -2288,8 +2291,8 @@ process_ec_fluxes <- function(
                             col = plotting_covar_colors[i])
                         }
                         title(paste0(ylab, " flux ", 
-                            format(soi_utc, format = "(%H:%M:%S"), " - ", 
-                            format(eoi_utc, format = "%H:%M:%S)"), 
+                            format(soi_user, format = "(%H:%M:%S"), " - ", 
+                            format(eoi_user, format = "%H:%M:%S)"), 
                             if (scalar_covariances[i]) {
                                 if (damping_reference[i] == 'ogive_quality') {
                                     reflab <- paste0(damping_reference[i], ': ',

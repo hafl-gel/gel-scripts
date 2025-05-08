@@ -24,12 +24,13 @@ check_limits <- function(input, time, d_t, limits, wind = 500, hflg.met = "norep
 	hflgs <- unlist(lapply(dat, \(x) sum(is.na(x))))
 	if (pmatch(hflg.met, "replace", nomatch = 0) && any(hflgs > 0)) {
 		cat("Replacing flagged values by window median...\n")
+        whflgs <- hflgs > 0
 		# since we're only intrested in specific time windows, find first NAs:
-		isna <- lapply(dat[hflgs],function(x)which(is.na(x)))
+		isna <- lapply(dat[whflgs],function(x)which(is.na(x)))
 		# replace if all NA? (Why could this happen?)
-		l <- length(dat[hflgs][[1]])
+		l <- length(dat[[1]])
 		replAll <- (l - lengths(isna)) < 2
-		if(any(replAll)) dat[hflgs][replAll] <- rep(-99999,l)
+		if(any(replAll)) dat[whflgs][replAll] <- rep(-99999,l)
 		# replace wind by seconds
 		wind <- parse_time_diff(wind)
 		### create matrix with running means of size wind (default = 500)
@@ -45,16 +46,16 @@ check_limits <- function(input, time, d_t, limits, wind = 500, hflg.met = "norep
 			x2 <- st1[isna[[i]]] + wind/2 - d_t/2000
             # NOTE: fixme cutIntervals & getIntervals sind continuous!!! -> add contin. check in ibts!!!
             ind <- find_window(time, x1, x2)
-			# dat[hflgs][[i]][isna[[i]]] <- sapply(ind, function(x) mean(dat[hflgs][[i]][x], na.rm = TRUE))
-			dat[hflgs][[i]][isna[[i]]] <- sapply(ind, function(x) median(dat[hflgs][[i]][x], na.rm = TRUE))
+			# dat[whflgs][[i]][isna[[i]]] <- sapply(ind, function(x) mean(dat[whflgs][[i]][x], na.rm = TRUE))
+			dat[whflgs][[i]][isna[[i]]] <- sapply(ind, function(x) median(dat[whflgs][[i]][x], na.rm = TRUE))
 		}	
-		cat("number of replaced values\n*~~~~*\n", names(dat[hflgs]),"\n", lengths(isna),"\n*~~~~*\n")
+		cat("number of replaced values\n*~~~~*\n", names(dat[whflgs]),"\n", lengths(isna),"\n*~~~~*\n")
 	} else {
 		cat(
             paste0(
                 'number of values outside of hard limits (set to NA)\n*~~~~*\n',
                 paste(
-                    sprintf('%s: %i', names(dat[hflgs > 0]), hflgs[hflgs > 0]), 
+                    sprintf('%s: %i', names(dat[whflgs]), hflgs[whflgs > 0]), 
                     collapse = '\n'),
                 "\n*~~~~*\n"
             )

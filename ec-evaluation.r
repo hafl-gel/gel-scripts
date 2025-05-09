@@ -768,7 +768,8 @@ plot_covfunc <- function(cov_func, avg_t, dynLag, fixLag, ylab = NULL, xlim = NU
 
 # plot cospectra and ogives
 plot_cospec_ogive <- function(ogive, cospec, freq, ylab = NULL, xlim = NULL, cx = 1.5, 
-    col = "lightblue", nred = floor(sqrt(sqrt(length(ogive))) * 1.5), model_par = NULL) {
+    col = "lightblue", nred = floor(sqrt(sqrt(length(ogive))) * 1.5), model_par = NULL,
+    model_cols = '#AE71EB99', main = NULL) {
 	# reduced cospec 1:
 	cospec_reduced0 <- reduce_cospec(cospec,freq,nred*10)
 	cospec_f <- cospec_reduced0$cospec
@@ -785,7 +786,9 @@ plot_cospec_ogive <- function(ogive, cospec, freq, ylab = NULL, xlim = NULL, cx 
 	y_cf <- (cospec_f - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1]
 	y_crm <- (cospec_rm - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1]
 	py2 <- (prCo - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1]
-	plot(1,xlim=xlim,ylim=ylim, cex.axis=cx, cex.lab=cx,type="n",log="x",xaxt="n",yaxt="n",xlab="frequency [Hz]",ylab="",panel.first=abline(h=0,col=col,lty=2))
+	plot(1, xlim = xlim, ylim = ylim, cex.axis = cx, cex.lab = cx, type = "n", 
+        log = "x", xaxt = "n", yaxt = "n", xlab = "frequency [Hz]", ylab = "", 
+        panel.first = abline(h = 0, col = col, lty = 2), main = main)
 	abline(h=(0 - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1],lty=2,col="darkgrey")
 	axis(1,at=10^pxlims,labels=FALSE,tck=-0.01, cex.axis=cx, cex.lab=cx)
 	axis(1,at=10^pxlim,labels=10 ^ pxlim, cex.axis=cx, cex.lab=cx)
@@ -801,15 +804,16 @@ plot_cospec_ogive <- function(ogive, cospec, freq, ylab = NULL, xlim = NULL, cx 
 	lines(cospec_reduced0$freq,y_cf,col="#E5E0E0")
     # modelled cospec/ogive
     if (!is.null(model_par) && !anyNA(model_par)) {
+        if (length(model_cols) == 1) model_cols <- rep(model_cols, 2)
         # cospec: f * Co(f)
         cs <- freq * cospec_model(model_par['fx'], model_par['m'], model_par['mu'], 
             model_par['A0'], freq)
 	    y_cs <- (cs - min(prCo)) / diff(range(prCo)) * diff(ylim) + ylim[1]
-        lines(freq, y_cs, col = '#AE71EB99', lwd = 2)
+        lines(freq, y_cs, col = model_cols[1], lwd = 2)
         # ogive
         og <- ogive_model(model_par['fx'], model_par['m'], model_par['mu'], 
             model_par['A0'], freq)
-        lines(freq, og, col = '#AE71EB99', lwd = 2)
+        lines(freq, og, col = model_cols[2], lwd = 2)
     }
     # measured cospec/ogive
 	lines(cospec_reduced$freq,y_crm,type="b",col="black",lwd=2)

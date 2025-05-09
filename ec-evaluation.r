@@ -8,60 +8,140 @@ library(fields)
 ## helper functions ----------------------------------------
 
 # check (and optionally replace) 'hard' data limits
-check_limits <- function(input, time, d_t, limits, wind = 500, hflg.met = "norepl"){ 
-	nms <- names(input)
-	missing <- !(nms %in% colnames(limits))
-	if (length(nms[missing]) > 0) {
-        stop(paste0("physical limits missing for: ", paste(nms[missing], collapse=", ")),
-            call. = TRUE, domain = NULL)
+check_limits <- function(dat, limits, lim_window = 500, 
+    lim_method = c('norepl', 'median', 'dist', 'squaredist')[4],
+    d_t, bin_threshold = NULL){ 
+    # check data.table
+    if (!is.data.table(dat)) {
+        cat('Fixme in "check_limits" - argument "dat" is not a data.table...\n')
+        browser()
     }
-	limits <- limits[, nms]
-	### replace values outside of limits by NAs
-	dat <- mapply(function(x, lo, hi) {
-		x[x < lo | x > hi] <- NA
-		x
-	}, x = input, lo = limits["lower", ], hi = limits["top", ], SIMPLIFY = FALSE)
-	hflgs <- unlist(lapply(dat, \(x) sum(is.na(x))))
-	if (pmatch(hflg.met, "replace", nomatch = 0) && any(hflgs > 0)) {
-		cat("Replacing flagged values by window median...\n")
-        whflgs <- hflgs > 0
-		# since we're only intrested in specific time windows, find first NAs:
-		isna <- lapply(dat[whflgs],function(x)which(is.na(x)))
-		# replace if all NA? (Why could this happen?)
-		l <- length(dat[[1]])
-		replAll <- (l - lengths(isna)) < 2
-		if(any(replAll)) dat[whflgs][replAll] <- rep(-99999,l)
-		# replace wind by seconds
-		wind <- parse_time_diff(wind)
-		### create matrix with running means of size wind (default = 500)
-		# original code
-		# run.m <- lapply(dat_r,function(x)rollapply(x, wind, mean, by.column=TRUE, na.rm = TRUE, fill="extend"))
-		# using much! faster function caTools::runmean
-		# run.m <- lapply(dat_r,function(x)caTools::runmean(x, wind, alg = "C", endrule = "mean"))
-		# using correct windows, bit slower though
-		st1 <- as.numeric(time)
-		st2 <- c(st1[-1], st1[length(st1)] + d_t / 1000)
-		for(i in seq_along(isna)){
-			x1 <- st1[isna[[i]]] - wind/2 + d_t/2000
-			x2 <- st1[isna[[i]]] + wind/2 - d_t/2000
-            # NOTE: fixme cutIntervals & getIntervals sind continuous!!! -> add contin. check in ibts!!!
-            ind <- find_window(time, x1, x2)
-			# dat[whflgs][[i]][isna[[i]]] <- sapply(ind, function(x) mean(dat[whflgs][[i]][x], na.rm = TRUE))
-			dat[whflgs][[i]][isna[[i]]] <- sapply(ind, function(x) median(dat[whflgs][[i]][x], na.rm = TRUE))
-		}	
-		cat("number of replaced values\n*~~~~*\n", names(dat[whflgs]),"\n", lengths(isna),"\n*~~~~*\n")
+    # get variable names
+    hl_vars <- colnames(limits)
+    # mark values outside of limits
+    dat[, paste0(hl_vars, '_flag') := mapply(\(x, nm) {
+        out <- as.integer(x < limits['lower', nm] | x > limits['upper', nm])
+        out[is.na(out)] <- 2
+        out
+        }, x = .SD, nm = hl_vars, SIMPLIFY = FALSE), .SDcols = hl_vars]
+    # check threshold
+    if (!is.null(bin_threshold)) {
+        dat[, paste0(hl_vars, '_flag') := lapply(.SD, \(x) {
+            if (sum(x == 0) < bin_threshold) {
+                x[] <- -1
+            }
+            x
+            }),
+            .SDcols = paste0(hl_vars, '_flag'), by = bin
+        ]
+    }
+    # check flagged
+	hflgs <- dat[, sapply(.SD, \(x) sum(x > 0)), .SDcols = paste0(hl_vars, '_flag')]
+    # get variable to replace
+    var_hflgs <- hl_vars[hflgs > 0]
+	if (!pmatch(lim_method, "norepl", nomatch = 0) && any(hflgs > 0)) {
+		# replace lim_window by seconds
+		lim_window <- parse_time_diff(lim_window)
+        # get window limits
+        win_half <- lim_window / 2
+        # check method
+        switch(lim_method
+            , 'dist' = {
+                # get weighting (1 / r)
+                w1 <- 1 / seq_len(win_half * d_t)
+                w_1 <- c(rev(w1), 1, w1)
+            }
+            , 'squaredist' = {
+                # get weighting (1 / r ^ 2)
+                w1 <- 1 / seq_len(win_half * d_t) ^ 2
+                w_1 <- c(rev(w1), 1, w1)
+            }
+            , 'median' = {
+                w_1 <- NULL
+            }
+            , stop('replacement method not valid')
+        )
+        # loop over variables
+        if (is.null(w_1)) {
+            # be verbose
+            cat("Replacing flagged values by window median...\n")
+            # median
+            dat[, (var_hflgs) := lapply(var_hflgs, \(v) {
+                cat('\t-', v, '- ')
+                x <- get(v)
+                x_flag <- get(paste0(v, '_flag'))
+                isna <- which(x_flag > 0)
+                x1 <- as.numeric(Time[isna]) - win_half
+                x2 <- as.numeric(Time[isna]) + win_half
+                # find window for each NA
+                cat('get windows - ')
+                ind <- find_window(Time, x1, x2)
+                # replace values
+                cat('replace values: ')
+                x[isna] <- sapply(seq_along(isna), \(i) {
+                    verb <- paste(i, '/', length(isna))
+                    cat(verb)
+                    out <- median(x[ind[[i]]], na.rm = TRUE)
+                    cat(paste(rep('\b', nchar(verb)), collapse = ''))
+                    out
+                })
+                cat('\n')
+                x
+            })]
+        } else {
+            # be verbose
+            cat("Replacing flagged values by window weighted average\n")
+            # weighted mean
+            dat[, (var_hflgs) := lapply(var_hflgs, \(v) {
+                cat('\t-', v, '- ')
+                x <- get(v)
+                x_flag <- get(paste0(v, '_flag'))
+                isna <- which(x_flag > 0)
+                x1 <- as.numeric(Time[isna]) - win_half
+                x2 <- as.numeric(Time[isna]) + win_half
+                # find window for each NA
+                cat('get windows - ')
+                ind <- find_window(Time, x1, x2)
+                # replace values
+                cat('replace values: ')
+                x[isna] <- sapply(seq_along(isna), \(i) {
+                    verb <- paste(i, '/', length(isna))
+                    cat(verb)
+                    # i <- 1
+                    # i <- length(isna)
+                    j <- which(ind[[i]])
+                    xx <- x[j]
+                    xf <- x_flag[j]
+                    if (length(j) != length(w_1)) {
+                        w_i <- j - isna[i] + win_half * d_t
+                        out <- sum(x[i] * w_1[w_i], na.rm = TRUE) / sum(w_1[w_i][x_flag[i] == 0])
+                    }
+                    out <- sum(x[i] * w_1, na.rm = TRUE) / sum(w_1[x_flag[i] == 0])
+                    if (out == 0 && all(is.na(x[i]))) {
+                        out <- NA
+                    }
+                    cat(paste(rep('\b', nchar(verb)), collapse = ''))
+                    out
+                })
+                cat('\n')
+                x
+            })]
+        }
+		cat("\n*~~~~*\n")
 	} else {
+	    hflgs <- dat[, sapply(.SD, \(x) sum(x != 0)), .SDcols = paste0(hl_vars, '_flag')]
+        names(hflgs) <- hl_vars
 		cat(
             paste0(
                 'number of values outside of hard limits (set to NA)\n*~~~~*\n',
                 paste(
-                    sprintf('%s: %i', names(dat[whflgs]), hflgs[whflgs > 0]), 
+                    sprintf('%s: %i', var_hflgs, hflgs[var_hflgs]), 
                     collapse = '\n'),
                 "\n*~~~~*\n"
             )
         )
     }
-	dat
+	invisible(dat)
 }
 
 # C++ helper function used in hard limits function
@@ -862,7 +942,7 @@ process_ec_fluxes <- function(
             nh3_ppb = 5000, nh3_ugm3 = 5000, h2o_mmolm3 = 5000, 
             co2_mmolm3 = 5000)
         , hard_limits_window = '5mins'
-        , hard_limits_replace = FALSE
+        , hard_limits_method = c('norepl', 'median', 'dist', 'squaredist')[4]
 		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 'wxco2_mmolm3')
         # fix lag in seconds
 		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, 
@@ -971,7 +1051,6 @@ process_ec_fluxes <- function(
     covariances_plotnames <- make.names(sub("x", "", covariances))
     names(covariances_plotnames) <- covariances
     covariances_variables <- strsplit(covariances, "x")
-    hl_method <- if (hard_limits_replace) 'repl' else 'norepl'
     if (is.null(z_ec) || !is.numeric(z_ec)) {
         stop('argument "z_ec" must be provided as numeric value (height in m a.g.l)!')
     }
@@ -1030,7 +1109,7 @@ process_ec_fluxes <- function(
     plotting_covar_units <- fix_defaults(plotting_covar_units, covariances)
     plotting_covar_colors <- fix_defaults(plotting_covar_colors, covariances)
 
-    lim_range <- rbind(lower = hard_limits_lower, top = hard_limits_upper)
+    lim_range <- rbind(lower = hard_limits_lower, upper = hard_limits_upper)
     damp_region <- mapply(c, damping_lower, damping_upper, SIMPLIFY = FALSE)
 
     # get flux variables and lag times:                                      
@@ -1487,12 +1566,17 @@ process_ec_fluxes <- function(
     # --------------------------------------------------------------------------
     cat("~~~\nchecking hard limits...\n")
     if (any(hard_limits)) {
-        daily_data[, variables[hard_limits] := check_limits(
-            mget(variables[hard_limits]), Time, rec_Hz, 
-            lim_range[, variables[hard_limits], drop = FALSE], 
-            hard_limits_window, hl_method
-            )]
-    } 
+        hl_vars <- names(hard_limits)[hard_limits]
+        if (any(!(hl_vars %in% colnames(lim_range)))) {
+            hl_missing <- !(hl_vars %in% colnames(lim_range))
+            stop(
+                'hard limits are missing for variables: ',
+                paste(names(hard_limits)[hl_missing], collapse = ', ')
+            )
+        }
+        check_limits(daily_data, lim_range[, hl_vars], hard_limits_window, 
+            hard_limits_method, rec_Hz, n_threshold)
+    }
 
     # define coordinate system
     if (daily_data[, sonic[1] == 'HS']) {
@@ -1615,9 +1699,9 @@ process_ec_fluxes <- function(
                 # loop over scalars & check
                 for (s in scalars) {
                     x <- SD[, unlist(mget(s, ifnotfound = NA))]
-                    if (sum(is.finite(x)) < n_threshold) {
-                        cat('=> ', s, ': number of valid measurements is below',
-                            ' threshold -> exclude from current interval\n', sep = '')
+                    if (anyNA(x)) {
+                        cat('=> ', s, ': measurement contains NA values',
+                            ' -> exclude from current interval\n', sep = '')
                         scalars <- scalars[!(scalars %in% s)]
                         flux_variables <- flux_variables[!(flux_variables %in% s)]
                         plot_timeseries <- plot_timeseries[!(names(plot_timeseries) %in% s)]

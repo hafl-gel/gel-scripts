@@ -2166,6 +2166,28 @@ process_ec_fluxes <- function(
                 names(dyn_damping_deming) <- names(Damping_dyn)
             }
 
+            v_stats <- unlist(sapply(variables, \(x) {
+                v <- get(x)
+                if (hard_limits[x]) {
+                    # get -1, 1, 2 flags
+                    vf <- get(paste0(x, '_flag'))
+                    c(
+                        below_thresh = vf[1] == -1,
+                        na_before = sum(vf == 1),
+                        hl_values = sum(vf == 2),
+                        na_after = sum(is.na(v))
+                    )
+                } else {
+                    # get # NA values only
+                    c(
+                        below_thresh = NA_integer_,
+                        na_before = NA_integer_,
+                        hl_values = NA_integer_,
+                        na_after = sum(is.na(v))
+                    )
+                }
+            }, simplify = FALSE))
+
             # write results:
             # -------------------------------------------------------------------------- 
             out <- c(
@@ -2175,6 +2197,7 @@ process_ec_fluxes <- function(
                     , n_values = .N
                     #, SubInts =  subint_n
                 )
+                , as.list(v_stats)
                 , if (ht_provided) {
                     list(
                         ht_temp_amb = mean(ht_temp_amb, na.rm = TRUE)

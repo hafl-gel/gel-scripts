@@ -769,7 +769,7 @@ plot_covfunc <- function(cov_func, avg_t, dynLag, fixLag, ylab = NULL, xlim = NU
 # plot cospectra and ogives
 plot_cospec_ogive <- function(ogive, cospec, freq, ylab = NULL, xlim = NULL, cx = 1.5, 
     col = "lightblue", nred = floor(sqrt(sqrt(length(ogive))) * 1.5), model_par = NULL,
-    model_cols = '#AE71EB99', main = NULL) {
+    model_cols = '#AE71EB99') {
 	# reduced cospec 1:
 	cospec_reduced0 <- reduce_cospec(cospec,freq,nred*10)
 	cospec_f <- cospec_reduced0$cospec
@@ -788,7 +788,7 @@ plot_cospec_ogive <- function(ogive, cospec, freq, ylab = NULL, xlim = NULL, cx 
 	py2 <- (prCo - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1]
 	plot(1, xlim = xlim, ylim = ylim, cex.axis = cx, cex.lab = cx, type = "n", 
         log = "x", xaxt = "n", yaxt = "n", xlab = "frequency [Hz]", ylab = "", 
-        panel.first = abline(h = 0, col = col, lty = 2), main = main)
+        panel.first = abline(h = 0, col = col, lty = 2))
 	abline(h=(0 - min(prCo))/diff(range(prCo))*diff(ylim) + ylim[1],lty=2,col="darkgrey")
 	axis(1,at=10^pxlims,labels=FALSE,tck=-0.01, cex.axis=cx, cex.lab=cx)
 	axis(1,at=10^pxlim,labels=10 ^ pxlim, cex.axis=cx, cex.lab=cx)

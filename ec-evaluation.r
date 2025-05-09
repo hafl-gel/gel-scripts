@@ -1633,8 +1633,7 @@ process_ec_fluxes <- function(
     if (ogives_out) {
         e_ogive <- new.env()
         e_ogive$Cospec_dyn_Out <- e_ogive$Cospec_fix_Out <- e_ogive$Covars_Out <- 
-            e_ogive$Ogive_fix_Out <- e_ogive$Ogive_dyn_Out <- 
-                setNames(vector("list", length(start_time)), format(start_time))
+            e_ogive$Ogive_fix_Out <- e_ogive$Ogive_dyn_Out <- list()
     }
 
 
@@ -2109,7 +2108,7 @@ process_ec_fluxes <- function(
 
             # should ogives be provided with output
             if (ogives_out) {
-                int_start <- format(interval_start)
+                int_start <- format(interval_start, '%Y-%m-%d %H:%M')
                 e_ogive$Cospec_fix_Out[[int_start]] <- c(
                     list(freq = freq, model_coef = ogive_par_fix), Cospec_fix)
                 e_ogive$Cospec_dyn_Out[[int_start]] <- c(

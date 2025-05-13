@@ -204,7 +204,7 @@ read_ht8700_old <- function(FilePath, tz = "Etc/GMT-1"){
         }
         # set data time zone
         tz_data <- 'Etc/GMT-1'
-    } else if (grepl('^(py_)?fnf_01_ht8700', bn)) {
+    } else if (grepl('^(py_)?fnf_0\\d_ht8700', bn)) {
         # new data structure on loggerbox
         data_pattern <- '^\\d{4}-\\d{2}-\\d{2}T\\d{2}[0-9.:]+Z,([ A-Z0-9.+-]+,){18}[[ 0-9.+-]+$'
         # set data time zone
@@ -319,7 +319,7 @@ read_ht8700 <- function(FilePath) {
     } else if (is_old_structure <- grepl('^ht8700_', bn)) {
         # read with old function
         return(read_ht8700_old(FilePath, tz = 'Etc/GMT-1'))
-    } else if (!grepl('^(py_)?fnf_01_ht8700', bn)) {
+    } else if (!grepl('^(py_)?fnf_0\\d_ht8700', bn)) {
         # wrong file name
         stop('data filename not valid')
     }

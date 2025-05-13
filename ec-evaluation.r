@@ -1225,7 +1225,7 @@ process_ec_fluxes <- function(
             sonic_files[i_gz]
         )
         # get date
-        sonic_dates <- sub('^(py_)?fnf_01_sonic_', '', sonic_files)
+        sonic_dates <- sub('^(py_)?fnf_0\\d_sonic_', '', sonic_files)
         # sort by date
         sonic_files <- sonic_files[order(sonic_dates)]
         # sort files by date (& time)
@@ -1286,7 +1286,7 @@ process_ec_fluxes <- function(
                 ht_files[i_gz]
             )
             # get date
-            ht_dates <- sub('^(py_)?fnf_01_ht8700_', '', ht_files)
+            ht_dates <- sub('^(py_)?fnf_0\\d_ht8700_', '', ht_files)
             # sort by date
             ht_files <- ht_files[order(ht_dates)]
             # get start
@@ -1340,7 +1340,7 @@ process_ec_fluxes <- function(
                 licor_files[i_gz]
             )
             # get date
-            licor_dates <- sub('^(py_)?fnf_01_licor_', '', licor_files)
+            licor_dates <- sub('^(py_)?fnf_0\\d_licor_', '', licor_files)
             # sort by date
             licor_files <- licor_files[order(licor_dates)]
             # get start & end

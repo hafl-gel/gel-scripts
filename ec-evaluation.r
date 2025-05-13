@@ -350,6 +350,15 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
                 ) 
             } else if (sub('_\\d+$', '', method) %in% names(filter_list)) {
                 win <- round(as.numeric(sub(".*_", "", method)) * Hz_ts)
+                if (win >= n) {
+                    return(
+                        list(
+                            coefficients = c(intercept = NA, slope = NA)
+                            , fitted = fitted
+                            , residuals = fitted
+                        )
+                    )
+                }
                 filter_name <- sub('_\\d+$', '', method)
                 # lowpass filter
                 filt <- filter_list[[filter_name]](win)

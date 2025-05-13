@@ -1391,8 +1391,10 @@ process_ec_fluxes <- function(
     if (any(end_time - start_time <= 0)) {
         stop('argument "end_time" must be strictly greater than "start_time"!')
     }
+    # get full vector if not yet provided
     if (length(start_time) == 1) {
-        start_time <- seq(start_time, end_time, by = avg_secs)
+        # "fix" end_time not included
+        start_time <- seq(start_time, end_time - 1e-4, by = avg_secs)
         end_time <- start_time + avg_secs
     }
 
@@ -1427,7 +1429,7 @@ process_ec_fluxes <- function(
     }
 
     # prepare interval times
-    dates_utc <- unique(date(c(start_time, end_time - 0.001)))
+    dates_utc <- unique(date(c(start_time, end_time - 1e-4)))
     dates_formatted <- gsub('-', '_', dates_utc, fixed = TRUE)
 
     # read raw data:
@@ -1720,7 +1722,8 @@ process_ec_fluxes <- function(
         SD <- copy(.SD)
 
         # check if any column contains finite data
-        if (SD[1, any(sapply(.SD, \(x) x > -3)), .SDcols = paste0(hl_vars, '_flag')]) {
+        if (.N >= n_threshold && 
+            SD[1, any(sapply(.SD, \(x) x > -3)), .SDcols = paste0(hl_vars, '_flag')]) {
 
             # check HT8700 quality: alarm codes & OSS
             if (ht_provided) {

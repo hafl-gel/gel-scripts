@@ -297,7 +297,7 @@ filter_list <- list(
 # detrending time series
 trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360"), Hz_ts = 10) {
     isfin <- is.finite(y)
-	n <- sum(isfin)
+    n <- sum(isfin)
     yfin <- y[isfin]
     fitted <- rep(NA_real_, length(y))
 	method <- method[1]
@@ -355,7 +355,7 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
                         list(
                             coefficients = c(intercept = NA, slope = NA)
                             , fitted = fitted
-                            , residuals = fitted
+                            , residuals = y - fitted
                         )
                     )
                 }
@@ -695,7 +695,6 @@ calcU <- function (ustar, Zo, L, z, kv = 0.4){
 # plot time series including filtered trend
 plot.tseries <- function(dat,wind,scal,selection,color,units){
 	msg <- paste(c(format(dat[1,1],"%d.%m.%Y")," - time series"),collapse="")
-	tsbeginning <- dat[1,1]
     # fix wind variables
 	dat[, c("u", "v", "w", "T")] <- dat[, paste0(c('u', 'v', 'w', 'T'), 'rot')]
 	# dat[, c("u", "v", "w", "T")] <- mapply("+", 

@@ -6,8 +6,8 @@ library(sodium)
 library(fields)
 
 ## get objects before sourcing script
-if (!exists('.ec_evaluation')) {
-    .ec_evaluation <- ls()
+if (.get_diff <- !exists('.ec_evaluation')) {
+    .ec_evaluation <- ls(all.names = TRUE)
 }
 
 ## helper functions ----------------------------------------
@@ -1057,7 +1057,7 @@ process_ec_fluxes <- function(
         , as_ibts = TRUE
         , ncores = 1
         , parallel_mem_limit = NULL
-        , parallelism_strategy = c('day-by-day', 'all-in-one')[1]
+        , parallelism_strategy = c('sequential', 'all-in-one')[1]
         , ...
 	){
     # ARGUMENTS
@@ -1067,14 +1067,13 @@ process_ec_fluxes <- function(
 
     # check parallelism startegy
     parallelism_strategy <- match.arg(parallelism_strategy, 
-        choices = c('day-by-day', 'all-in-one', 'recursive'))
+        choices = c('sequential', 'all-in-one', 'recursive'))
+
+    # get current environment
+    current_env <- environment()
 
     # if/else RECURSIVE
     if (parallelism_strategy != 'recursive') {
-
-        # get current environment
-        current_env <- environment()
-        current_obj <- ls(current_env)
 
         # check input
         if (create_graphs) {
@@ -1457,30 +1456,44 @@ process_ec_fluxes <- function(
             if (inherits(ncores, '')) {
                 # copy cluster
                 cl <- ncores
+                cat('\n=> Processing in parallel using', length(cl), 'cores.\n\n')
             } else {
                 # start cluster
                 cl <- bLSmodelR:::.makePSOCKcluster(ncores, 
                     memory_limit = parallel_mem_limit)
                 # stop cluster on exit
                 on.exit(parallel::stopCluster(cl))
+                cat('\n=> Processing in parallel using', length(cl), 'cores.\n')
+                cat('setting up cores:\n-> exporting libraries...')
                 # setup workers
                 parallel::clusterEvalQ(cl, {
                     # export libraries
                     library(data.table)
+                    library(ibts)
                     library(Rcpp)
                     library(fields)
                     # restrict DT threads to 1
                     setDTthreads(1L)
                 })
-                # export functions
-                parallel::clusterExport(cl, c(.ec_evaluation, 'read_sonic',
-                        'read_ht8700', 'read_licor'))
+                cat(' done.\n')
+                cat('-> exporting R objects...')
+                # export ec functions + all reading functions + cpp codes
+                codes <- ls(pattern = '^code_', .GlobalEnv)
+                parallel::clusterExport(cl, c(.ec_evaluation, 
+                        unique(c(ls(pattern = 'read', .GlobalEnv), codes))))
+                cat(' done.\n')
+                cat('-> recompiling C++ code on workers...')
+                # Fix using zlib library
+                parallel::clusterEvalQ(cl,
+                    Sys.setenv(PKG_LIBS = "-lz")
+                )
+                # recompile gzip cpp functions for linking
+                for (code in codes) {
+                    parallel::clusterCall(cl, \(x) sourceCpp(code = get(x)), code)
+                }
+                cat(' done.\n')
             }
         }
-
-        # get all objects defined so far
-        # TODO: remove me later?
-        current_obj <- setdiff(ls(current_env), current_obj)
 
     # if/else RECURSIVE else
     } else {
@@ -1494,8 +1507,8 @@ process_ec_fluxes <- function(
     }
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # check all-in-one vs. day-by-day
-    if (length(dates_utc) > 1 && parallelism_strategy == 'day-by-day') {
+    # check all-in-one vs. sequential
+    if (length(start_time) > 1 && parallelism_strategy == 'sequential') {
         # get current objects as string
         # strip off objects which need changes
         cobj <- setdiff(ls(current_env), 
@@ -1506,9 +1519,19 @@ process_ec_fluxes <- function(
         et_dates <- as.Date(end_time - 1e-4)
         # call main function recursively
         if (run_parallel) {
+            # distribute intervals
+            # if number of days > ncores -> distribute dates
+            # else -> distribute intervals in "daily" chunks
+
             browser()
+
+            cat("\n************************************************************\n") 
+            cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
+                "time elapsed: ", difftime(Sys.time(), script_start, unit = "mins"),
+                "minutes\n")
+            cat("************************************************************\n")  
         } else {
-            # loop over start_time dates
+            # loop over dates
             out_list <- lapply(
                 unique(st_dates), 
                 \(udate) {
@@ -1566,14 +1589,16 @@ process_ec_fluxes <- function(
         # read sonic files
         if (length(sonic_selected)) {
             if (run_parallel) {
-                sonic_raw <- rbindlist(bLSmodelR:::.clusterApplyLB(
+                sonic_raw <- rbindlist(
+                    bLSmodelR:::.clusterApplyLB(
                         cl,
                         file.path(sonic_directory, sonic_selected), 
                         \(x) {
                             cat('\t')
                             read_sonic(x)
                         }
-                ))
+                    )
+                )
             } else {
                 sonic_raw <- rbindlist(lapply(
                         file.path(sonic_directory, sonic_selected), 
@@ -1848,14 +1873,13 @@ process_ec_fluxes <- function(
 
     # loop over intervals: call MAIN function
     if (run_parallel) {
-        cat('here I am...\n')
-        browser()
-        # export current_env
-        parallel::clusterExport(cl, 'current_env')
-        # results <- rbindlist(bLSmodelR:::.clusterApplyLB(
-        #         cl, .ec_main
-        #     .ec_main(daily_data, current_env),
-        #     fill = TRUE)
+        # export current_env & main function
+        parallel::clusterExport(cl, 'current_env', current_env)
+        # run main function
+        results <- rbindlist(bLSmodelR:::.clusterApplyLB(
+                cl, split(daily_data, by = 'bin'),
+                \(x) .ec_main(x, current_env)),
+            fill = TRUE)
     } else {
         results <- .ec_main(daily_data, current_env)
     }
@@ -2977,8 +3001,8 @@ get_kappa <- function(tval, pval) {
 }
 
 ## get objects after sourcing script
-if (!exists('.ec_evaluation')) {
-    .ec_evaluation <- setdiff(ls(), .ec_evaluation)
+if (.get_diff) {
+    .ec_evaluation <- setdiff(ls(all.names = TRUE), .ec_evaluation)
 }
 
 ## add kappa values for HT ----------------------------------------

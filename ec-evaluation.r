@@ -1473,7 +1473,8 @@ process_ec_fluxes <- function(
                     setDTthreads(1L)
                 })
                 # export functions
-                parallel::clusterExport(cl, c(.ec_evaluation, 'read_sonic'))
+                parallel::clusterExport(cl, c(.ec_evaluation, 'read_sonic',
+                        'read_ht8700', 'read_licor'))
             }
         }
 
@@ -1564,13 +1565,24 @@ process_ec_fluxes <- function(
             ]
         # read sonic files
         if (length(sonic_selected)) {
-            sonic_raw <- rbindlist(lapply(
-                    file.path(sonic_directory, sonic_selected), 
-                    \(x) {
-                        cat('\t')
-                        read_sonic(x)
-                    }
-            ))
+            if (run_parallel) {
+                sonic_raw <- rbindlist(bLSmodelR:::.clusterApplyLB(
+                        cl,
+                        file.path(sonic_directory, sonic_selected), 
+                        \(x) {
+                            cat('\t')
+                            read_sonic(x)
+                        }
+                ))
+            } else {
+                sonic_raw <- rbindlist(lapply(
+                        file.path(sonic_directory, sonic_selected), 
+                        \(x) {
+                            cat('\t')
+                            read_sonic(x)
+                        }
+                ))
+            }
         } else {
             sonic_raw <- NULL
         }
@@ -1598,13 +1610,24 @@ process_ec_fluxes <- function(
             ]
         # read ht files
         if (length(ht_selected)) {
-            ht <- rbindlist(lapply(
-                    file.path(ht_directory, ht_selected), 
-                    \(x) {
-                        cat('\t')
-                        read_ht8700(x)
-                    }
-            ))
+            if (run_parallel) {
+                ht <- rbindlist(bLSmodelR:::.clusterApplyLB(
+                        cl,
+                        file.path(ht_directory, ht_selected), 
+                        \(x) {
+                            cat('\t')
+                            read_ht8700(x)
+                        }
+                ))
+            } else {
+                ht <- rbindlist(lapply(
+                        file.path(ht_directory, ht_selected), 
+                        \(x) {
+                            cat('\t')
+                            read_ht8700(x)
+                        }
+                ))
+            }
         } else {
             ht <- NULL
         }
@@ -1635,15 +1658,28 @@ process_ec_fluxes <- function(
             ]
         if (length(licor_selected)) {
             # read new licor files
-            licor <- rbindlist(lapply(
-                    file.path(licor_directory, licor_selected), 
-                    \(x) {
-                        cat('\tFile:', x, '- ')
-                        out <- read_licor(x)
-                        cat('done\n')
-                        out
-                    }
-            ))
+            if (run_parallel) {
+                licor <- rbindlist(bLSmodelR:::.clusterApplyLB(
+                        cl,
+                        file.path(licor_directory, licor_selected), 
+                        \(x) {
+                            cat('\tFile:', x, '- ')
+                            out <- read_licor(x)
+                            cat('done\n')
+                            out
+                        }
+                ))
+            } else {
+                licor <- rbindlist(lapply(
+                        file.path(licor_directory, licor_selected), 
+                        \(x) {
+                            cat('\tFile:', x, '- ')
+                            out <- read_licor(x)
+                            cat('done\n')
+                            out
+                        }
+                ))
+            }
         } else {
             licor <- NULL
         }

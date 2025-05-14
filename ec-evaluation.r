@@ -5,6 +5,11 @@ library(Rcpp)
 library(sodium)
 library(fields)
 
+## get objects before sourcing script
+if (!exists('.ec_evaluation')) {
+    .ec_evaluation <- ls()
+}
+
 ## helper functions ----------------------------------------
 
 # check (and optionally replace) 'hard' data limits
@@ -1050,395 +1055,485 @@ process_ec_fluxes <- function(
             wxnh3_ugm3 = 'indianred', wxh2o_mmolm3 = '#8FC1E6', wxco2_mmolm3 = 'seagreen4')
 		, ogives_out = FALSE
         , as_ibts = TRUE
+        , ncores = 1
+        , parallel_mem_limit = NULL
+        , parallelism_strategy = c('day-by-day', 'all-in-one')[1]
+        , ...
 	){
+    # ARGUMENTS
 
     # start processing
 	script_start <- Sys.time()
 
-    # check input
-    if (create_graphs) {
-        # TODO: eventually remove one of either arguments
-        if (is.null(graphs_directory)) {
-            stop('argument "create_graphs" is TRUE, but "graphs_directory" is not specified!')
+    # check parallelism startegy
+    parallelism_strategy <- match.arg(parallelism_strategy, 
+        choices = c('day-by-day', 'all-in-one', 'recursive'))
+
+    # if/else RECURSIVE
+    if (parallelism_strategy != 'recursive') {
+
+        # get current environment
+        current_env <- environment()
+        current_obj <- ls(current_env)
+
+        # check input
+        if (create_graphs) {
+            # TODO: eventually remove one of either arguments
+            if (is.null(graphs_directory)) {
+                stop('argument "create_graphs" is TRUE, but "graphs_directory" is not specified!')
+            }
+            library(reshape2)
+            library(lattice)
         }
-        library(reshape2)
-        library(lattice)
-    }
-    if (create_graphs && (
-            !is.character(graphs_directory) || !dir.exists(graphs_directory)
-            )) {
-        stop('argument "graphs_directory": directory "', graphs_directory, 
-            '" does not exist!')
-    }
-
-    # check sonic function
-    if (!exists('read_sonic', mode = "function")) {
-        stop("function 'read_sonic' doesn't exist -> please source gel script",
-        " read-sonic-data.r")
-    }
-
-    # check data for nh3, co2 & h2o
-    if (is.data.table(sonic_directory)) {
-        if (any(grepl('nh3', names(sonic_directory)))) {
-            ht_directory <- 'data provided with sonic'
+        if (create_graphs && (
+                !is.character(graphs_directory) || !dir.exists(graphs_directory)
+                )) {
+            stop('argument "graphs_directory": directory "', graphs_directory, 
+                '" does not exist!')
         }
-        if (any(grepl('h2o', names(sonic_directory)))) {
-            licor_directory <- 'data provided with sonic'
+
+        # check sonic function
+        if (!exists('read_sonic', mode = "function")) {
+            stop("function 'read_sonic' doesn't exist -> please source gel script",
+            " read-sonic-data.r")
         }
-    }
 
-    # get scalars and fix missing instruments
-    scalars <- sub('wx', '', grep('wx[^T].+', covariances, value = TRUE))
-    # fix missing ht8700
-    if (ht_null <- is.null(ht_directory)) {
-        scalars <- grep('nh3', scalars, value = TRUE, invert = TRUE)
-        covariances <- grep('nh3', covariances, value = TRUE, invert = TRUE)
-    } else if (!exists('read_ht8700', mode = "function")) {
-        stop("function 'read_ht8700' doesn't exist -> please source gel script",
-        " ht8700-functions.r")
-    }
-    # fix missing licor
-    if (licor_null <- is.null(licor_directory)) {
-        scalars <- grep('h2o|co2', scalars, value = TRUE, invert = TRUE)
-        covariances <- grep('h2o|co2', covariances, value = TRUE, invert = TRUE)
-    } else if (!exists('read_licor', mode = "function")) {
-        stop("function 'read_licor' doesn't exist -> please source gel script",
-        " licor-functions.r")
-    }
-
-    # prepare variables etc.
-    variables <- c('u', 'v', 'w', 'T', scalars)
-    scalar_covariances <- grepl('wx[^T].+', covariances)
-    names(scalar_covariances) <- covariances
-    covariances_plotnames <- make.names(sub("x", "", covariances))
-    names(covariances_plotnames) <- covariances
-    covariances_variables <- strsplit(covariances, "x")
-    if (is.null(z_ec) || !is.numeric(z_ec)) {
-        stop('argument "z_ec" must be provided as numeric value (height in m a.g.l)!')
-    }
-    if (is.null(z_canopy) || !is.numeric(z_canopy)) {
-        stop('argument "z_canopy" must be provided as numeric value ',
-            '(height of canopy in meters)!')
-    }
-    if (is.null(dev_north) || !is.numeric(dev_north)) {
-        stop('argument "dev_north" must be provided as numeric value!')
-    }
-    if (is.null(declination)) {
-        stop('argument "declination" must be provided!',
-        ' -> it is also possible to provide a list with lon/lat entries...')
-    } else if (is.list(declination) || length(declination) == 2) {
-        if (!require(oce)) {
-            stop('R package "oce" must be installed when lat/lon is provided')
+        # check data for nh3, co2 & h2o
+        if (is.data.table(sonic_directory)) {
+            if (any(grepl('nh3', names(sonic_directory)))) {
+                ht_directory <- 'data provided with sonic'
+            }
+            if (any(grepl('h2o', names(sonic_directory)))) {
+                licor_directory <- 'data provided with sonic'
+            }
         }
-        mag_dec <- \(x) oce::magneticField(declination$lon, declination$lat, x)$declination
-    } else if (!is.numeric(declination) || length(declination) != 1) {
-        stop('argument "declination" must be a single numeric value!')
-    } else {
-        mag_dec <- \(x) declination
-    }
 
-    # fix input (vectors of default values)
-    rotation_method <- match.arg(rotation_method, c('two axis', 'planar fit'))
-    rot_args <- rotation_args
-    rotation_args <- eval(formals(process_ec_fluxes)$rotation_args)
-    rotation_args[names(rot_args)] <- rot_args
-    detrending <- fix_defaults(detrending, variables)
-    na_limits <- fix_defaults(na_limits, variables)
-    limits_lower <- fix_defaults(limits_lower, variables)
-    limits_upper <- fix_defaults(limits_upper, variables)
-    lag_fix <- fix_defaults(lag_fix, covariances)
-    lag_dyn <- fix_defaults(lag_dyn, covariances)
-    damping_reference <- fix_defaults(damping_reference, covariances[scalar_covariances])
-    damping_lower <- fix_defaults(damping_lower, covariances[scalar_covariances])
-    damping_upper <- fix_defaults(damping_upper, covariances[scalar_covariances])
-    # subint_detrending <- fix_defaults(subint_detrending, variables)
-    ts_vars <- variables
-    if (!ht_null) {
-        # add ht8700 quality parameters (oss) to plotting
-        ts_vars <- c(ts_vars, 'ht_oss')
-    }
-    if (!licor_null) {
-        # add licor quality parameters (co2ss) to plotting
-        ts_vars <- c(ts_vars, 'li_co2ss')
-    }
-    # extend & sort ts_vars
-    # ts_vars <- union(names(plot_timeseries), ts_vars)
-    plot_timeseries <- fix_defaults(plot_timeseries, ts_vars)
-    # only take TRUE
-    plot_timeseries <- plot_timeseries[plot_timeseries]
-    plotting_var_colors <- fix_defaults(plotting_var_colors, ts_vars)[names(plot_timeseries)]
-    plotting_var_units <- fix_defaults(plotting_var_units, ts_vars)[names(plot_timeseries)]
-    plotting_covar_units <- fix_defaults(plotting_covar_units, covariances)
-    plotting_covar_colors <- fix_defaults(plotting_covar_colors, covariances)
-
-    lim_range <- rbind(lower = limits_lower, upper = limits_upper)
-    damp_region <- mapply(c, damping_lower, damping_upper, SIMPLIFY = FALSE)
-
-    # get flux variables and lag times:                                      
-    # ------------------------------------------------------------------------------ 
-    flux_variables <- unique(unlist(strsplit(covariances, split = "x")))
-
-    # ------------------------------------------------------------------------------
-
-    # get data
-    # ------------------------------------------------------------------------------
-
-    cat("\n************************************************************\n")
-    cat("HT8700/LI-COR EC flux processing\n")
-
-    # mandatory sonic data
-    if (sonic_has_data <- inherits(sonic_directory, 'data.table')) {
-        cat('Sonic Anemometer: raw data provided...\n')
-        setDT(sonic_directory)
-        # set time zone to UTC
-        sonic_directory[, Time := with_tz(Time, 'UTC')]
-        # get start & end
-        start_sonic <- sonic_directory[, Time[1]]
-        end_sonic <- sonic_directory[, Time[.N]]
-    } else {
-        # get files
-        sonic_files <- dir(sonic_directory, pattern = '^(py_)?fnf_.*_sonic_.*')
-        if (sonic_old_format <- length(sonic_files) == 0) {
-            cat('Implement old CET format sonic!\n')
-            browser()
-            # old loggerbox format
-            sonic_files <- dir(sonic_directory, pattern = '^data_sonic-.')
+        # get scalars and fix missing instruments
+        scalars <- sub('wx', '', grep('wx[^T].+', covariances, value = TRUE))
+        # fix missing ht8700
+        if (ht_null <- is.null(ht_directory)) {
+            scalars <- grep('nh3', scalars, value = TRUE, invert = TRUE)
+            covariances <- grep('nh3', covariances, value = TRUE, invert = TRUE)
+        } else if (!exists('read_ht8700', mode = "function")) {
+            stop("function 'read_ht8700' doesn't exist -> please source gel script",
+            " ht8700-functions.r")
         }
-        # check files available
-        if (length(sonic_files) == 0) {
-            stop('No sonic data available in "', sonic_directory, '"!')
+        # fix missing licor
+        if (licor_null <- is.null(licor_directory)) {
+            scalars <- grep('h2o|co2', scalars, value = TRUE, invert = TRUE)
+            covariances <- grep('h2o|co2', covariances, value = TRUE, invert = TRUE)
+        } else if (!exists('read_licor', mode = "function")) {
+            stop("function 'read_licor' doesn't exist -> please source gel script",
+            " licor-functions.r")
         }
-        # prioritize py_ files
-        # get py_
-        i_py <- grepl('^py_', sonic_files)
-        # remove duplicated non-py
-        sonic_files <- c(
-            setdiff(sonic_files[!i_py], sub('^py_', '', sonic_files[i_py])),
-            sonic_files[i_py]
-        )
-        # prioritize gz files
-        i_gz <- grepl('\\.gz$', sonic_files)
-        # remove duplicated non-py
-        sonic_files <- c(
-            setdiff(sonic_files[!i_gz], sub('\\.gz$', '.csv', sonic_files[i_gz])),
-            sonic_files[i_gz]
-        )
-        # get date
-        sonic_dates <- sub('^(py_)?fnf_0\\d_sonic_', '', sonic_files)
-        # sort by date
-        sonic_files <- sonic_files[order(sonic_dates)]
-        # sort files by date (& time)
-        sonic_files <- sort(sonic_files)
-        # get start
-        if (sonic_old_format) {
-            sonic_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', 'Etc/GMT-1', 
-                '\\1000000')
+
+        # prepare variables etc.
+        variables <- c('u', 'v', 'w', 'T', scalars)
+        scalar_covariances <- grepl('wx[^T].+', covariances)
+        names(scalar_covariances) <- covariances
+        covariances_plotnames <- make.names(sub("x", "", covariances))
+        names(covariances_plotnames) <- covariances
+        covariances_variables <- strsplit(covariances, "x")
+        if (is.null(z_ec) || !is.numeric(z_ec)) {
+            stop('argument "z_ec" must be provided as numeric value (height in m a.g.l)!')
+        }
+        if (is.null(z_canopy) || !is.numeric(z_canopy)) {
+            stop('argument "z_canopy" must be provided as numeric value ',
+                '(height of canopy in meters)!')
+        }
+        if (is.null(dev_north) || !is.numeric(dev_north)) {
+            stop('argument "dev_north" must be provided as numeric value!')
+        }
+        if (is.null(declination)) {
+            stop('argument "declination" must be provided!',
+            ' -> it is also possible to provide a list with lon/lat entries...')
+        } else if (is.list(declination) || length(declination) == 2) {
+            if (!require(oce)) {
+                stop('R package "oce" must be installed when lat/lon is provided')
+            }
+            mag_dec <- \(x) oce::magneticField(declination$lon, declination$lat, x)$declination
+        } else if (!is.numeric(declination) || length(declination) != 1) {
+            stop('argument "declination" must be a single numeric value!')
         } else {
-            sonic_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000',
-                'UTC')
-            sonic_pattern[4] <- sonic_pattern[2]
+            mag_dec <- \(x) declination
         }
-        start_sonic <- strptime(sub(sonic_pattern[1], sonic_pattern[2], sonic_files[1]),
-            '%Y%m%d%H%M%S', tz = sonic_pattern[3])
-        # get end (last date + 24h)
-        end_sonic <- strptime(sub(sonic_pattern[1], sonic_pattern[4], tail(sonic_files, 1)),
-            '%Y%m%d%H%M%S', tz = sonic_pattern[3]) + 24 * 3600
-    }
 
-    # optional ht8700 data
-    ht_with_sonic <- FALSE
-    if (ht_provided <- !is.null(ht_directory)) {
-        if (ht_has_data <- inherits(ht_directory, 'data.table')) {
-            cat('HT8700: raw data provided in input...\n')
-            setDT(ht_directory)
+        # fix input (vectors of default values)
+        rotation_method <- match.arg(rotation_method, c('two axis', 'planar fit'))
+        rot_args <- rotation_args
+        rotation_args <- eval(formals(process_ec_fluxes)$rotation_args)
+        rotation_args[names(rot_args)] <- rot_args
+        detrending <- fix_defaults(detrending, variables)
+        na_limits <- fix_defaults(na_limits, variables)
+        limits_lower <- fix_defaults(limits_lower, variables)
+        limits_upper <- fix_defaults(limits_upper, variables)
+        lag_fix <- fix_defaults(lag_fix, covariances)
+        lag_dyn <- fix_defaults(lag_dyn, covariances)
+        damping_reference <- fix_defaults(damping_reference, covariances[scalar_covariances])
+        damping_lower <- fix_defaults(damping_lower, covariances[scalar_covariances])
+        damping_upper <- fix_defaults(damping_upper, covariances[scalar_covariances])
+        # subint_detrending <- fix_defaults(subint_detrending, variables)
+        ts_vars <- variables
+        if (!ht_null) {
+            # add ht8700 quality parameters (oss) to plotting
+            ts_vars <- c(ts_vars, 'ht_oss')
+        }
+        if (!licor_null) {
+            # add licor quality parameters (co2ss) to plotting
+            ts_vars <- c(ts_vars, 'li_co2ss')
+        }
+        # extend & sort ts_vars
+        # ts_vars <- union(names(plot_timeseries), ts_vars)
+        plot_timeseries <- fix_defaults(plot_timeseries, ts_vars)
+        # only take TRUE
+        plot_timeseries <- plot_timeseries[plot_timeseries]
+        plotting_var_colors <- fix_defaults(plotting_var_colors, ts_vars)[names(plot_timeseries)]
+        plotting_var_units <- fix_defaults(plotting_var_units, ts_vars)[names(plot_timeseries)]
+        plotting_covar_units <- fix_defaults(plotting_covar_units, covariances)
+        plotting_covar_colors <- fix_defaults(plotting_covar_colors, covariances)
+
+        lim_range <- rbind(lower = limits_lower, upper = limits_upper)
+        damp_region <- mapply(c, damping_lower, damping_upper, SIMPLIFY = FALSE)
+
+        # get flux variables and lag times:                                      
+        # ------------------------------------------------------------------------------ 
+        flux_variables <- unique(unlist(strsplit(covariances, split = "x")))
+
+        # ------------------------------------------------------------------------------
+
+        # get data
+        # ------------------------------------------------------------------------------
+
+        cat("\n************************************************************\n")
+        cat("HT8700/LI-COR EC flux processing\n")
+
+        # mandatory sonic data
+        if (sonic_has_data <- inherits(sonic_directory, 'data.table')) {
+            cat('Sonic Anemometer: raw data provided...\n')
+            setDT(sonic_directory)
             # set time zone to UTC
-            ht_directory[, Time := with_tz(Time, 'UTC')]
+            sonic_directory[, Time := with_tz(Time, 'UTC')]
             # get start & end
-            start_ht <- ht_directory[, Time[1]]
-            end_ht <- ht_directory[, Time[.N]]
-        } else if (!(ht_with_sonic <- ht_directory == 'data provided with sonic')) {
-            cat('HT8700: data provided...\n')
+            start_sonic <- sonic_directory[, Time[1]]
+            end_sonic <- sonic_directory[, Time[.N]]
+        } else {
             # get files
-            ht_files <- dir(ht_directory, pattern = '^(py_)?fnf_.*_ht8700_.*')
-            if (ht_old_format <- length(ht_files) == 0) {
-                cat('Implement old CET format ht8700!\n')
+            sonic_files <- dir(sonic_directory, pattern = '^(py_)?fnf_.*_sonic_.*')
+            if (sonic_old_format <- length(sonic_files) == 0) {
+                cat('Implement old CET format sonic!\n')
+                browser()
                 # old loggerbox format
-                ht_files <- dir(ht_directory, pattern = '^ht8700_sonic-.')
+                sonic_files <- dir(sonic_directory, pattern = '^data_sonic-.')
             }
             # check files available
-            if (length(ht_files) == 0) {
-                stop('No ht8700 data available in "', ht_directory, '"!')
+            if (length(sonic_files) == 0) {
+                stop('No sonic data available in "', sonic_directory, '"!')
             }
             # prioritize py_ files
             # get py_
-            i_py <- grepl('^py_', ht_files)
+            i_py <- grepl('^py_', sonic_files)
             # remove duplicated non-py
-            ht_files <- c(
-                setdiff(ht_files[!i_py], sub('^py_', '', ht_files[i_py])),
-                ht_files[i_py]
+            sonic_files <- c(
+                setdiff(sonic_files[!i_py], sub('^py_', '', sonic_files[i_py])),
+                sonic_files[i_py]
             )
             # prioritize gz files
-            i_gz <- grepl('\\.gz$', ht_files)
+            i_gz <- grepl('\\.gz$', sonic_files)
             # remove duplicated non-py
-            ht_files <- c(
-                setdiff(ht_files[!i_gz], sub('\\.gz$', '.csv', ht_files[i_gz])),
-                ht_files[i_gz]
+            sonic_files <- c(
+                setdiff(sonic_files[!i_gz], sub('\\.gz$', '.csv', sonic_files[i_gz])),
+                sonic_files[i_gz]
             )
             # get date
-            ht_dates <- sub('^(py_)?fnf_0\\d_ht8700_', '', ht_files)
+            sonic_dates <- sub('^(py_)?fnf_0\\d_sonic_', '', sonic_files)
             # sort by date
-            ht_files <- ht_files[order(ht_dates)]
+            sonic_files <- sonic_files[order(sonic_dates)]
+            # sort files by date (& time)
+            sonic_files <- sort(sonic_files)
             # get start
-            if (ht_old_format) {
-                ht_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', 'Etc/GMT-1', '\\1000000')
+            if (sonic_old_format) {
+                sonic_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', 'Etc/GMT-1', 
+                    '\\1000000')
             } else {
-                ht_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000', 'UTC')
-                ht_pattern[4] <- ht_pattern[2]
+                sonic_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000',
+                    'UTC')
+                sonic_pattern[4] <- sonic_pattern[2]
             }
-            start_ht <- strptime(sub(ht_pattern[1], ht_pattern[2], ht_files[1]),
-                '%Y%m%d%H%M%S', tz = ht_pattern[3])
+            start_sonic <- strptime(sub(sonic_pattern[1], sonic_pattern[2], sonic_files[1]),
+                '%Y%m%d%H%M%S', tz = sonic_pattern[3])
             # get end (last date + 24h)
-            end_ht <- strptime(sub(ht_pattern[1], ht_pattern[4], tail(ht_files, 1)),
-                '%Y%m%d%H%M%S', tz = ht_pattern[3]) + 24 * 3600
-        } else if (ht_with_sonic) {
-            cat('HT8700: raw data provided with sonic input...\n')
+            end_sonic <- strptime(sub(sonic_pattern[1], sonic_pattern[4], tail(sonic_files, 1)),
+                '%Y%m%d%H%M%S', tz = sonic_pattern[3]) + 24 * 3600
         }
-    }
 
-    # optional licor data
-    licor_with_sonic <- FALSE
-    if (licor_provided <- !is.null(licor_directory)) {
-        if (licor_has_data <- inherits(licor_directory, 'data.table')) {
-            cat('LI-7500: raw data provided in input...\n')
-            licor_files <- NULL
-            setDT(licor_directory)
-            # set time zone to UTC
-            licor_directory[, Time := with_tz(Time, 'UTC')]
-            # get start & end
-            start_licor <- licor_directory[, Time[1]]
-            end_licor <- licor_directory[, Time[.N]]
-        } else if (!(licor_with_sonic <- licor_directory == 'data provided with sonic')) {
-            cat('LI-7500: data provided...\n')
-            licor_files <- dir(licor_directory, pattern = '^(py_)?fnf_.*_licor_.*')
-            if (length(licor_files) == 0) {
-                stop('No licor data available in "', licor_directory, '"!')
+        # optional ht8700 data
+        ht_with_sonic <- FALSE
+        if (ht_provided <- !is.null(ht_directory)) {
+            if (ht_has_data <- inherits(ht_directory, 'data.table')) {
+                cat('HT8700: raw data provided in input...\n')
+                setDT(ht_directory)
+                # set time zone to UTC
+                ht_directory[, Time := with_tz(Time, 'UTC')]
+            } else if (!(ht_with_sonic <- ht_directory == 'data provided with sonic')) {
+                cat('HT8700: data provided...\n')
+                # get files
+                ht_files <- dir(ht_directory, pattern = '^(py_)?fnf_.*_ht8700_.*')
+                if (ht_old_format <- length(ht_files) == 0) {
+                    cat('Implement old CET format ht8700!\n')
+                    # old loggerbox format
+                    ht_files <- dir(ht_directory, pattern = '^ht8700_sonic-.')
+                }
+                # check files available
+                if (length(ht_files) == 0) {
+                    stop('No ht8700 data available in "', ht_directory, '"!')
+                }
+                # prioritize py_ files
+                # get py_
+                i_py <- grepl('^py_', ht_files)
+                # remove duplicated non-py
+                ht_files <- c(
+                    setdiff(ht_files[!i_py], sub('^py_', '', ht_files[i_py])),
+                    ht_files[i_py]
+                )
+                # prioritize gz files
+                i_gz <- grepl('\\.gz$', ht_files)
+                # remove duplicated non-py
+                ht_files <- c(
+                    setdiff(ht_files[!i_gz], sub('\\.gz$', '.csv', ht_files[i_gz])),
+                    ht_files[i_gz]
+                )
+                # get date
+                ht_dates <- sub('^(py_)?fnf_0\\d_ht8700_', '', ht_files)
+                # sort by date
+                ht_files <- ht_files[order(ht_dates)]
+                # get start
+                if (ht_old_format) {
+                    ht_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', 'Etc/GMT-1', '\\1000000')
+                } else {
+                    ht_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000', 'UTC')
+                    ht_pattern[4] <- ht_pattern[2]
+                }
+            } else if (ht_with_sonic) {
+                cat('HT8700: raw data provided with sonic input...\n')
             }
-            # prioritize py_ files
-            # get py_
-            i_py <- grepl('^py_', licor_files)
-            # remove duplicated non-py
-            licor_files <- c(
-                setdiff(licor_files[!i_py], sub('^py_', '', licor_files[i_py])),
-                licor_files[i_py]
-            )
-            # prioritize gz files
-            i_gz <- grepl('\\.gz$', licor_files)
-            # remove duplicated non-py
-            licor_files <- c(
-                setdiff(licor_files[!i_gz], sub('\\.gz$', '.csv', licor_files[i_gz])),
-                licor_files[i_gz]
-            )
-            # get date
-            licor_dates <- sub('^(py_)?fnf_0\\d_licor_', '', licor_files)
-            # sort by date
-            licor_files <- licor_files[order(licor_dates)]
-            # get start & end
-            licor_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000',
-                'UTC')
-            start_licor <- strptime(sub(licor_pattern[1], licor_pattern[2], licor_files[1]),
-                '%Y%m%d%H%M%S', tz = licor_pattern[3])
-            # get end (last date + 24h)
-            end_licor <- strptime(sub(licor_pattern[1], licor_pattern[2], tail(licor_files, 1)),
-                '%Y%m%d%H%M%S', tz = licor_pattern[3]) + 24 * 3600
-        } else if (licor_with_sonic) {
-            cat('LI-7500: raw data provided with sonic input...\n')
         }
-    # } else {
-        # check if ht available
-        # if (!ht_provided) {
-        #     stop('neither ht8700 nor licor data or directory has been provided -> cannot process fluxes without concentration data!')
-        # }
-    }
 
-    cat("************************************************************\n")
+        # optional licor data
+        licor_with_sonic <- FALSE
+        if (licor_provided <- !is.null(licor_directory)) {
+            if (licor_has_data <- inherits(licor_directory, 'data.table')) {
+                cat('LI-7500: raw data provided in input...\n')
+                licor_files <- NULL
+                setDT(licor_directory)
+                # set time zone to UTC
+                licor_directory[, Time := with_tz(Time, 'UTC')]
+            } else if (!(licor_with_sonic <- licor_directory == 'data provided with sonic')) {
+                cat('LI-7500: data provided...\n')
+                licor_files <- dir(licor_directory, pattern = '^(py_)?fnf_.*_licor_.*')
+                if (length(licor_files) == 0) {
+                    stop('No licor data available in "', licor_directory, '"!')
+                }
+                # prioritize py_ files
+                # get py_
+                i_py <- grepl('^py_', licor_files)
+                # remove duplicated non-py
+                licor_files <- c(
+                    setdiff(licor_files[!i_py], sub('^py_', '', licor_files[i_py])),
+                    licor_files[i_py]
+                )
+                # prioritize gz files
+                i_gz <- grepl('\\.gz$', licor_files)
+                # remove duplicated non-py
+                licor_files <- c(
+                    setdiff(licor_files[!i_gz], sub('\\.gz$', '.csv', licor_files[i_gz])),
+                    licor_files[i_gz]
+                )
+                # get date
+                licor_dates <- sub('^(py_)?fnf_0\\d_licor_', '', licor_files)
+                # sort by date
+                licor_files <- licor_files[order(licor_dates)]
+                # get start & end
+                licor_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000',
+                    'UTC')
+            } else if (licor_with_sonic) {
+                cat('LI-7500: raw data provided with sonic input...\n')
+            }
+        # } else {
+            # check if ht available
+            # if (!ht_provided) {
+            #     stop('neither ht8700 nor licor data or directory has been provided -> cannot process fluxes without concentration data!')
+            # }
+        }
 
-    # parse time diff
-    avg_secs <- parse_time_diff(avg_period)
+        cat("************************************************************\n")
 
-    # check times
-    if (is.null(start_time) && is.null(end_time)) {
-        start_time <- 'first'
-        end_time <- 'last'
-    } 
+        # parse time diff
+        avg_secs <- parse_time_diff(avg_period)
 
-    # fix start_time (only use sonic)
-    if (length(start_time) == 1 && start_time == 'first') {
-        start_time <- with_tz(start_sonic, tz_user)
-    } else if (!is.null(start_time)) {
-        start_time <- parse_date_time3(start_time, tz = tz_user)
-    }
+        # check times
+        if (is.null(start_time) && is.null(end_time)) {
+            start_time <- 'first'
+            end_time <- 'last'
+        } 
 
-    # fix end_time (only use sonic)
-    if (is.null(end_time)) {
-        end_time <- start_time + avg_secs
-    } else if (length(end_time) == 1 && end_time == 'last') {
-        end_time <- with_tz(end_sonic, tz_user)
-    } else {
-        end_time <- parse_date_time3(end_time, tz = tz_user)
-    }
+        # fix start_time (only use sonic)
+        if (length(start_time) == 1 && start_time == 'first') {
+            start_time <- with_tz(start_sonic, tz_user)
+        } else if (!is.null(start_time)) {
+            start_time <- parse_date_time3(start_time, tz = tz_user)
+        }
 
-    # fix end_time != NULL & start_time == NULL
-    if (is.null(start_time)) {
-        start_time <- end_time - avg_secs
-    }
-
-    # check & extend start/end times
-    if (length(start_time) != length(end_time)) {
-        stop('arguments "start_time" and "end_time" must have equal lengths!')
-    }
-    if (any(end_time - start_time <= 0)) {
-        stop('argument "end_time" must be strictly greater than "start_time"!')
-    }
-    # get full vector if not yet provided
-    if (length(start_time) == 1) {
-        # "fix" end_time not included
-        start_time <- seq(start_time, end_time - 1e-4, by = avg_secs)
-        end_time <- start_time + avg_secs
-    }
-
-    # copy scalars etc. to fix missing
-    input_scalars <- scalars
-    input_covariances <- covariances
-    input_covariances_variables <- covariances_variables
-    input_covariances_plotnames <- covariances_plotnames
-    input_scalar_covariances <- scalar_covariances
-    input_flux_variables <- flux_variables
-    input_plot_timeseries <- plot_timeseries
-    input_damping_reference <- damping_reference
-    input_damp_region <- damp_region
-
-    # scalar covariances
-    scalar_covariances_only <- covariances[scalar_covariances]
-
-    # create result folder (folder name includes first input-filename) and set this directory as working directory                                      
-    # ------------------------------------------------------------------------------ 
-    if (is.null(graphs_directory) || isFALSE(graphs_directory)) {
-        create_graphs <- FALSE
-    } else {					
-        # tstamp <- format(Sys.time(), "%Y%m%d_%H%M")
-        if (add_name != "") {
-            # folder <- paste0("ec-fluxes-", add_name, "-eval", tstamp, "-avg", avg_period)
-            folder <- paste0("ec-fluxes-", add_name, "-avg", avg_period)
+        # fix end_time (only use sonic)
+        if (is.null(end_time)) {
+            end_time <- start_time + avg_secs
+        } else if (length(end_time) == 1 && end_time == 'last') {
+            end_time <- with_tz(end_sonic, tz_user)
         } else {
-            # folder <- paste0("ec_fluxes-eval", tstamp, "-avg", avg_period)
-            folder <- paste0("ec_fluxes-avg", avg_period)
+            end_time <- parse_date_time3(end_time, tz = tz_user)
         }
-        path_folder <- file.path(graphs_directory, folder)
+
+        # fix end_time != NULL & start_time == NULL
+        if (is.null(start_time)) {
+            start_time <- end_time - avg_secs
+        }
+
+        # check & extend start/end times
+        if (length(start_time) != length(end_time)) {
+            stop('arguments "start_time" and "end_time" must have equal lengths!')
+        }
+        if (any(end_time - start_time <= 0)) {
+            stop('argument "end_time" must be strictly greater than "start_time"!')
+        }
+        # get full vector if not yet provided
+        if (length(start_time) == 1) {
+            # "fix" end_time not included
+            start_time <- seq(start_time, end_time - 1e-4, by = avg_secs)
+            end_time <- start_time + avg_secs
+        }
+
+        # prepare dates
+        dates_utc <- unique(date(c(start_time, end_time - 1e-4)))
+        dates_formatted <- gsub('-', '_', dates_utc, fixed = TRUE)
+
+        # copy scalars etc. to fix missing
+        input_scalars <- scalars
+        input_covariances <- covariances
+        input_covariances_variables <- covariances_variables
+        input_covariances_plotnames <- covariances_plotnames
+        input_scalar_covariances <- scalar_covariances
+        input_flux_variables <- flux_variables
+        input_plot_timeseries <- plot_timeseries
+        input_damping_reference <- damping_reference
+        input_damp_region <- damp_region
+
+        # scalar covariances
+        scalar_covariances_only <- covariances[scalar_covariances]
+
+        # create result folder (folder name includes first input-filename) and set this directory as working directory                                      
+        # ------------------------------------------------------------------------------ 
+        if (is.null(graphs_directory) || isFALSE(graphs_directory)) {
+            create_graphs <- FALSE
+        } else {					
+            # tstamp <- format(Sys.time(), "%Y%m%d_%H%M")
+            if (add_name != "") {
+                # folder <- paste0("ec-fluxes-", add_name, "-eval", tstamp, "-avg", avg_period)
+                folder <- paste0("ec-fluxes-", add_name, "-avg", avg_period)
+            } else {
+                # folder <- paste0("ec_fluxes-eval", tstamp, "-avg", avg_period)
+                folder <- paste0("ec_fluxes-avg", avg_period)
+            }
+            path_folder <- file.path(graphs_directory, folder)
+        }
+
+        # prepare ogive output
+        if (ogives_out) {
+            e_ogive <- new.env()
+            e_ogive$Cospec_dyn_Out <- e_ogive$Cospec_fix_Out <- e_ogive$Covars_Out <- 
+                e_ogive$Ogive_fix_Out <- e_ogive$Ogive_dyn_Out <- list()
+        }
+
+        # setup parallelism
+        if (run_parallel <- (!is.numeric(ncores) || isFALSE(ncores == 1))) {
+            if (inherits(ncores, '')) {
+                # copy cluster
+                cl <- ncores
+            } else {
+                # start cluster
+                cl <- bLSmodelR:::.makePSOCKcluster(ncores, 
+                    memory_limit = parallel_mem_limit)
+                # stop cluster on exit
+                on.exit(parallel::stopCluster(cl))
+                # setup workers
+                parallel::clusterEvalQ(cl, {
+                    # export libraries
+                    library(data.table)
+                    library(Rcpp)
+                    library(fields)
+                    # restrict DT threads to 1
+                    setDTthreads(1L)
+                })
+                # export functions
+                parallel::clusterExport(cl, c(.ec_evaluation, 'read_sonic'))
+            }
+        }
+
+        # get all objects defined so far
+        # TODO: remove me later?
+        current_obj <- setdiff(ls(current_env), current_obj)
+
+    # if/else RECURSIVE else
+    } else {
+        # get extra data from top function environment
+        dots <- list(...)
+        # assign dots to current env
+        for (what in names(dots)) {
+            assign(what, dots[[what]])
+        }
+    # if/else RECURSIVE end
     }
 
-    # prepare interval times
-    dates_utc <- unique(date(c(start_time, end_time - 1e-4)))
-    dates_formatted <- gsub('-', '_', dates_utc, fixed = TRUE)
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # check all-in-one vs. day-by-day
+    if (length(dates_utc) > 1 && parallelism_strategy == 'day-by-day') {
+        # get current objects as string
+        # strip off objects which need changes
+        cobj <- setdiff(ls(current_env), 
+            c('start_time', 'end_time', 'parallelism_strategy', 'dates_utc', 
+                'dates_formatted'))
+        # get start/end time dates
+        st_dates <- as.Date(start_time)
+        et_dates <- as.Date(end_time - 1e-4)
+        # call main function recursively
+        if (run_parallel) {
+            browser()
+        } else {
+            # loop over start_time dates
+            out_list <- lapply(
+                unique(st_dates), 
+                \(udate) {
+                    # get indices for date
+                    ind <- st_dates == udate
+                    # get utc dates
+                    utc_dates <- unique(c(udate, et_dates[ind]))
+                    formatted_dates <- gsub('-', '_', utc_dates, fixed = TRUE)
+                    do.call(process_ec_fluxes,
+                        c(
+                            list(
+                                dates_utc = utc_dates,
+                                dates_formatted = formatted_dates,
+                                start_time = start_time[ind],
+                                end_time = end_time[ind],
+                                parallelism_strategy = 'recursive'
+                            ),
+                            mget(cobj, envir = current_env)
+                        )
+                    )
+                }
+            )
+
+            browser()
+        }
+    }
 
     # read raw data:
     # ------------------------------------------------------------------------------
@@ -1707,15 +1802,8 @@ process_ec_fluxes <- function(
 	### correct for sonic north deviation
 	daily_data[, WD := (WD + d_north[.GRP]) %% 360, by = bin]
 
-    # prepare ogive output
-    if (ogives_out) {
-        e_ogive <- new.env()
-        e_ogive$Cospec_dyn_Out <- e_ogive$Cospec_fix_Out <- e_ogive$Covars_Out <- 
-            e_ogive$Ogive_fix_Out <- e_ogive$Ogive_dyn_Out <- list()
-    }
 
-
-    # loop over bins
+    # loop over intervals: MAIN start
     results <- daily_data[, {
 
         # get start of interval
@@ -2580,6 +2668,7 @@ process_ec_fluxes <- function(
             NULL
         }
     }, by = bin]
+    # MAIN stop
 
 	cat("\n************************************************************\n") 
 	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
@@ -2810,6 +2899,11 @@ get_kappa <- function(tval, pval) {
         dkappa_P_at_T = (out$z[2, 3] - out$z[2, 1]) / (out$y[3] - out$y[1]) / 1000,
         dkappa_T_at_P = (out$z[3, 2] - out$z[1, 2]) / (out$x[3] - out$x[1])
     )
+}
+
+## get objects after sourcing script
+if (!exists('.ec_evaluation')) {
+    .ec_evaluation <- setdiff(ls(), .ec_evaluation)
 }
 
 ## add kappa values for HT ----------------------------------------

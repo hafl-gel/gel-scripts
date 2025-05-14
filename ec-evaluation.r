@@ -1846,8 +1846,110 @@ process_ec_fluxes <- function(
 	daily_data[, WD := (WD + d_north[.GRP]) %% 360, by = bin]
 
 
-    # loop over intervals: MAIN start
-    results <- daily_data[, {
+    # loop over intervals: call MAIN function
+    if (run_parallel) {
+        cat('here I am...\n')
+        browser()
+        # export current_env
+        parallel::clusterExport(cl, 'current_env')
+        # results <- rbindlist(bLSmodelR:::.clusterApplyLB(
+        #         cl, .ec_main
+        #     .ec_main(daily_data, current_env),
+        #     fill = TRUE)
+    } else {
+        results <- .ec_main(daily_data, current_env)
+    }
+
+	cat("\n************************************************************\n") 
+	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
+        "time elapsed: ", difftime(Sys.time(), script_start, unit = "mins"),
+        "minutes\n")
+	cat("************************************************************\n")  
+
+    if (nrow(results) == 0) {
+        return(NULL)
+    }
+
+    # fix time zone
+    results[, ':='(
+        st = with_tz(st, tz_user),
+        et = with_tz(et, tz_user)
+    )]
+
+    # convert to ibts
+    if (as_ibts) {
+        results <- as.ibts(results)
+    }
+
+    # output incl. ogives
+	if (ogives_out) {
+		structure(
+            results, 
+            covars = e_ogive$Covars_Out,
+            cospec_fix = e_ogive$Cospec_fix_Out, 
+            cospec_dyn = e_ogive$Cospec_dyn_Out,
+            ogv_fix = e_ogive$Ogive_fix_Out, 
+            ogv_dyn = e_ogive$Ogive_dyn_Out
+        )
+	} else {
+        results
+	}
+}
+
+## function to fit theoretical ogive shape to measurement
+# library(Rcpp)
+sourceCpp(code = '
+#include <Rcpp.h>
+using namespace Rcpp;
+// [[Rcpp::export]]
+double fit_ogive(const NumericVector paras, const NumericVector ogive, const NumericVector f,
+    const int ilo, const int ihi) {
+    const double len = ogive.size();
+    const double m = 3.0 / 4.0;
+    const double fx = paras[0];
+    const double mu = paras[1];
+    const double A0 = paras[2];
+    const double A0_fx = A0 / fx;
+    const double m_mu_pow = (m + 1.0) / (2.0 * mu * m);
+    double last_value = 0.0;
+    double ss = 0.0;
+    // loop in reverse over ogive and get cumsum
+    for (int i = len - 1; i >= (ilo - 1); i--) {
+        // get cospec value devided by f
+        last_value = last_value + 
+            A0_fx / (
+                std::pow(1.0 + m * std::pow(f[i] / fx, (2.0 * mu)), m_mu_pow)
+            );
+        // get difference to ogive
+        if (i < ihi) {
+            ss += std::fabs(ogive[i] - last_value) * std::sqrt(1 / f[i]);
+        }
+    }
+    return ss;
+}
+' -> code_fit_ogive)
+# xx <- fit_ogive(ini, og, freq)
+# yy <- fit_og(ini, og)
+# fcpp <- function(x) fit_ogive(x, og, freq)
+
+# convenience functions for theoretical cospec/ogive models
+cospec_model <- function(fx, m, mu, A0, f = freq) {
+    A0 / fx / (
+        (1 + m * (f / fx) ^ (2 * mu)) ^ ((m + 1) / (2 * mu * m))
+    )
+}
+ogive_model <- function(fx, m, mu, A0, f = freq) {
+    rev(cumsum(rev(cospec_model(fx, m, mu, A0, f))))
+}
+
+# EC MAIN function
+.ec_main <- function(dat, env = parent.frame()) {
+    # get variables
+    for (what in ls(env)) {
+        assign(what, get(what, env))
+    }
+    # call main function
+    out <- dat[, {
 
         # get start of interval
         interval_start <- start_time[.BY[[1]]]
@@ -2711,89 +2813,19 @@ process_ec_fluxes <- function(
             NULL
         }
     }, by = bin]
-    # MAIN stop
 
-	cat("\n************************************************************\n") 
-	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
-        "time elapsed: ", difftime(Sys.time(), script_start, unit = "mins"),
-        "minutes\n")
-	cat("************************************************************\n")  
-
-    if (nrow(results) == 0) {
+    # check rows
+    if (nrow(out) == 0) {
         return(NULL)
     }
 
     # bind lists to one data.table
-    results <- results[, rbindlist(V1, fill = TRUE, use.names = TRUE)]
+    out <- out[, rbindlist(V1, fill = TRUE, use.names = TRUE)]
 
-    # fix time zone
-    results[, ':='(
-        st = with_tz(st, tz_user),
-        et = with_tz(et, tz_user)
-    )]
-
-    # convert to ibts
-    if (as_ibts) {
-        results <- as.ibts(results)
-    }
-
-    # output incl. ogives
-	if (ogives_out) {
-		structure(
-            results, 
-            covars = e_ogive$Covars_Out,
-            cospec_fix = e_ogive$Cospec_fix_Out, 
-            cospec_dyn = e_ogive$Cospec_dyn_Out,
-            ogv_fix = e_ogive$Ogive_fix_Out, 
-            ogv_dyn = e_ogive$Ogive_dyn_Out
-        )
-	} else {
-        results
-	}
+    # return
+    out
 }
-
-## function to fit theoretical ogive shape to measurement
-# library(Rcpp)
-cppFunction('
-double fit_ogive(const NumericVector paras, const NumericVector ogive, const NumericVector f,
-    const int ilo, const int ihi) {
-    const double len = ogive.size();
-    const double m = 3.0 / 4.0;
-    const double fx = paras[0];
-    const double mu = paras[1];
-    const double A0 = paras[2];
-    const double A0_fx = A0 / fx;
-    const double m_mu_pow = (m + 1.0) / (2.0 * mu * m);
-    double last_value = 0.0;
-    double ss = 0.0;
-    // loop in reverse over ogive and get cumsum
-    for (int i = len - 1; i >= (ilo - 1); i--) {
-        // get cospec value devided by f
-        last_value = last_value + 
-            A0_fx / (
-                std::pow(1.0 + m * std::pow(f[i] / fx, (2.0 * mu)), m_mu_pow)
-            );
-        // get difference to ogive
-        if (i < ihi) {
-            ss += std::fabs(ogive[i] - last_value) * std::sqrt(1 / f[i]);
-        }
-    }
-    return ss;
-}
-')
-# xx <- fit_ogive(ini, og, freq)
-# yy <- fit_og(ini, og)
-# fcpp <- function(x) fit_ogive(x, og, freq)
-
-# convenience functions for theoretical cospec/ogive models
-cospec_model <- function(fx, m, mu, A0, f = freq) {
-    A0 / fx / (
-        (1 + m * (f / fx) ^ (2 * mu)) ^ ((m + 1) / (2 * mu * m))
-    )
-}
-ogive_model <- function(fx, m, mu, A0, f = freq) {
-    rev(cumsum(rev(cospec_model(fx, m, mu, A0, f))))
-}
+# EC MAIN end
 
 ## wpl post-processing ----------------------------------------
 

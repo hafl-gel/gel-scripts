@@ -280,11 +280,13 @@ read_hs_ascii_old <- function(FilePath){
 }
 
 # C++ helper function for HS data
-cppFunction('
+sourceCpp(code = '
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <Rcpp.h>
+using namespace Rcpp;
+// [[Rcpp::export]]
 Rcpp::List hs_read_cpp(String filename) {
     // open file
     std::ifstream input{filename};
@@ -359,7 +361,7 @@ Rcpp::List hs_read_cpp(String filename) {
 if (Sys.info()['sysname'] == 'Windows') {
     old_pkg_libs <- Sys.getenv('PKG_LIBS')
     # help the linker to include zlib through the environment variable PKG_LIBS
-    Sys.setenv(PKG_LIBS = "-lz")       # Adjust the path to zlib library directory
+    Sys.setenv(PKG_LIBS = "-lz")       # Fix linking to zlib
 }
 sourceCpp(code = '
 #include <zlib.h>

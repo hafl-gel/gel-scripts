@@ -1499,7 +1499,7 @@ process_ec_fluxes <- function(
         # strip off objects which need changes
         cobj <- setdiff(ls(current_env), 
             c('start_time', 'end_time', 'parallelism_strategy', 'dates_utc', 
-                'dates_formatted'))
+                'dates_formatted', 'as_ibts'))
         # get start/end time dates
         st_dates <- as.Date(start_time)
         et_dates <- as.Date(end_time - 1e-4)
@@ -1523,6 +1523,7 @@ process_ec_fluxes <- function(
                                 dates_formatted = formatted_dates,
                                 start_time = start_time[ind],
                                 end_time = end_time[ind],
+                                as_ibts = FALSE,
                                 parallelism_strategy = 'recursive'
                             ),
                             mget(cobj, envir = current_env)
@@ -1530,9 +1531,15 @@ process_ec_fluxes <- function(
                     )
                 }
             )
-
-            browser()
         }
+        # rbind output list
+        out <- rbindlist(out_list, fill = TRUE)
+        # convert to ibts
+        if (as_ibts) {
+            out <- as.ibts(out)
+        }
+        # exit main function
+        return(out)
     }
 
     # read raw data:

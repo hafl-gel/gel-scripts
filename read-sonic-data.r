@@ -3,6 +3,11 @@ library(Rcpp)
 library(data.table)
 library(ibts)
 
+## get objects before sourcing script
+if (.get_diff <- !exists('.read_sonic')) {
+    .read_sonic <- ls(all.names = TRUE)
+}
+
 ## main function to read sonic data
 read_sonic <- function(FilePath) {
 	bn <- basename(FilePath)
@@ -468,3 +473,9 @@ read_hs_ascii <- function(FilePath) {
             w = w_string, T = t_string, sonic = 'HS')
     }]
 }
+
+## get objects after sourcing script
+if (.get_diff) {
+    .read_sonic <- setdiff(ls(all.names = TRUE), .read_sonic)
+}
+

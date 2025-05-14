@@ -3,6 +3,10 @@ library(data.table)
 library(lubridate)
 library(Rcpp)
 
+## get objects before sourcing script
+if (.get_diff <- !exists('.licor_functions')) {
+    .licor_functions <- ls(all.names = TRUE)
+}
 
 ## C++ helper function
 sourceCpp(code = '
@@ -280,3 +284,7 @@ read_licor <- function(FilePath) {
     na.omit(out)
 }
 
+## get objects after sourcing script
+if (.get_diff) {
+    .licor_functions <- setdiff(ls(all.names = TRUE), .licor_functions)
+}

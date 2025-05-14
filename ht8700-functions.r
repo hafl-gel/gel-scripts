@@ -4,6 +4,11 @@ library(data.table)
 library(ibts)
 library(Rcpp)
 
+## get objects before sourcing script
+if (.get_diff <- !exists('.ht8700_functions')) {
+    .ht8700_functions <- ls(all.names = TRUE)
+}
+
 select_files <- function(ht_path, sonic_path, from, to) {
     # read ht folder
     if (!file.exists(ht_path)) {
@@ -1049,4 +1054,7 @@ read_local <- function(path, hash_only = FALSE) {
     alloc.col(qs::qdeserialize(out_ser))
 }
 
-
+## get objects after sourcing script
+if (.get_diff) {
+    .ht8700_functions <- setdiff(ls(all.names = TRUE), .ht8700_functions)
+}

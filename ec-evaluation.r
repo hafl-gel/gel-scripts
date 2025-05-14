@@ -239,7 +239,7 @@ Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2)
 	}
 	return(Out);
 }
-')
+' -> code_find_window)
 
 # filter functions for higph-pass filtering time series
 # (copied from minidoas scripts)

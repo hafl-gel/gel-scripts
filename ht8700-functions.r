@@ -476,7 +476,7 @@ Rcpp::List ht8700_read_cpp(String filename) {
         _["notused"] = col20
     );
 }
-')
+' -> code_ht8700_read_cpp)
 
 ### function to read gzip-ped data in C++
 # thanks to directions given in https://github.com/eddelbuettel/bh/issues/106#issuecomment-2724741475
@@ -607,7 +607,7 @@ Rcpp::List ht8700_read_cpp_gzip(Rcpp::String filename) {
         Rcpp::_["notused"] = col20
     );
 }
-')
+' -> code_ht8700_read_cpp_gzip)
 if (Sys.info()['sysname'] == 'Windows') {
     # reset env var
     Sys.setenv(PKG_LIBS = old_pkg_libs)
@@ -658,7 +658,7 @@ List match_times(NumericVector time1, NumericVector time2, double deltat)
     }
     return List::create(index1, index2);
 }
-')
+' -> code_match_times)
 
 # merge sonic & ht8700 data based on time
 #   -> output contains the same times as 'basis'
@@ -831,7 +831,7 @@ List decal(IntegerVector x, IntegerVector y)
     out.attr("mat") = mat;
     return out;
 }
-')
+' -> code_decal)
 
 
 # NOTE:

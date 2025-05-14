@@ -117,7 +117,7 @@ Rcpp::List licor_read_cpp(String filename) {
         _["CO2AWO"] = col15_CO2AWO
     );
 }
-')
+' -> code_licor_read_cpp)
 
 ## C++ helper function for gzipped licor data
 if (Sys.info()['sysname'] == 'Windows') {
@@ -238,7 +238,7 @@ Rcpp::List licor_read_cpp_gzip(Rcpp::String filename) {
         Rcpp::_["CO2AWO"] = col15_CO2AWO
     );
 }
-')
+' -> code_licor_read_cpp_gzip)
 if (Sys.info()['sysname'] == 'Windows') {
     # reset env var
     Sys.setenv(PKG_LIBS = old_pkg_libs)

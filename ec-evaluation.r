@@ -1478,9 +1478,15 @@ process_ec_fluxes <- function(
                 cat(' done.\n')
                 cat('-> exporting R objects...')
                 # export ec functions + all reading functions + cpp codes
-                codes <- ls(pattern = '^code_', .GlobalEnv)
-                parallel::clusterExport(cl, c(.ec_evaluation, 
-                        unique(c(ls(pattern = 'read', .GlobalEnv), codes))))
+                # fix missing ht/licor
+                if (ht_null) {
+                    .ht8700_functions <- character(0)
+                }
+                if (licor_null) {
+                    .licor_functions <- character(0)
+                }
+                parallel::clusterExport(cl, c(.ec_evaluation, .read_sonic,
+                        .ht8700_functions, .licor_functions))
                 cat(' done.\n')
                 cat('-> recompiling C++ code on workers...')
                 # Fix using zlib library
@@ -1488,6 +1494,7 @@ process_ec_fluxes <- function(
                     Sys.setenv(PKG_LIBS = "-lz")
                 )
                 # recompile gzip cpp functions for linking
+                codes <- ls(pattern = '^code_', .GlobalEnv)
                 for (code in codes) {
                     parallel::clusterCall(cl, \(x) sourceCpp(code = get(x)), code)
                 }
@@ -1513,18 +1520,78 @@ process_ec_fluxes <- function(
         # strip off objects which need changes
         cobj <- setdiff(ls(current_env), 
             c('start_time', 'end_time', 'parallelism_strategy', 'dates_utc', 
-                'dates_formatted', 'as_ibts'))
+                'dates_formatted', 'as_ibts', 'current_env'))
         # get start/end time dates
         st_dates <- as.Date(start_time)
         et_dates <- as.Date(end_time - 1e-4)
         # call main function recursively
         if (run_parallel) {
             # distribute intervals
-            # if number of days > ncores -> distribute dates
-            # else -> distribute intervals in "daily" chunks
-
-            browser()
-
+            # get number of cluster
+            nc <- length(cl)
+            # get unique dates
+            st_udates <- unique(st_dates)
+            # number of days > 20h (40 intervals)
+            nrle <- rle(as.numeric(st_dates))
+            full_day <- which(nrle$lengths > 40)
+            nd <- length(full_day)
+            incomplete_day <- which(nrle$lengths <= 40)
+            # split full days
+            if (nd >= nc) {
+                # get number of full days to split
+                ifd <- nc * floor(nd / nc)
+                # check before first full day
+                if (ifd != nd && length(incomplete_day) > 0 && 
+                    any(incomplete_day < full_day[1])) {
+                    ind_fd <- full_day[length(full_day) + 1 - rev(seq_len(ifd))]
+                } else {
+                    ind_fd <- full_day[seq_len(ifd)]
+                }
+                # extend incomplete days
+                incomplete_day <- sort(c(incomplete_day, setdiff(full_day, ind_fd)))
+                # split days
+                ind_split <- lapply(ind_fd, \(x) which(st_dates == st_udates[x]))
+            } else {
+                # prepare index list
+                ind_split <- list()
+                # add full_day to incomplete_day
+                incomplete_day <- sort(c(incomplete_day, full_day))
+            }
+            # split incomplete days
+            if (length(incomplete_day)) {
+                # get intervals
+                ints <- unlist(lapply(incomplete_day, \(x) which(st_dates == st_udates[x])))
+                # split incomplete days
+                ind_split <- c(
+                    ind_split,
+                    parallel::clusterSplit(cl, ints)
+                )
+            }
+            # set ncores to 1 & run_parallel to FALSE
+            ncores <- 1
+            run_parallel <- FALSE
+            # export current_env & main function
+            # parallel::clusterExport(cl, c('current_env', 'st_dates', 'et_dates'),
+            parallel::clusterExport(cl, c('st_dates', 'et_dates', 'start_time',
+                    'end_time'), current_env)
+            # # call main function in parallel
+            out_list <- bLSmodelR:::.clusterApplyLB(cl, ind_split, \(ind, env) {
+                utc_dates <- unique(c(st_dates[ind], et_dates[ind]))
+                formatted_dates <- gsub('-', '_', utc_dates, fixed = TRUE)
+                do.call(process_ec_fluxes,
+                    c(
+                        list(
+                            dates_utc = utc_dates,
+                            dates_formatted = formatted_dates,
+                            start_time = start_time[ind],
+                            end_time = end_time[ind],
+                            as_ibts = FALSE,
+                            parallelism_strategy = 'recursive'
+                        ),
+                        mget(cobj, envir = env)
+                    )
+                )
+            }, env = current_env)
             cat("\n************************************************************\n") 
             cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
                 "time elapsed: ", difftime(Sys.time(), script_start, unit = "mins"),
@@ -1558,6 +1625,10 @@ process_ec_fluxes <- function(
         }
         # rbind output list
         out <- rbindlist(out_list, fill = TRUE)
+        # check again if all empty
+        if (nrow(out) == 0) {
+            return(NULL)
+        }
         # convert to ibts
         if (as_ibts) {
             out <- as.ibts(out)
@@ -1890,7 +1961,7 @@ process_ec_fluxes <- function(
         "minutes\n")
 	cat("************************************************************\n")  
 
-    if (nrow(results) == 0) {
+    if (is.null(results) || nrow(results) == 0) {
         return(NULL)
     }
 

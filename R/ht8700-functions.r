@@ -18,7 +18,7 @@ read_ht8700 <- function(FilePath) {
     if (grepl('[.]qdata$', bn)) {
         return(qs2::qd_read(FilePath))
     } else if (grepl('[.]qs$', bn)) {
-        if (!require(qs)) {
+        if (!requireNamespace(qs)) {
             stop('data is provided as *.qs file -> install qs library',
                 ' running "install.packages("qs")"')
         }

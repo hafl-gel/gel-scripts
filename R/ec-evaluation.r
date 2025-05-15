@@ -1514,7 +1514,7 @@ process_ec_fluxes <- function(
             }, env = current_env)
             cat("\n************************************************************\n") 
             cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
-                "time elapsed: ", difftime(Sys.time(), script_start, unit = "mins"),
+                "time elapsed: ", difftime(Sys.time(), script_start, units = "mins"),
                 "minutes\n")
             cat("************************************************************\n")  
         } else {
@@ -1909,7 +1909,7 @@ process_ec_fluxes <- function(
 
 	cat("\n************************************************************\n") 
 	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
-        "time elapsed: ", difftime(Sys.time(), script_start, unit = "mins"),
+        "time elapsed: ", difftime(Sys.time(), script_start, units = "mins"),
         "minutes\n")
 	cat("************************************************************\n")  
 

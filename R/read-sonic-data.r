@@ -1,60 +1,42 @@
 
-library(Rcpp)
-library(data.table)
-library(ibts)
-
-## get objects before sourcing script
-if (.get_diff <- !exists('.read_sonic')) {
-    .read_sonic <- ls(all.names = TRUE)
-}
-
 ## main function to read sonic data
-read_sonic <- function(FilePath) {
-	bn <- basename(FilePath)
+read_sonic <- function(file_path) {
+	bn <- basename(file_path)
     # check if provided as qs or rds
     if (grepl('[.]qdata$', bn)) {
         if (!require(qs2)) {
             stop('data is provided as *.qdata file -> install qs2 library',
                 ' running "install.packages("qs2")"')
         }
-        qs2::qd_read(FilePath)
+        qs2::qd_read(file_path)
     } else if (grepl('[.]qs$', bn)) {
         if (!require(qs)) {
             stop('data is provided as *.qs file -> install qs library',
                 ' running "install.packages("qs")"')
         }
-        qs::qread(FilePath)
+        qs::qread(file_path)
     } else if (grepl('[.]rds$', bn)) {
-        readRDS(FilePath)
+        readRDS(file_path)
     } else if (grepl("^(py_)?fnf_", bn)) {
-        # new data format -> TODO: check HS vs Windmaster
-        read_hs_ascii(FilePath)
-        # read_windmaster_ascii(FilePath)
+        read_hs_ascii(file_path)
     } else {
-        read_windmaster_ascii(FilePath)
+        read_windmaster_ascii(file_path)
     }
 }
 
-#### To Do:
-# - neue readWindMaster Routine
-# - Plotting & anderes Gheu aufräumen
-read_windmaster_ascii <- function(FilePath){
+# new windmaster format
+read_windmaster_ascii <- function(file_path){
 	### get Date
-	bn <- basename(FilePath)
+	bn <- basename(file_path)
 	if(!grepl("^data_", bn)){
 		# run old script
-		return(read_windmaster_old_ascii(FilePath))
+		return(read_windmaster_old_ascii(file_path))
 	}
-    if (grepl('[.]gz$', bn)) {
-        if (!any(grepl('R.utils', installed.packages()[, 'Package']))) {
-            stop('package "R.utils" must be installed to process gz files!')
-        }
-    }
     # be verbose
-    cat("File:", path.expand(FilePath), "- ")
+    cat("File:", path.expand(file_path), "- ")
 	Date <- gsub("^data_.*_([0-9]{8})_.*", "\\1", bn)
 	### read File
-    raw <- readLines(FilePath, warn = FALSE)
+    raw <- readLines(file_path, warn = FALSE)
     # filter out erroneous multibyte strings
     raw <- raw[grepl('^\\d{2}[0-9.:]+,[^,]+,([0-9.+-]+,){3}M,([0-9.+-]+,){2}[^,]+$', raw, 
         useBytes = TRUE)]
@@ -86,11 +68,13 @@ read_windmaster_ascii <- function(FilePath){
     cat(paste0("data recorded by sonic-", tolower(sonic_label), "\n"))
     sonic_file <- sub("data_(.*)_[0-9]{8}_[0-9]{6}([.]gz)?$", "\\1", bn)
     if(sonic_label != toupper(sub("sonic-", "", sonic_file))){
-        warning(paste0("Sonic label '", sonic_label, "', and hostname '", sonic_file, "' don't match!"), call. = FALSE)
+        warning(paste0("Sonic label '", sonic_label, "', and hostname '", sonic_file, 
+                "' don't match!"), call. = FALSE)
     }
     # check units
     if(out[, V6[1]] != "M"){
-        stop("Units of recorded data not compatible with evaluation script! Column 6 should contain 'M' for m/s!")
+        stop("Units of recorded data not compatible with evaluation script! Column 6 ",
+            "should contain 'M' for m/s!")
     }
     # fix time etc.
     out[, c(
@@ -102,9 +86,11 @@ read_windmaster_ascii <- function(FilePath){
         'V7'
         ) := {
         # set times correctly
-        st.dec <- fast_strptime(paste(Date, V1), lt = FALSE, format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")
+        st.dec <- fast_strptime(paste(Date, V1), lt = FALSE, 
+            format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")
         # get Hz (faster than as.factor(sub('[.].*', '', V1)) !
-        Hz <- round(median(tabulate(trunc(as.numeric(st.dec) - as.numeric(st.dec[1])))), -1)
+        Hz <- round(median(tabulate(trunc(as.numeric(st.dec) - 
+                        as.numeric(st.dec[1])))), -1)
         if (
             hour(st.dec[.N]) == 0 && 
             (hour(st.dec[1]) != 0 || .N > (3 * Hz))
@@ -112,7 +98,8 @@ read_windmaster_ascii <- function(FilePath){
             ## fix last 3 * Hz entries, where hour == 0
             sub.st <- st.dec[.N - seq_len(3 * Hz) + 1]
             hr <- hour(sub.st)
-            st.dec[.N - seq_len(3 * Hz) + 1] <- fifelse(hr == 0, sub.st + 24 * 3600, sub.st)
+            st.dec[.N - seq_len(3 * Hz) + 1] <- fifelse(hr == 0, sub.st + 24 * 3600, 
+                sub.st)
         }
         # return list
         list(
@@ -137,22 +124,25 @@ read_windmaster_ascii <- function(FilePath){
     out
 }
 
-read_windmaster_old_ascii <- function(FilePath){
+# old windmaster format
+read_windmaster_old_ascii <- function(file_path) {
 	### get Date
-	bn <- basename(FilePath)
-	Date <- gsub("^..._([0-9]{6})_.*","\\1",bn)
+	bn <- basename(file_path)
+	Date <- gsub("^..._([0-9]{6})_.*", "\\1", bn)
     ### check if rg is available
     use_rg <- try(system('rg -V', intern = TRUE), silent = TRUE)
     # use_rg <- length(system('command -v rg', intern = TRUE)) > 0
 	### read File
 	# browser()
     if (inherits(use_rg, 'try-error')) {
-        suppressWarnings(out <- fread(cmd=paste0("grep -v -e ',,' -e '[A-Za-z]' '",path.expand(FilePath),"'"),fill = TRUE,blank.lines.skip = TRUE))
+        suppressWarnings(out <- fread(cmd = paste0("grep -v -e ',,' -e '[A-Za-z]' '", 
+                    path.expand(file_path), "'"), fill = TRUE, blank.lines.skip = TRUE))
     } else {
-        suppressWarnings(out <- fread(cmd=paste0("rg -v -e ',,' -e '[A-Za-z]' '",path.expand(FilePath),"'"),fill = TRUE,blank.lines.skip = TRUE))
+        suppressWarnings(out <- fread(cmd = paste0("rg -v -e ',,' -e '[A-Za-z]' '", 
+                    path.expand(file_path), "'"), fill = TRUE, blank.lines.skip = TRUE))
     }
-	if(nrow(out) == 0){
-		cat("File empty:",path.expand(FilePath),"\n")
+	if (nrow(out) == 0) {
+		cat("File empty:", path.expand(file_path), "\n")
 		return(NULL)
 	}
 	# remove first (empty) column
@@ -163,7 +153,8 @@ read_windmaster_old_ascii <- function(FilePath){
     Hz <- out[, .N, by = V2][, round(median(N), -1)]
     out[, Hz := Hz]
 	## set times
-	out[, st.dec := fast_strptime(paste0(Date,V2),lt = FALSE,format = "%y%m%d%H:%M:%S",tz = "Etc/GMT-1")+V3][,c("V2","V3"):=NULL]
+	out[, st.dec := fast_strptime(paste0(Date, V2), lt = FALSE, 
+        format = "%y%m%d%H:%M:%S", tz = "Etc/GMT-1") + V3][, c("V2", "V3") := NULL]
     ## fix end of day
     if (out[, 
         hour(st.dec[.N]) == 0 && 
@@ -176,139 +167,29 @@ read_windmaster_old_ascii <- function(FilePath){
         }]
     }
 	### set Output names and order
-	setnames(out,c("u", "v", "w", "T", "Hz", "Time"))
-	setcolorder(out,c("Time","Hz","u","v","w","T"))
+	setnames(out, c("u", "v", "w", "T", "Hz", "Time"))
+	setcolorder(out, c("Time", "Hz", "u", "v", "w", "T"))
 	### remove 999.99 entries
-	out <- out[!(u%in%999.99|v%in%999.99|w%in%999.99|T%in%999.99),]
+	out <- out[!(u %in% 999.99 | v %in% 999.99 | w %in% 999.99 | T %in% 999.99), ]
 	### change units from °C to K
 	out[, T := T + 273.15]
     setattr(out, "GillBug", TRUE)
 	out
 }
 
-readSonicEVS_csv <- function(FilePath, tz = "Etc/GMT-1"){
-	### read File
-	suppressWarnings(out <- fread(cmd=paste0("grep -v -e ',,' -e [A-Za-z] '", 
-		path.expand(FilePath), "'"), fill = TRUE, blank.lines.skip = TRUE))
-	### remove rows with NA
- 	out <- na.omit(out)
-	### set times
-	out[,st.dec := fast_strptime(paste(V1, V2), lt = FALSE, format = "%d.%m.%Y %H.%M.%OS",
-		tz = tz)][,c("V1","V2"):=NULL]
-	# get start time
-	start_time <- out[, as.POSIXct(trunc(st.dec[1]))]
-	out[, dt := trunc(as.numeric(st.dec - start_time, units = "secs"))]
-	# correct new day
-	out[(seq_len(.N) > 30) & dt == 0, dt := dt + 24 * 3600]
-	out[dt < 0, dt := dt + 24 * 3600 - 1]
-	# add st column
-	out[, st := start_time + dt]
-	# add Hz column
-	Hz <- out[, .N, by = trunc(dt)][, round(median(N), -1)]
-	out[, Hz := Hz]
-	# remove columns
-	out[, c("st.dec", "dt") := NULL]
-	### set Output names and order
-	setnames(out,c("u", "v", "w", "T", "Time","Hz"))
-	setcolorder(out,c("Time","Hz","u","v","w","T"))
-	### remove 999.99 entries
-	out <- out[!(u%in%999.99|v%in%999.99|w%in%999.99|T%in%999.99),]
-	### change units from °C to K
-	out[,T := T + 273.15]
-	out
-}
-
 # HS Sonic Agroscope Wauwilermoos
-read_hs_ascii_old <- function(FilePath){
+read_hs_ascii <- function(file_path) {
     # be verbose
-    cat("File:", path.expand(FilePath), "- ")
-	### read File
-    raw <- readLines(FilePath, warn = FALSE)
-    # filter out erroneous multibyte strings
-    raw <- raw[grepl('^\\d{4}-\\d{2}-\\d{2}T\\d{2}[0-9.:]+Z,([^,]+,){2}([0-9.+-]+,){4}([0-9.+-]+,){2}[^,]+$', raw, 
-        useBytes = TRUE)]
-    out <- fread(text = raw, header = FALSE, na.strings = '999.99', showProgress = FALSE, 
-        blank.lines.skip = TRUE, tz = 'UTC')
-    # check if file is empty
-	if(nrow(out) == 0){
-        cat('no valid data\n')
-		return(NULL)
-	}
-    # check if first column has class POSIXct
-    if (out[, inherits(class(V1), 'POSIXct')]) {
-        out[, V1 := fast_strptime(V1, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE, tz = 'UTC')]
-    }
-    # check which columns to convert columns if necessary
-    vnums <- paste0('V', 4:7)
-    is.char <- out[, sapply(.SD, is.character), .SDcols = vnums]
-    # convert to numeric
-    out[, vnums[is.char] := {
-        lapply(.SD, as.numeric)
-    }, .SDcols = vnums[is.char]]
-    # remove NA lines that come from conversion
-    out <- na.omit(out)
-    if (out[, .N == 0]) {
-        cat('no valid data\n')
-        return(NULL)
-    }
-    # be verbose and print sonic names:
-    sonic_label <- 'HS'
-    cat(paste0("data recorded by sonic-", tolower(sonic_label), "\n"))
-    # fix time etc.
-    out[, c(
-        # remove columns
-        'V1', 'V2', 'V3', 'V8', 'V9', 'V10',
-        # add columns
-        'sonic', 'Time', 'Hz'
-        ) := {
-        # get Hz (faster than as.factor(sub('[.].*', '', V1)) !
-        Hz <- round(median(tabulate(trunc(as.numeric(V1) - as.numeric(V1[1])))), -1)
-        # return list
-        list(
-            # remove columns
-            NULL, NULL, NULL, NULL, NULL, NULL,
-            # sonic
-            sonic_label,
-            # Time
-            V1,
-            # Hz
-            Hz
-            )
-    }]
-    ### set Output names and order
-    setnames(out, c("u", "v", "w", "T", "sonic", "Time","Hz"))
-    setcolorder(out,c("Time","Hz","u","v","w","T", "sonic"))
-    # check if GillBug affected sonic
-    setattr(out, 'GillBug', sonic_label %in% c('C', 'D'))
-    # return
-    out
-}
-
-# C++ helper function for gzipped HS data
-if (Sys.info()['sysname'] == 'Windows') {
-    old_pkg_libs <- Sys.getenv('PKG_LIBS')
-    # help the linker to include zlib through the environment variable PKG_LIBS
-    Sys.setenv(PKG_LIBS = "-lz")       # Fix linking to zlib
-}
-
-if (Sys.info()['sysname'] == 'Windows') {
-    # reset env var
-    Sys.setenv(PKG_LIBS = old_pkg_libs)
-}
-
-# HS Sonic Agroscope Wauwilermoos (new function using C++)
-read_hs_ascii <- function(FilePath) {
-    # be verbose
-    cat("File:", path.expand(FilePath), "- ")
-    if (grepl('[.]gz$', basename(FilePath))) {
+    cat("File:", path.expand(file_path), "- ")
+    if (grepl('[.]gz$', basename(file_path))) {
         # gzipped data
-        raw <- hs_read_cpp_gzip(normalizePath(FilePath, mustWork = FALSE))
+        raw <- hs_read_cpp_gzip(normalizePath(file_path, mustWork = FALSE))
     } else {
         # uncompressed
-        raw <- hs_read_cpp(normalizePath(FilePath, mustWork = FALSE))
+        raw <- hs_read_cpp(normalizePath(file_path, mustWork = FALSE))
     }
     if (length(raw) == 0) {
-        stop('File path: "', FilePath, '" is not accessible!')
+        stop('File path: "', file_path, '" is not accessible!')
     }
     out <- as.data.table(raw)
     out[, Time := fast_strptime(time_string, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE)]
@@ -318,10 +199,7 @@ read_hs_ascii <- function(FilePath) {
         .(Time, Hz = round(1 / median(as.numeric(diff(Time)))), u = u_string, v = v_string, 
             w = w_string, T = t_string, sonic = 'HS')
     }]
-}
-
-## get objects after sourcing script
-if (.get_diff) {
-    .read_sonic <- setdiff(ls(all.names = TRUE), .read_sonic)
+    setattr(out, "GillBug", FALSE)
+    out
 }
 

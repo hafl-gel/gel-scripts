@@ -1,4 +1,9 @@
 
+#' @title Read Sonic Data
+#' @description Main function to read sonic data from various file formats.
+#' @param file_path A string specifying the path to the file to be read.
+#' @return A data.table containing the processed sonic data or NULL if no valid data is found.
+#' @export
 ## main function to read sonic data
 read_sonic <- function(file_path) {
 	bn <- basename(file_path)
@@ -24,6 +29,10 @@ read_sonic <- function(file_path) {
     }
 }
 
+#' @title Read New Windmaster ASCII Data
+#' @description Reads and processes data from the new Windmaster ASCII format.
+#' @param file_path A string specifying the path to the file to be read.
+#' @return A data.table containing the processed Windmaster data or NULL if no valid data is found.
 # new windmaster format
 read_windmaster_ascii <- function(file_path){
 	### get Date
@@ -124,6 +133,10 @@ read_windmaster_ascii <- function(file_path){
     out
 }
 
+#' @title Read Old Windmaster ASCII Data
+#' @description Reads and processes data from the old Windmaster ASCII format.
+#' @param file_path A string specifying the path to the file to be read.
+#' @return A data.table containing the processed Windmaster data or NULL if no valid data is found.
 # old windmaster format
 read_windmaster_old_ascii <- function(file_path) {
 	### get Date
@@ -148,7 +161,7 @@ read_windmaster_old_ascii <- function(file_path) {
 	# remove first (empty) column
     if ('V1' %in% names(out)) out[, V1 := NULL]
     # remove NAs
- 	out <- na.omit(out)
+  	out <- na.omit(out)
     ## get Hz
     Hz <- out[, .N, by = V2][, round(median(N), -1)]
     out[, Hz := Hz]
@@ -177,6 +190,10 @@ read_windmaster_old_ascii <- function(file_path) {
 	out
 }
 
+#' @title Read HS Sonic ASCII Data
+#' @description Reads and processes data from the HS Sonic ASCII format.
+#' @param file_path A string specifying the path to the file to be read.
+#' @return A data.table containing the processed HS Sonic data or NULL if no valid data is found.
 # HS Sonic Agroscope Wauwilermoos
 read_hs_ascii <- function(file_path) {
     # be verbose
@@ -202,4 +219,3 @@ read_hs_ascii <- function(file_path) {
     setattr(out, "GillBug", FALSE)
     out
 }
-

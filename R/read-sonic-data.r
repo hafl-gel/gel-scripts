@@ -9,13 +9,13 @@ read_sonic <- function(file_path) {
 	bn <- basename(file_path)
     # check if provided as qs or rds
     if (grepl('[.]qdata$', bn)) {
-        qs2::qd_read(file_path)
+        alloc.col(qs2::qd_read(file_path))
     } else if (grepl('[.]qs$', bn)) {
         if (!requireNamespace(qs)) {
             stop('data is provided as *.qs file -> install qs library',
                 ' running "install.packages("qs")"')
         }
-        qs::qread(file_path)
+        alloc.col(qs::qread(file_path))
     } else if (grepl('[.]rds$', bn)) {
         readRDS(file_path)
     } else if (grepl("^(py_)?fnf_", bn)) {

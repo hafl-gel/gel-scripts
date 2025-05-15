@@ -5,13 +5,13 @@ read_licor <- function(file_path) {
 	bn <- basename(file_path)
     # check file name
     if (grepl('[.]qdata$', bn)) {
-        return(qs2::qd_read(file_path))
+        return(alloc.col(qs2::qd_read(file_path)))
     } else if (grepl('[.]qs$', bn)) {
         if (!requireNamespace(qs)) {
             stop('data is provided as *.qs file -> install qs library',
                 ' running "install.packages("qs")"')
         }
-        return(qs::qread(file_path))
+        return(alloc.col(qs::qread(file_path)))
     } else if (grepl('[.]rds$', bn)) {
         return(readRDS(file_path))
     }

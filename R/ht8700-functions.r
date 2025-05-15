@@ -16,13 +16,13 @@ read_ht8700 <- function(file_path) {
 	bn <- basename(file_path)
     # check file name
     if (grepl('[.]qdata$', bn)) {
-        return(qs2::qd_read(file_path))
+        return(alloc.col(qs2::qd_read(file_path)))
     } else if (grepl('[.]qs$', bn)) {
         if (!requireNamespace(qs)) {
             stop('data is provided as *.qs file -> install qs library',
                 ' running "install.packages("qs")"')
         }
-        return(qs::qread(file_path))
+        return(alloc.col(qs::qread(file_path)))
     } else if (grepl('[.]rds$', bn)) {
         return(readRDS(file_path))
     } else if (is_old_structure <- grepl('^ht8700_', bn)) {
@@ -35,11 +35,13 @@ read_ht8700 <- function(file_path) {
 	### read File
     if (grepl('[.]gz$', bn)) {
         # gzip-ped data
-        out <- data.table::as.data.table(ht8700_read_cpp_gzip(normalizePath(file_path)))
+        raw <- ht8700_read_cpp_gzip(normalizePath(file_path))
     } else {
         # uncompressed data
-        out <- data.table::as.data.table(ht8700_read_cpp(normalizePath(file_path)))
+        raw <- ht8700_read_cpp(normalizePath(file_path))
     }
+    # convert to data.table
+    out <- as.data.table(raw)
     # check empty
     if (nrow(out) == 0) {
         cat('no valid data!\n')
@@ -80,33 +82,24 @@ read_ht8700 <- function(file_path) {
 merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
     # prepare output
     n_out <- nrow(basis_sonic)
-    out <- data.table(
-        Time = POSIXct(n_out), 
-        Hz = NA_character_,
-        u = NA_real_, 
-        v = NA_real_, 
-        w = NA_real_, 
-        T = NA_real_, 
-        sonic = NA_character_,
-        nh3_ppb = NA_real_,
-        nh3_ugm3 = NA_real_, 
-        ht_temp_amb = NA_real_, 
-        ht_press_amb = NA_real_, 
-        ht_oss = NA_real_, 
-        ht_peak_pos = NA_real_,
-        ht_alarm_code = NA_character_,
-        h2o_mmolm3 = NA_real_,
-        co2_mmolm3 = NA_real_,
-        li_temp_amb = NA_real_,
-        li_press_amb = NA_real_,
-        li_co2ss = NA_real_
+    out <- cbind(
+        basis_sonic,
+        nh3_ppb = rep(NA_real_, n_out),
+        nh3_ugm3 = rep(NA_real_, n_out), 
+        ht_temp_amb = rep(NA_real_, n_out), 
+        ht_press_amb = rep(NA_real_, n_out), 
+        ht_oss = rep(NA_real_, n_out), 
+        ht_peak_pos = rep(NA_real_, n_out),
+        ht_alarm_code = rep(NA_character_, n_out),
+        h2o_mmolm3 = rep(NA_real_, n_out),
+        co2_mmolm3 = rep(NA_real_, n_out),
+        li_temp_amb = rep(NA_real_, n_out),
+        li_press_amb = rep(NA_real_, n_out),
+        li_co2ss = rep(NA_real_, n_out)
     )
     if (n_out == 0) {
         return(out)
     }
-    # fill sonic
-    sonic_vars <- names(out)[1:7]
-    out[, (sonic_vars) := copy(basis_sonic[, sonic_vars, with = FALSE])]
     # fill ht
     ht_vars <- names(out)[8:14]
     ht_orig <- c('nh3_ppb', 'nh3_ugm3', 'temp_amb', 'press_amb', 'oss', 'peak_pos', 

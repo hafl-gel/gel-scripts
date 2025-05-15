@@ -704,12 +704,12 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
 	dat2 <- reshape2::melt(dat[,c("st",selection)],id="st")
 	dat2[, "trend"] <- dat4[, "trend"]
 	myxscale.component <- function(...) {
-		ans <- xscale.components.default(...)
+		ans <- lattice::xscale.components.default(...)
 		ans$top <- ans$bottom
 		ans
 	}
 	myyscale.component <- function(...) {
-		ans <- yscale.components.default(...)
+		ans <- lattice::yscale.components.default(...)
 		ans$right <- ans$left
 		ans$right$labels$labels <- NULL
 		ans
@@ -727,14 +727,14 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
 		strip=FALSE, layout=c(1, length(selection)), between=list(x=0,y=1), subscripts=TRUE, lwd=rep(1,length(color)), lty=rep(1,length(color)), col=color,
 		panel=function(x, y, ...) {
 			# panel.grid(h=-1, v=-1, lty=3, col="gray80")
-			panel.xyplot(x,y,...)
+            lattice::panel.xyplot(x,y,...)
 			y2 <- dat2[list(...)$subscripts,"trend"]
             if (!identical(y, y2)) {
                 # panel.xyplot(x,y2,type="l",lwd=1.5, lty=3, col="gray30")
                 # panel.xyplot(x,y2,type="l",lwd=2, lty=2, col="lightblue")
                 # panel.xyplot(x,y2,type="l",lwd=2, lty=2, col="lightgrey")
                 # panel.xyplot(x, y2, type = "l", lwd = 2, lty = 2, col = "#B37FDF")
-                panel.xyplot(x, y2, type = "l", lwd = 3, col = "darkgrey")
+                lattice::panel.xyplot(x, y2, type = "l", lwd = 3, col = "darkgrey")
             }
 		}
 	)  	
@@ -2701,7 +2701,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 time2 <- format(soi_user, format = "%H%M")
                 plotname <- paste("timeseries", date_formatted, time2, sep="-") 
                 ts_vars <- names(plot_timeseries)[plot_timeseries]
-                jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), width = 600, 
+                jpeg(filename = paste0(path_folder, '/', plotname, ".jpg"), width = 600, 
                     height = (sum(plot_timeseries)) * 100, quality = 60)
                     ts_plot <- plot.tseries(
                         cbind(st = Time, as.data.frame(SD)),
@@ -2721,7 +2721,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         covariances_plotnames[i], sep = "-")
                     # fix ylab
                     ylab <- sub('(.+)x(.+)', "<\\1'\\2'>", i)
-                    jpeg(file = paste0(path_folder, '/', plotname, ".jpg"), 
+                    jpeg(filename = paste0(path_folder, '/', plotname, ".jpg"), 
                         width = 1350, height = 900, quality = 60)
                         par(mfrow=c(2,3))
                         # ----------------------- Covariance -----------------------

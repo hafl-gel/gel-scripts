@@ -57,6 +57,28 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// licor_read_cpp
+Rcpp::List licor_read_cpp(String filename);
+RcppExport SEXP _gel_licor_read_cpp(SEXP filenameSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< String >::type filename(filenameSEXP);
+    rcpp_result_gen = Rcpp::wrap(licor_read_cpp(filename));
+    return rcpp_result_gen;
+END_RCPP
+}
+// licor_read_cpp_gzip
+Rcpp::List licor_read_cpp_gzip(Rcpp::String filename);
+RcppExport SEXP _gel_licor_read_cpp_gzip(SEXP filenameSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::String >::type filename(filenameSEXP);
+    rcpp_result_gen = Rcpp::wrap(licor_read_cpp_gzip(filename));
+    return rcpp_result_gen;
+END_RCPP
+}
 // hs_read_cpp
 Rcpp::List hs_read_cpp(String filename);
 RcppExport SEXP _gel_hs_read_cpp(SEXP filenameSEXP) {
@@ -85,6 +107,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_gel_ht8700_read_cpp_gzip", (DL_FUNC) &_gel_ht8700_read_cpp_gzip, 1},
     {"_gel_match_times", (DL_FUNC) &_gel_match_times, 3},
     {"_gel_decal", (DL_FUNC) &_gel_decal, 2},
+    {"_gel_licor_read_cpp", (DL_FUNC) &_gel_licor_read_cpp, 1},
+    {"_gel_licor_read_cpp_gzip", (DL_FUNC) &_gel_licor_read_cpp_gzip, 1},
     {"_gel_hs_read_cpp", (DL_FUNC) &_gel_hs_read_cpp, 1},
     {"_gel_hs_read_cpp_gzip", (DL_FUNC) &_gel_hs_read_cpp_gzip, 1},
     {NULL, NULL, 0}

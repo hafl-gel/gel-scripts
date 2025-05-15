@@ -29,130 +29,149 @@ check_limits <- function(dat, limits, lim_window = 500,
         out[is.na(out)] <- 2
         out
         }, x = .SD, nm = hl_vars, SIMPLIFY = FALSE), .SDcols = hl_vars]
-    # parse windows
-	pass_window <- parse_time_diff(lim_window[['pass']]) * d_t
-    # be verbose
-    # TODO: output # NA, # replace
-    # check max NA window lengths (pass) -> set flag to -1 if > window
-    dat[, paste0(hl_vars, '_flag') := lapply(.SD, \(x) {
-        y <- x > 0
-        z <- y[-1L] != y[-.N]
-        i <- which(z)
-        i_to <- c(i, .N)
-        i_from <- c(0, i)
-        i_ind <- diff(c(0, i_to)) > pass_window & y[i_to]
-        if (any(i_ind)) {
-            ind <- unlist(mapply(':', i_from[i_ind], i_to[i_ind], SIMPLIFY = FALSE))
-            x[ind] <- -1
+    # check method
+    if (!pmatch(lim_method, 'norepl', nomatch = 0)) {
+        # re-flag windows which can't be replaced anyway
+        # parse windows
+        pass_window <- parse_time_diff(lim_window[['pass']]) * d_t
+        # check max NA window lengths (pass) -> set flag to -1 if > window
+        dat[, paste0(hl_vars, '_flag') := lapply(.SD, \(x) {
+            y <- x > 0
+            z <- y[-1L] != y[-.N]
+            i <- which(z)
+            i_to <- c(i, .N)
+            i_from <- c(0, i)
+            i_ind <- diff(c(0, i_to)) > pass_window & y[i_to]
+            if (any(i_ind)) {
+                ind <- unlist(mapply(':', i_from[i_ind], i_to[i_ind], SIMPLIFY = FALSE))
+                x[ind] <- -1
+            }
+            x
+        }), .SDcols = paste0(hl_vars, '_flag')]
+        # check flagged
+        hflgs <- dat[, sapply(.SD, \(x) sum(x > 0)), .SDcols = paste0(hl_vars, '_flag')]
+        # get variable to replace
+        var_hflgs <- hl_vars[hflgs > 0]
+        if (any(hflgs > 0)) {
+            # parse 'replace' window
+            repl_window <- parse_time_diff(lim_window[['replace']])
+            # get window limits
+            win_half <- repl_window / 2
+            # check method
+            switch(lim_method
+                , 'dist' = {
+                    # get weighting (1 / r)
+                    w1 <- 1 / seq_len(win_half * d_t)
+                    w_1 <- c(rev(w1), 1, w1)
+                }
+                , 'squaredist' = {
+                    # get weighting (1 / r ^ 2)
+                    w1 <- 1 / seq_len(win_half * d_t) ^ 2
+                    w_1 <- c(rev(w1), 1, w1)
+                }
+                , 'median' = {
+                    w_1 <- NULL
+                }
+                , stop('replacement method not valid')
+            )
+            # loop over variables
+            if (is.null(w_1)) {
+                # be verbose
+                cat("Replacing flagged values by window median...\n")
+                # median
+                dat[, (var_hflgs) := lapply(var_hflgs, \(var) {
+                    cat('\t-', var, '- ')
+                    x <- get(var)
+                    x_flag <- get(paste0(var, '_flag'))
+                    isna <- which(x_flag > 0)
+                    x1 <- as.numeric(Time[isna]) - win_half
+                    x2 <- as.numeric(Time[isna]) + win_half
+                    # find window for each NA
+                    cat('get windows - ')
+                    ind <- find_window(Time, x1, x2)
+                    # replace values
+                    cat('replace values: ')
+                    x[isna] <- sapply(seq_along(isna), \(i) {
+                        verb <- paste(i, '/', length(isna))
+                        cat(verb)
+                        out <- median(x[ind[[i]]], na.rm = TRUE)
+                        cat(paste(rep('\b', nchar(verb)), collapse = ''))
+                        out
+                    })
+                    cat('\n')
+                    x
+                })]
+            } else {
+                # be verbose
+                cat("Replacing flagged values by window weighted average\n")
+                # weighted mean
+                dat[, (var_hflgs) := lapply(var_hflgs, \(var) {
+                    cat('\t-', var, '- ')
+                    x <- get(var)
+                    x_flag <- get(paste0(var, '_flag'))
+                    isna <- which(x_flag > 0)
+                    # dat[749718 + (-1500:1500),]
+                    x1 <- as.numeric(Time[isna]) - win_half
+                    x2 <- as.numeric(Time[isna]) + win_half
+                    # find window for each NA
+                    cat('get windows - ')
+                    ind <- find_window(as.numeric(Time), x1, x2)
+                    # replace values
+                    cat('replace values: ')
+                    x[isna] <- sapply(seq_along(isna), \(i) {
+                        verb <- paste(i, '/', length(isna))
+                        cat(verb)
+                        # i <- 1
+                        # i <- length(isna)
+                        j <- which(ind[[i]])
+                        # if (all(is.na(x[j]))) {
+                        #     browser()
+                        #     # only NA values
+                        #     out <- NA
+                        # } else if (length(j) != length(w_1)) {
+                        if (length(j) != length(w_1)) {
+                            w_i <- j - isna[i] + win_half * d_t + 1
+                            out <- sum(x[j] * w_1[w_i], na.rm = TRUE) / 
+                                sum(w_1[w_i][x_flag[j] == 0])
+                        } else {
+                            out <- sum(x[j] * w_1, na.rm = TRUE) / sum(w_1[x_flag[j] == 0])
+                        }
+                        cat(paste(rep('\b', nchar(verb)), collapse = ''))
+                        out
+                    })
+                    cat('\n')
+                    x
+                })]
+            }
+            cat("\n*~~~~*\n")
         }
-        x
-    }), .SDcols = paste0(hl_vars, '_flag')]
-    # check flagged
-	hflgs <- dat[, sapply(.SD, \(x) sum(x > 0)), .SDcols = paste0(hl_vars, '_flag')]
-    # get variable to replace
-    var_hflgs <- hl_vars[hflgs > 0]
-	if (!pmatch(lim_method, "norepl", nomatch = 0) && any(hflgs > 0)) {
-		# parse 'replace' window
-		repl_window <- parse_time_diff(lim_window[['replace']])
-        # get window limits
-        win_half <- repl_window / 2
-        # check method
-        switch(lim_method
-            , 'dist' = {
-                # get weighting (1 / r)
-                w1 <- 1 / seq_len(win_half * d_t)
-                w_1 <- c(rev(w1), 1, w1)
-            }
-            , 'squaredist' = {
-                # get weighting (1 / r ^ 2)
-                w1 <- 1 / seq_len(win_half * d_t) ^ 2
-                w_1 <- c(rev(w1), 1, w1)
-            }
-            , 'median' = {
-                w_1 <- NULL
-            }
-            , stop('replacement method not valid')
-        )
-        # loop over variables
-        if (is.null(w_1)) {
-            # be verbose
-            cat("Replacing flagged values by window median...\n")
-            # median
-            dat[, (var_hflgs) := lapply(var_hflgs, \(var) {
-                cat('\t-', var, '- ')
-                x <- get(var)
-                x_flag <- get(paste0(var, '_flag'))
-                isna <- which(x_flag > 0)
-                x1 <- as.numeric(Time[isna]) - win_half
-                x2 <- as.numeric(Time[isna]) + win_half
-                # find window for each NA
-                cat('get windows - ')
-                ind <- find_window(Time, x1, x2)
-                # replace values
-                cat('replace values: ')
-                x[isna] <- sapply(seq_along(isna), \(i) {
-                    verb <- paste(i, '/', length(isna))
-                    cat(verb)
-                    out <- median(x[ind[[i]]], na.rm = TRUE)
-                    cat(paste(rep('\b', nchar(verb)), collapse = ''))
-                    out
-                })
-                cat('\n')
-                x
-            })]
-        } else {
-            # be verbose
-            cat("Replacing flagged values by window weighted average\n")
-            # weighted mean
-            dat[, (var_hflgs) := lapply(var_hflgs, \(var) {
-                cat('\t-', var, '- ')
-                x <- get(var)
-                x_flag <- get(paste0(var, '_flag'))
-                isna <- which(x_flag > 0)
-                # dat[749718 + (-1500:1500),]
-                x1 <- as.numeric(Time[isna]) - win_half
-                x2 <- as.numeric(Time[isna]) + win_half
-                # find window for each NA
-                cat('get windows - ')
-                ind <- find_window(as.numeric(Time), x1, x2)
-                # replace values
-                cat('replace values: ')
-                x[isna] <- sapply(seq_along(isna), \(i) {
-                    verb <- paste(i, '/', length(isna))
-                    cat(verb)
-                    # i <- 1
-                    # i <- length(isna)
-                    j <- which(ind[[i]])
-                    # if (all(is.na(x[j]))) {
-                    #     browser()
-                    #     # only NA values
-                    #     out <- NA
-                    # } else if (length(j) != length(w_1)) {
-                    if (length(j) != length(w_1)) {
-                        w_i <- j - isna[i] + win_half * d_t + 1
-                        out <- sum(x[j] * w_1[w_i], na.rm = TRUE) / 
-                            sum(w_1[w_i][x_flag[j] == 0])
-                    } else {
-                        out <- sum(x[j] * w_1, na.rm = TRUE) / sum(w_1[x_flag[j] == 0])
-                    }
-                    cat(paste(rep('\b', nchar(verb)), collapse = ''))
-                    out
-                })
-                cat('\n')
-                x
-            })]
-        }
-		cat("\n*~~~~*\n")
 	} else {
-	    hflgs <- dat[, sapply(.SD, \(x) sum(x != 0)), .SDcols = paste0(hl_vars, '_flag')]
-        names(hflgs) <- hl_vars
-		cat(
+        # set values outsid limits to NA
+	    if (dat[, any(sapply(.SD, \(x) any(x == 1))), 
+            .SDcols = paste0(hl_vars, '_flag')]) {
+            cat('setting values outside limits to NA...\n')
+            # set flagged values to NA
+            dat[, (hl_vars) := lapply(hl_vars, \(var) {
+                xf <- get(paste0(var, '_flag'))
+                x <- get(var)
+                x[xf == 1] <- NA_real_
+                x
+                })
+            ]
+        }
+    }
+    # check remaining NA values
+    hflgs <- dat[, sapply(.SD, \(x) sum(is.na(x))), .SDcols = hl_vars]
+    names(hflgs) <- hl_vars
+    var_hflgs <- names(hflgs)[hflgs > 0]
+    if (length(var_hflgs) > 0) {
+        cat(
             paste0(
-                'number of values outside of hard limits (set to NA)\n*~~~~*\n',
+                '------\nremaining NA-values in data set:\n',
                 paste(
                     sprintf('%s: %i', var_hflgs, hflgs[var_hflgs]), 
                     collapse = '\n'),
-                "\n*~~~~*\n"
+                "\n"
             )
         )
     }
@@ -1880,6 +1899,38 @@ process_ec_fluxes <- function(
         "on a", avg_secs / 60, "minute basis\n~~~\n\n"
     )
 
+    # check HT8700 quality: alarm codes & OSS
+    if (ht_provided) {
+        cat('~~~\nChecking HT-8700 OSS and alarm codes - ')
+        # add alarm code
+        if (!('ht_alarm_code' %in% names(daily_data))) {
+            daily_data[, ht_alarm_code := get_alarms(.SD)]
+        }
+        # create regex pattern
+        na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'),
+            collapse = '|')
+        # check alarms and set nh3 NA
+        nh3_vars <- grep('nh3', names(daily_data), value = TRUE)
+        na0 <- daily_data[, sum(is.na(get(nh3_vars[1])))]
+        daily_data[grepl(na_alarm_pattern, ht_alarm_code), (nh3_vars) := NA_real_]
+        na1 <- daily_data[, sum(is.na(get(nh3_vars[1])))]
+        # check oss
+        daily_data[ht_oss < oss_threshold, (nh3_vars) := NA_real_]
+        cat('done\nBad alarms:', na1 - na0, '\nValues below OSS threshold:', 
+            daily_data[, sum(ht_oss < oss_threshold, na.rm = TRUE)], '\n')
+    }
+
+    # check licor ss
+    if (licor_provided) {
+        cat('~~~\nChecking LI-7500 signal strength - ')
+        # get variables
+        li_vars <- grep('^(co2|h2o)_', names(daily_data), value = TRUE)
+        # check li_co2ss
+        daily_data[li_co2ss < co2ss_threshold, (li_vars) := NA_real_]
+        cat('done\nValues below "co2ss" threshold:', 
+            daily_data[, sum(li_co2ss < co2ss_threshold, na.rm = TRUE)], '\n')
+    }
+
     # raw data quality control I, i.e. hard limits = physical range
     # --------------------------------------------------------------------------
     cat("~~~\nchecking NA-values and hard limits...\n")
@@ -2060,38 +2111,6 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
         # check if any column contains finite data
         if (.N >= n_threshold && 
             SD[1, any(sapply(.SD, \(x) x > -3)), .SDcols = paste0(hl_vars, '_flag')]) {
-
-            # check HT8700 quality: alarm codes & OSS
-            if (ht_provided) {
-                cat('~~~\nChecking HT-8700 OSS and alarm codes - ')
-                # add alarm code
-                if (!('ht_alarm_code' %in% names(SD))) {
-                    SD[, ht_alarm_code := get_alarms(.SD)]
-                }
-                # create regex pattern
-                na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'),
-                    collapse = '|')
-                # check alarms and set nh3 NA
-                nh3_vars <- grep('nh3', names(SD), value = TRUE)
-                na0 <- SD[, sum(is.na(get(nh3_vars[1])))]
-                SD[grepl(na_alarm_pattern, ht_alarm_code), (nh3_vars) := NA_real_]
-                na1 <- SD[, sum(is.na(get(nh3_vars[1])))]
-                # check oss
-                SD[ht_oss < oss_threshold, (nh3_vars) := NA_real_]
-                cat('done\nBad alarms:', na1 - na0, '\nValues below OSS threshold:', 
-                    SD[, sum(ht_oss < oss_threshold, na.rm = TRUE)], '\n')
-            }
-
-            # check licor ss
-            if (licor_provided) {
-                cat('~~~\nChecking LI-7500 signal strength - ')
-                # get variables
-                li_vars <- grep('^(co2|h2o)_', names(SD), value = TRUE)
-                # check li_co2ss
-                SD[li_co2ss < co2ss_threshold, (li_vars) := NA_real_]
-                cat('done\nValues below "co2ss" threshold:', 
-                    SD[, sum(li_co2ss < co2ss_threshold, na.rm = TRUE)], '\n')
-            }
 
             # check NA values in scalars
             scalars <- input_scalars

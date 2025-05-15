@@ -10,6 +10,53 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// ht8700_read_cpp
+Rcpp::List ht8700_read_cpp(String filename);
+RcppExport SEXP _gel_ht8700_read_cpp(SEXP filenameSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< String >::type filename(filenameSEXP);
+    rcpp_result_gen = Rcpp::wrap(ht8700_read_cpp(filename));
+    return rcpp_result_gen;
+END_RCPP
+}
+// ht8700_read_cpp_gzip
+Rcpp::List ht8700_read_cpp_gzip(Rcpp::String filename);
+RcppExport SEXP _gel_ht8700_read_cpp_gzip(SEXP filenameSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::String >::type filename(filenameSEXP);
+    rcpp_result_gen = Rcpp::wrap(ht8700_read_cpp_gzip(filename));
+    return rcpp_result_gen;
+END_RCPP
+}
+// match_times
+List match_times(NumericVector time1, NumericVector time2, double deltat);
+RcppExport SEXP _gel_match_times(SEXP time1SEXP, SEXP time2SEXP, SEXP deltatSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type time1(time1SEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type time2(time2SEXP);
+    Rcpp::traits::input_parameter< double >::type deltat(deltatSEXP);
+    rcpp_result_gen = Rcpp::wrap(match_times(time1, time2, deltat));
+    return rcpp_result_gen;
+END_RCPP
+}
+// decal
+List decal(IntegerVector x, IntegerVector y);
+RcppExport SEXP _gel_decal(SEXP xSEXP, SEXP ySEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type y(ySEXP);
+    rcpp_result_gen = Rcpp::wrap(decal(x, y));
+    return rcpp_result_gen;
+END_RCPP
+}
 // hs_read_cpp
 Rcpp::List hs_read_cpp(String filename);
 RcppExport SEXP _gel_hs_read_cpp(SEXP filenameSEXP) {
@@ -34,6 +81,10 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_gel_ht8700_read_cpp", (DL_FUNC) &_gel_ht8700_read_cpp, 1},
+    {"_gel_ht8700_read_cpp_gzip", (DL_FUNC) &_gel_ht8700_read_cpp_gzip, 1},
+    {"_gel_match_times", (DL_FUNC) &_gel_match_times, 3},
+    {"_gel_decal", (DL_FUNC) &_gel_decal, 2},
     {"_gel_hs_read_cpp", (DL_FUNC) &_gel_hs_read_cpp, 1},
     {"_gel_hs_read_cpp_gzip", (DL_FUNC) &_gel_hs_read_cpp_gzip, 1},
     {NULL, NULL, 0}

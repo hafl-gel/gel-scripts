@@ -11,4 +11,5 @@ Depends: R (>= 4.0.0)
 Imports: Rcpp (>= 1.0.12), data.table (>= 1.15.2), qs2, ibts, lubridate, digest
 Suggests: qs
 LinkingTo: Rcpp
+LazyData: true
 RoxygenNote: 7.3.2

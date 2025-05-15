@@ -5,6 +5,7 @@ export(read_sonic)
 export(read_ht8700)
 export(get_alarms)
 export(add_alarms)
+export(merge_data)
 # remove these?
 export(write_hashed)
 export(read_hashed)

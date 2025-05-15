@@ -204,7 +204,7 @@ read_hs_ascii <- function(file_path) {
     if (length(raw) == 0) {
         stop('File path: "', file_path, '" is not accessible!')
     }
-    out <- as.data.table(raw)
+    out <- data.table::as.data.table(raw)
     out[, Time := fast_strptime(time_string, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE)]
     out <- na.omit(out)
     cat(paste0("data recorded by HS sonic\n"))

@@ -1,4 +1,13 @@
 
+#' Read HT8700 Raw Data
+#'
+#' This function reads raw data from HT8700 files. It supports multiple file formats
+#' and handles different structures of the data.
+#'
+#' @param FilePath A string specifying the path to the HT8700 file.
+#' @return A data.table containing the processed HT8700 data or NULL if the file is empty.
+#' @export
+#'
 # main function to read HT8700 raw data
 read_ht8700 <- function(FilePath) {
     # be verbose
@@ -55,6 +64,15 @@ read_ht8700 <- function(FilePath) {
     out
 }
 
+#' Merge Sonic and HT8700 Data Based on Time
+#'
+#' This function merges sonic and HT8700 data based on time. The output contains the same times as the `basis` input. Values from `draw` will be repeated or dropped to match `basis` times. Licor data is optional and must be provided by `draw_licor`.
+#'
+#' @param basis_sonic A data.table containing the sonic data to be used as the basis for merging.
+#' @param draw_ht A data.table containing the HT8700 data to be merged. Default is NULL.
+#' @param draw_licor A data.table containing the Licor data to be merged. Default is NULL.
+#' @return A data.table containing the merged data with the same times as `basis`.
+#'
 # merge sonic & ht8700 data based on time
 #   -> output contains the same times as 'basis'
 #   -> values from 'draw' will be repeated or dropped to match 'basis' times
@@ -338,8 +356,11 @@ hash <- function(x) {
         )
     )]
 }
+
 add_hash <- function(x) setattr(x, 'hash', hash(x))
+
 get_hash <- function(x) attr(x, 'hash')
+
 check_path <- function(path) {
     path <- normalizePath(path, mustWork = FALSE)
     if (!dir.exists(path)) {
@@ -347,6 +368,7 @@ check_path <- function(path) {
     }
     path
 }
+
 write_local <- function(dat, path, ...) {
     dat_ser <- qs2::qd_serialize(dat, ...)
     con <- file(path, open = 'wb')
@@ -358,6 +380,7 @@ write_local <- function(dat, path, ...) {
     # write serialized dat
     writeBin(dat_ser, con)
 }
+
 read_local <- function(path, hash_only = FALSE) {
     # check if file exists
     if (!file.exists(path)) return(NULL)

@@ -1,2 +1,2 @@
 
-Add roxygen2 comments to all functions. Keep original code including the original comments in the output. Add at least a title, a good description, all parameters, the return value in the roxygen2 comments. Export all functions.
+Add roxygen2 comments to all functions. Keep original code including the original comments in the output. Add at least a title, a good description, all parameters, the return value in the roxygen2 comments. Export all functions. Do it for all functions without stopping. Do not change any code. Do not change any existing comments.

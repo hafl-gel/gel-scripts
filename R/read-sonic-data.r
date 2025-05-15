@@ -87,7 +87,7 @@ read_windmaster_ascii <- function(file_path){
         'V1', 'V2', 'V6', 'V8', 'V9',
         # add columns
         'sonic', 'Time', 'Hz',
-        # replace °C by K
+        # replace degree Celsius by K
         'V7'
         ) := {
         # set times correctly
@@ -180,7 +180,7 @@ read_windmaster_old_ascii <- function(file_path) {
 	setcolorder(out, c("Time", "Hz", "u", "v", "w", "T"))
 	### remove 999.99 entries
 	out <- out[!(u %in% 999.99 | v %in% 999.99 | w %in% 999.99 | T %in% 999.99), ]
-	### change units from °C to K
+	### change units from degree Celsius to K
 	out[, T := T + 273.15]
     setattr(out, "GillBug", TRUE)
 	out

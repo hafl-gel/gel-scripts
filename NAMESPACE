@@ -11,6 +11,9 @@ export(read_hashed)
 export(ht_merged_daily)
 # ~~~ licor
 export(read_licor)
+# ~~~ ec-evaluation
+export(process_ec_fluxes)
+export(col2hex)
 # ~~~ imports
 importFrom(digest, sha1)
 importFrom(lubridate, fast_strptime)
@@ -18,5 +21,7 @@ import(Rcpp)
 import(data.table)
 import(ibts)
 importFrom(qs2, qd_read, qd_save, qd_serialize, qd_deserialize)
+importFrom(fields, interp.surface.grid)
+importFrom(reshape2, melt)
 importFrom(stats, median, na.omit)
 importFrom(utils, capture.output)

@@ -10,6 +10,34 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// find_window
+Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2);
+RcppExport SEXP _gel_find_window(SEXP xSEXP, SEXP y1SEXP, SEXP y2SEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type y1(y1SEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type y2(y2SEXP);
+    rcpp_result_gen = Rcpp::wrap(find_window(x, y1, y2));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fit_ogive
+double fit_ogive(const NumericVector paras, const NumericVector ogive, const NumericVector f, const int ilo, const int ihi);
+RcppExport SEXP _gel_fit_ogive(SEXP parasSEXP, SEXP ogiveSEXP, SEXP fSEXP, SEXP iloSEXP, SEXP ihiSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const NumericVector >::type paras(parasSEXP);
+    Rcpp::traits::input_parameter< const NumericVector >::type ogive(ogiveSEXP);
+    Rcpp::traits::input_parameter< const NumericVector >::type f(fSEXP);
+    Rcpp::traits::input_parameter< const int >::type ilo(iloSEXP);
+    Rcpp::traits::input_parameter< const int >::type ihi(ihiSEXP);
+    rcpp_result_gen = Rcpp::wrap(fit_ogive(paras, ogive, f, ilo, ihi));
+    return rcpp_result_gen;
+END_RCPP
+}
 // ht8700_read_cpp
 Rcpp::List ht8700_read_cpp(String filename);
 RcppExport SEXP _gel_ht8700_read_cpp(SEXP filenameSEXP) {
@@ -103,6 +131,8 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_gel_find_window", (DL_FUNC) &_gel_find_window, 3},
+    {"_gel_fit_ogive", (DL_FUNC) &_gel_fit_ogive, 5},
     {"_gel_ht8700_read_cpp", (DL_FUNC) &_gel_ht8700_read_cpp, 1},
     {"_gel_ht8700_read_cpp_gzip", (DL_FUNC) &_gel_ht8700_read_cpp_gzip, 1},
     {"_gel_match_times", (DL_FUNC) &_gel_match_times, 3},

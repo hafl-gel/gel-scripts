@@ -2953,14 +2953,14 @@ get_kappa <- function(tval, pval) {
 }
 
 ### get data to script
-dat2string <- function(x) {
+obj2string <- function(x) {
     key <- keygen(as.raw(rep(1, 32)))
     nonce <- as.raw(rep(1, 24))
     xs <- qs2::qd_serialize(x)
     xr <- data_encrypt(xs, key, nonce = nonce)
     as.character(xr)
 }
-string2dat <- function(x) {
+string2obj <- function(x) {
     key <- keygen(as.raw(rep(1, 32)))
     nonce <- as.raw(rep(1, 24))
     xr <- as.raw(paste0('0x', x))

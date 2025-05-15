@@ -30,14 +30,14 @@ Rcpp::List hs_read_cpp(String filename) {
     std::string s;
     while (input.get(c)) {
         // check for comma
-        if (c == \',\') {
+        if (c == ',') {
             // add s to current line vector
             line[field] = s;
             // increase field counter
             field += 1;
             // reset s
             s.clear();
-        } else if (c == \'\\n\') {
+        } else if (c == '\n') {
         // check for newline -> newline
             // add s to current line vector
             line[field] = s;
@@ -65,7 +65,7 @@ Rcpp::List hs_read_cpp(String filename) {
             // scan to newline without consuming newline
             // this might fail
             char sp[256];
-            input.get(sp, 256, \'\\n\');
+            input.get(sp, 256, '\n');
         }
     }
     return Rcpp::List::create(
@@ -100,7 +100,7 @@ Rcpp::List hs_read_cpp_gzip(Rcpp::String filename) {
     char c;
     std::string s;
     while (gzread(input, &c, 1) > 0) {
-        if (c == \'\\n\') {
+        if (c == '\n') {
         // check for newline -> newline
             // check field counter
             if (field == n_fields) {
@@ -123,7 +123,7 @@ Rcpp::List hs_read_cpp_gzip(Rcpp::String filename) {
             cline += 1;
         } else if (field <= n_fields) {
             // check for comma
-            if (c == \',\') {
+            if (c == ',') {
                 // add s to current line vector
                 line[field] = s;
                 // increase field counter

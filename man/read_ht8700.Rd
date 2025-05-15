@@ -4,10 +4,10 @@
 \alias{read_ht8700}
 \title{Read HT8700 Raw Data}
 \usage{
-read_ht8700(FilePath)
+read_ht8700(file_path)
 }
 \arguments{
-\item{FilePath}{A string specifying the path to the HT8700 file.}
+\item{file_path}{A string specifying the path to the HT8700 file.}
 }
 \value{
 A data.table containing the processed HT8700 data or NULL if the file is empty.

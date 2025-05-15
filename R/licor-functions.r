@@ -1,24 +1,24 @@
 
 # R wrapper, main function
-read_licor <- function(FilePath) {
+read_licor <- function(file_path) {
 	# get file name
-	bn <- basename(FilePath)
+	bn <- basename(file_path)
     # check file name
     if (grepl('[.]qdata$', bn)) {
-        return(qs2::qd_read(FilePath))
+        return(qs2::qd_read(file_path))
     } else if (grepl('[.]qs$', bn)) {
         if (!requireNamespace(qs)) {
             stop('data is provided as *.qs file -> install qs library',
                 ' running "install.packages("qs")"')
         }
-        return(qs::qread(FilePath))
+        return(qs::qread(file_path))
     } else if (grepl('[.]rds$', bn)) {
-        return(readRDS(FilePath))
+        return(readRDS(file_path))
     }
     if (grepl('[.]gz$', bn)) {
-        raw_list <- licor_read_cpp_gzip(normalizePath(FilePath))
+        raw_list <- licor_read_cpp_gzip(normalizePath(file_path))
     } else {
-        raw_list <- licor_read_cpp(normalizePath(FilePath))
+        raw_list <- licor_read_cpp(normalizePath(file_path))
     }
     out <- data.table::as.data.table(raw_list)
     # convert time

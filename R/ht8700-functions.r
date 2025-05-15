@@ -4,30 +4,30 @@
 #' This function reads raw data from HT8700 files. It supports multiple file formats
 #' and handles different structures of the data.
 #'
-#' @param FilePath A string specifying the path to the HT8700 file.
+#' @param file_path A string specifying the path to the HT8700 file.
 #' @return A data.table containing the processed HT8700 data or NULL if the file is empty.
 #' @export
 #'
 # main function to read HT8700 raw data
-read_ht8700 <- function(FilePath) {
+read_ht8700 <- function(file_path) {
     # be verbose
-    cat("File:", path.expand(FilePath), "- ")
+    cat("File:", path.expand(file_path), "- ")
 	# get file name
-	bn <- basename(FilePath)
+	bn <- basename(file_path)
     # check file name
     if (grepl('[.]qdata$', bn)) {
-        return(qs2::qd_read(FilePath))
+        return(qs2::qd_read(file_path))
     } else if (grepl('[.]qs$', bn)) {
         if (!requireNamespace(qs)) {
             stop('data is provided as *.qs file -> install qs library',
                 ' running "install.packages("qs")"')
         }
-        return(qs::qread(FilePath))
+        return(qs::qread(file_path))
     } else if (grepl('[.]rds$', bn)) {
-        return(readRDS(FilePath))
+        return(readRDS(file_path))
     } else if (is_old_structure <- grepl('^ht8700_', bn)) {
         # read with old function
-        return(read_ht8700_old(FilePath, tz = 'Etc/GMT-1'))
+        return(read_ht8700_old(file_path, tz = 'Etc/GMT-1'))
     } else if (!grepl('^(py_)?fnf_0\\d_ht8700', bn)) {
         # wrong file name
         stop('data filename not valid')
@@ -35,10 +35,10 @@ read_ht8700 <- function(FilePath) {
 	### read File
     if (grepl('[.]gz$', bn)) {
         # gzip-ped data
-        out <- data.table::as.data.table(ht8700_read_cpp_gzip(normalizePath(FilePath)))
+        out <- data.table::as.data.table(ht8700_read_cpp_gzip(normalizePath(file_path)))
     } else {
         # uncompressed data
-        out <- data.table::as.data.table(ht8700_read_cpp(normalizePath(FilePath)))
+        out <- data.table::as.data.table(ht8700_read_cpp(normalizePath(file_path)))
     }
     # check empty
     if (nrow(out) == 0) {

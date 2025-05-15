@@ -1,3 +1,14 @@
 useDynLib(gel, .registration=TRUE)
 # main functions
+# ~~~ sonic
 export(read_sonic)
+# ~~~ ht8700
+export(read_ht8700)
+export(get_alarms)
+export(add_alarms)
+# remove these?
+export(write_hashed)
+export(read_hashed)
+export(ht_merged_daily)
+# imports
+importFrom(digest, sha1)

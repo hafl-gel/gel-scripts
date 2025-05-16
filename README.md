@@ -17,3 +17,6 @@ E.g. to source the script to handle raw data downloaded from the MeteoSwiss IDAw
 devtools::source_url('https://rawgithubusercontent.com/hafl-gel/gel-scripts/main/remaining-scripts/idaweb.r')
 ```
 
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/hafl-gel/gel-scripts/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/hafl-gel/gel-scripts/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->

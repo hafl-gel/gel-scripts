@@ -208,7 +208,7 @@ read_hs_ascii <- function(file_path) {
     out[, Time := fast_strptime(time_string, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE)]
     out <- na.omit(out)
     cat(paste0("data recorded by HS sonic\n"))
-    out[, {
+    out <- out[, {
         .(Time, Hz = round(1 / median(as.numeric(diff(Time)))), u = u_string, v = v_string, 
             w = w_string, T = t_string, sonic = 'HS')
     }]

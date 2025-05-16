@@ -1411,7 +1411,7 @@ process_ec_fluxes <- function(
                     memory_limit = parallel_mem_limit)
                 # stop cluster on exit
                 on.exit(parallel::stopCluster(cl))
-                cat('\n=> Processing in parallel using', length(cl), 'cores.\n')
+                cat('\n=> Processing in parallel using', length(cl), 'cores.\n\n')
                 # set data.table threads to 1 on slaves
                 parallel::clusterEvalQ(cl, data.table::setDTthreads(1L))
                 # cat('-> exporting R objects...')
@@ -1487,6 +1487,8 @@ process_ec_fluxes <- function(
                     parallel::clusterSplit(cl, ints)
                 )
             }
+            # be verbose
+            cat('~~~\nRunning main function in parallel...\n')
             # set ncores to 1 & run_parallel to FALSE
             ncores <- 1
             run_parallel <- FALSE
@@ -1514,8 +1516,9 @@ process_ec_fluxes <- function(
             }, env = current_env)
             cat("\n************************************************************\n") 
             cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
-                "time elapsed: ", difftime(Sys.time(), script_start, units = "mins"),
-                "minutes\n")
+                "time elapsed: ", sprintf('%1.1f', 
+                    d <- difftime(Sys.time(), script_start)),
+                attr(d, 'units'), "\n")
             cat("************************************************************\n")  
         } else {
             # loop over dates
@@ -1895,6 +1898,7 @@ process_ec_fluxes <- function(
 
 
     # loop over intervals: call MAIN function
+    cat('~~~\nprocessing fluxes...\n')
     if (run_parallel) {
         # export current_env & main function
         parallel::clusterExport(cl, 'current_env', current_env)
@@ -1909,8 +1913,9 @@ process_ec_fluxes <- function(
 
 	cat("\n************************************************************\n") 
 	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
-        "time elapsed: ", difftime(Sys.time(), script_start, units = "mins"),
-        "minutes\n")
+        "time elapsed: ", sprintf('%1.1f', 
+            d <- difftime(Sys.time(), script_start)), 
+        attr(d, 'units'), "\n")
 	cat("************************************************************\n")  
 
     if (is.null(results) || nrow(results) == 0) {

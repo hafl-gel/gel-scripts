@@ -7,7 +7,7 @@ read_licor <- function(file_path) {
     if (grepl('[.]qdata$', bn)) {
         return(alloc.col(qs2::qd_read(file_path)))
     } else if (grepl('[.]qs$', bn)) {
-        if (!requireNamespace(qs)) {
+        if (!requireNamespace('qs')) {
             stop('data is provided as *.qs file -> install qs library',
                 ' running "install.packages("qs")"')
         }

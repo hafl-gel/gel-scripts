@@ -1095,7 +1095,7 @@ process_ec_fluxes <- function(
             stop('argument "declination" must be provided!',
             ' -> it is also possible to provide a list with lon/lat entries...')
         } else if (is.list(declination) || length(declination) == 2) {
-            if (!requireNamespace(oce)) {
+            if (!requireNamespace('oce')) {
                 stop('R package "oce" must be installed when lat/lon is provided')
             }
             mag_dec <- \(x) oce::magneticField(declination$lon, declination$lat, x)$declination

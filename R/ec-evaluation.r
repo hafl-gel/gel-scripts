@@ -2948,8 +2948,8 @@ wpl_correction <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'),
 get_kappa <- function(tval, pval) {
     tout <- tval + (-1:1) * 0.01
     pout <- pval + (-1:1) * 0.05
-    out <- fields::interp.surface.grid(list(x = T_deg, y = p_kPa, z = kappa),
-        list(x = tout, y = pout))
+    out <- fields::interp.surface.grid(list(x = gel::T_deg, y = gel::p_kPa, 
+            z = gel::kappa), list(x = tout, y = pout))
     c(
         kappa = out$z[2, 2],
         dkappa_P_at_T = (out$z[2, 3] - out$z[2, 1]) / (out$y[3] - out$y[1]) / 1000,

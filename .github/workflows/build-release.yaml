@@ -52,8 +52,7 @@ jobs:
 
   build-and-release:
     needs: 
-      - R-CMD-check.ubuntu-latest
-      - R-CMD-check.windows-latest
+      - R-CMD-check
     runs-on: ${{ matrix.config.os }}
 
     name: ${{ matrix.config.os }}

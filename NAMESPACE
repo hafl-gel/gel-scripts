@@ -28,7 +28,7 @@ export(string2obj)
 export(col2hex)
 # ~~~ imports
 importFrom(digest, sha1)
-importFrom(lubridate, fast_strptime, POSIXct)
+importFrom(lubridate, fast_strptime, POSIXct, date, with_tz)
 import(Rcpp)
 import(data.table)
 import(ibts)

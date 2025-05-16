@@ -1359,7 +1359,7 @@ process_ec_fluxes <- function(
         }
 
         # prepare dates
-        dates_utc <- unique(date(c(start_time, end_time - 1e-4)))
+        dates_utc <- unique(lubridate::date(c(start_time, end_time - 1e-4)))
         dates_formatted <- gsub('-', '_', dates_utc, fixed = TRUE)
 
         # copy scalars etc. to fix missing

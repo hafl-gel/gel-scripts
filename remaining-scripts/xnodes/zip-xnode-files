@@ -1,0 +1,21 @@
+#!/bin/bash
+
+
+### check folder not equal (older than) today and yet uncompressed
+# apt install zip since gzip only compresses files and tar.gz cannot
+# be read into R without temporary files...
+
+# get today folder
+today=$(date +%Y_%m_%d)
+
+# loop over all folders not compressed
+for file in /datafiles/xnode/{nh3,co2}/sensor*/????_??_??
+do
+    # get folder name
+    fn=$(basename $file)
+    # exclude today
+    if [ $fn != $today ]
+    then
+        zip -r "$file".zip "$file" && rm -rf "$file"
+    fi
+done

@@ -1,5 +1,5 @@
-This repository contains a collection of R scripts from the BFH/HAFL group GEL.
-It is slowely transformed into a package called 'gel'.
+This repository contains a collection of R scripts from the BFH/HAFL group GEL,
+which is slowly transformed into a package called 'gel' ([-> get latest release](https://github.com/hafl-gel/gel-scripts/releases/latest)).
 
 At the moment, the package 'gel' contains:
 - functions to process raw data from our instruments
@@ -16,7 +16,3 @@ E.g. to source the script to handle raw data downloaded from the MeteoSwiss IDAw
 ```r
 devtools::source_url('https://rawgithubusercontent.com/hafl-gel/gel-scripts/main/remaining-scripts/idaweb.r')
 ```
-
-<!-- badges: start -->
-[![R-CMD-check](https://github.com/hafl-gel/gel-scripts/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/hafl-gel/gel-scripts/actions/workflows/R-CMD-check.yaml)
-<!-- badges: end -->

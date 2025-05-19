@@ -1499,7 +1499,7 @@ process_ec_fluxes <- function(
             out_list <- bLSmodelR:::.clusterApplyLB(cl, ind_split, \(ind, env) {
                 utc_dates <- unique(c(st_dates[ind], et_dates[ind]))
                 formatted_dates <- gsub('-', '_', utc_dates, fixed = TRUE)
-                do.call(process_ec_fluxes,
+                try(do.call(process_ec_fluxes,
                     c(
                         list(
                             dates_utc = utc_dates,
@@ -1511,14 +1511,20 @@ process_ec_fluxes <- function(
                         ),
                         mget(cobj, envir = env)
                     )
-                )
+                ))
             }, env = current_env)
+            # check try errors
+            try_errors <- sapply(out_list, \(x) inherits(x, 'try-error'))
             cat("\n************************************************************\n") 
             cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
                 "time elapsed: ", sprintf('%1.1f', 
                     d <- difftime(Sys.time(), script_start)),
                 attr(d, 'units'), "\n")
             cat("************************************************************\n")  
+            if (any(try_errors)) {
+                cat('try errors in parallel calls! Returning list for checking..\n')
+                return(out_list)
+            }
         } else {
             # loop over dates
             out_list <- lapply(

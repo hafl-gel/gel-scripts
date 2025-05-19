@@ -8,7 +8,7 @@ Maintainer: Christoph Haeni <christoph.haeni@bfh.ch>
 Description: Convenience functions used by the GEL research group
 License: GPL-2
 Depends: R (>= 4.0.0), data.table (>= 1.15.2), qs2, ibts, parallel
-Imports: Rcpp (>= 1.0.12), lubridate, digest, fields, deming, reshape2, lattice, bLSmodelR, caTools, MASS
+Imports: Rcpp (>= 1.0.12), lubridate, digest, fields, deming, reshape2, lattice, bLSmodelR, caTools, MASS, sf
 Suggests: qs, oce
 LinkingTo: Rcpp
 LazyData: true

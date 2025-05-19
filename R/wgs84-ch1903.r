@@ -19,8 +19,6 @@
 # ch1903/LV03: 21781
 # ch1903/LV95: 2056
 
-require(sf, quietly = TRUE)
-
 ## ~~~~~~~~~~~~~~~ functions
 
 fix_crs <- function(crs = NULL,
@@ -40,7 +38,7 @@ fix_crs <- function(crs = NULL,
                 , 'lv95' = 'EPSG:2056'
             )
     }
-    crs <- st_crs(crs)
+    crs <- sf::st_crs(crs)
     if (!is.null(new_origin_at) && length(new_origin_at) > 0) {
         base_origin <- get_origin(crs)
         crs <- modify_crs(crs, new_origin = base_origin - as.numeric(new_origin_at))
@@ -177,7 +175,7 @@ guess_coords <- function(obj, value = TRUE) {
 }
 
 parse_wkt <- function(crs) {
-    # crs <- st_crs('EPSG:2056')
+    # crs <- sf::st_crs('EPSG:2056')
     wkt_a <- gsub('\\s*\\n\\s*', '', crs$wkt)
     # replace ,[] inside string with {1}, {2}[ {3}]
     wkt_a2 <- gsub('([,]|\\[|\\])(?=([^"]*["][^"]*["])*[^"]*$)', '{\\1}', wkt_a, perl = TRUE)
@@ -223,7 +221,7 @@ modify_crs <- function(base_crs, new_origin = NULL, new_angle = NULL) {
         stop('base crs is missing')
     }
     if (is.character(base_crs)) {
-        base_crs <- try(st_crs(base_crs), silent = TRUE)
+        base_crs <- try(sf::st_crs(base_crs), silent = TRUE)
     }
     if (!inherits(base_crs, 'crs')) {
         stop('base crs argument is not a valid crs')
@@ -270,14 +268,14 @@ modify_crs <- function(base_crs, new_origin = NULL, new_angle = NULL) {
     }
     # replace name
     p_wkt[[1]][[1]] <- "User"
-    st_crs(deparse_wkt(p_wkt))
+    sf::st_crs(deparse_wkt(p_wkt))
 }
 get_origin <- function(base_crs) {
     if (missing(base_crs)) {
         stop('base crs is missing')
     }
     if (is.character(base_crs)) {
-        base_crs <- try(st_crs(base_crs), silent = TRUE)
+        base_crs <- try(sf::st_crs(base_crs), silent = TRUE)
     }
     if (!inherits(base_crs, 'crs')) {
         stop('base crs argument is not a valid crs')
@@ -328,7 +326,7 @@ guess_ch <- function(x, y = NULL) {
 
 
 .coord_transf <- function(x, y, crs_from = NULL, crs_to = NULL) {
-    sf_project(crs_from, crs_to, cbind(x, y))
+    sf::sf_project(crs_from, crs_to, cbind(x, y))
 }
 
 coord_transf <- function(x, crs_to,
@@ -683,7 +681,7 @@ get_map_ch <- function(loc, ...) get_map(loc, crs_from = guess_ch(loc), ...)
 
 # https://gis.stackexchange.com/a/87159
 metric_wgs84 <- function(lon, lat) {
-    st_crs(
+    sf::st_crs(
         paste0('+proj=laea +lat_0=',
             lat, ' +lon_0=', lon, 
             ' +ellps=WGS84 +units=m +no_defs'
@@ -695,6 +693,7 @@ metric_wgs84 <- function(lon, lat) {
 
 if (FALSE) {
 
+    library(gel)
     library(RgoogleMaps)
 
     ## read gps data
@@ -733,7 +732,7 @@ if (FALSE) {
     ch_to_wgs(gm_ch03)
     ch_to_user(gm_ch95, c(2.6e6, 1.2e6))
     gm_map <- ch_to_map(rgmap, gm_ch03)
-    plot(rgmap)
+    PlotOnStaticMap(rgmap)
     points(gm_map, cex = 1.5, col = 'orange', lwd = 2)
     # wgs_to_*
     wgs_to_ch(gps_m)
@@ -741,7 +740,7 @@ if (FALSE) {
     args(wgs_to_user)
     wgs_to_user(gps_m, 'lv95', c(2.6e6, 1.2e6))
     gm_map2 <- wgs_to_map(rgmap, gps_m)
-    plot(rgmap)
+    PlotOnStaticMap(rgmap)
     points(gm_map2, cex = 1.5, col = 'orange', lwd = 2)
     # map_to_*
     map_to_wgs(rgmap, gm_map)

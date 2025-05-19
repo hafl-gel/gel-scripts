@@ -1,30 +1,4 @@
 
-# # transition from require/library to box::use
-# if ('box' %in% .packages(TRUE) && length(box::name()) != 0) {
-#     # load ibts/data.table package for module
-#     # although considered bad praxis, we want all
-#     # data.table functions available in .GlobalEnv:
-#     evalq(box::use(data.table[...]), .GlobalEnv)
-#     evalq(box::use(ibts[...]), .GlobalEnv)
-#     # import necessary functions
-#     box::use(
-#         data.table[...], 
-#         ibts[as.ibts], 
-#         lubridate[fast_strptime],
-#         utils[unzip],
-#         graphics[par]
-#         )
-# } else {
-#     library(lubridate)
-#     library(data.table)
-#     library(ibts)
-# }
-
-# transition to box needs some investment!
-require(data.table)
-require(ibts)
-require(lubridate)
-
 #' Print IDA data summary 
 #'
 #' This function prints a short summary of a idaweb data set.
@@ -32,7 +6,7 @@ require(lubridate)
 #' @param x A `data.table` containing idaweb data
 #' @return A `data.table` with a data summary (one row per stn)
 #' @export
-smry_ida <- function(x) {
+ida_summary <- function(x) {
     nms0 <- names(x[, stn:et])
     nms1 <- names(x)[!(names(x) %in% nms0)]
     x[, c(
@@ -64,7 +38,7 @@ smry_ida <- function(x) {
 #' @param x A `data.table` containing idaweb data
 #' @return A `data.table` with data coverage summary (one row per stn)
 #' @export
-check_ida <- function(x) {
+ida_coverage <- function(x) {
     nms0 <- names(x[, stn:et])
     nms1 <- names(x)[!(names(x) %in% nms0)]
     x[, 
@@ -81,7 +55,7 @@ check_ida <- function(x) {
 #' @param x A `data.table` containing idaweb data
 #' @export
 plot_ida <- function(x) {
-    ch <- check_ida(x)
+    ch <- ida_coverage(x)
     nms1 <- names(ch[, -1])
     nt <- sum(ch[, mget(nms1)] > 0)
     nr <- floor(sqrt(nt))
@@ -206,17 +180,17 @@ read_ida <- function(File) {
 }
 
 # convenience functions
-parameters <- function(obj) {
+ida_parameters <- function(obj) {
     attr(obj, 'parameters')
 }
-stations <- function(obj) {
+ida_stations <- function(obj) {
     if (is.data.table(obj)) {
         unique(obj[, .(stn, name, ch.x, ch.y, m.asl)])
     } else {
         unique(obj[, c('stn', 'name', 'ch.x', 'ch.y', 'm.asl')])
     }
 }
-data_info <- function(obj) {
+ida_info <- function(obj) {
     x <- copy(as.data.table(obj))
     out <- x[, {
             c(
@@ -234,31 +208,6 @@ data_info <- function(obj) {
     cat('~~~~ data sets ~~~~\n')
     print(out)
     cat('\n~~~~ parameters ~~~~\n')
-    print(parameters(obj))
+    print(ida_parameters(obj))
     invisible(out)
 }
-
-# add objects to environment (directly adding objects breaks ctags)
-idaweb <- new.env()
-idaweb$check_ida <- check_ida
-idaweb$plot_ida <- plot_ida
-idaweb$read_ida <- read_ida
-idaweb$smry_ida <- smry_ida
-idaweb$parameters <- parameters
-idaweb$stations <- stations
-idaweb$data_info <- data_info
-rm(check_ida, plot_ida, read_ida, smry_ida, parameters, stations, data_info)
-
-# attach to search path
-pos_name <- 'user:idaweb'
-try(detach(pos_name, character.only = TRUE), silent = TRUE)
-attach(idaweb, name = pos_name)
-
-cat('\n**~~~~~~~ new environment ~~~~~~~**\n\n')
-cat("Attaching environment '", pos_name, "' to searchpaths().\n\n", sep = '')
-cat("run ls(pos = '", pos_name, "') to list attached objects\n\n", sep = '')
-cat("attached objects:\n")
-print(ls(envir = idaweb))
-cat('\n**~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~**\n\n')
-
-rm(idaweb, pos_name)

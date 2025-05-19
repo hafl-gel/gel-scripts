@@ -75,6 +75,8 @@ export(metric_wgs84)
 # S3 methods
 S3method(get_names, default)
 S3method(get_names, matrix)
+# ~~~ windrose
+export(windrose)
 # ~~~ imports
 importFrom(digest, sha1)
 importFrom(lubridate, fast_strptime, POSIXct, date, with_tz)

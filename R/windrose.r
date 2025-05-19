@@ -1,17 +1,3 @@
-# # transition from require/library to box::use
-# if ('box' %in% .packages(TRUE) && length(box::name()) != 0) {
-#     # import necessary functions
-#     box::use(
-#         data.table[is.data.table],
-#         graphics[par, polygon]
-#     )
-# } else {
-#     require(data.table)
-# }
-
-# transition to box needs some investment!
-require(data.table)
-
 #' windrose plot
 #'
 #' plot a windrose either with wedges or as a spider plot
@@ -199,7 +185,7 @@ windrose <- function(
     # add alpha to colors
     if (!is.na(alpha[1])) {
         add <- unlist(lapply(alpha * 255, function(x) {
-            out <- hexadec(x)
+            out <- .hexadec(x)
             if (nchar(out) == 1) out <- paste0('0', out)
             out
             }))
@@ -315,7 +301,7 @@ windrose <- function(
 }
 
 #' helper function to convert to hexadec
-hexadec <- function(x){
+.hexadec <- function(x){
     hd_string <- c(0:9, letters[1:6])
     r16 <- function(r) {
         f <- (r %% 16) + 1L
@@ -334,24 +320,3 @@ hexadec <- function(x){
     z <- scale * ws * exp((90 - wd) / 180 * pi * 1i)
     data.frame(x = Re(z) + center[1], y = Im(z) * asp + center[2])
 }
-
-# add objects to environment (directly adding objects breaks ctags)
-windrose_env <- new.env()
-windrose_env$windrose <- windrose
-windrose_env$hexadec <- hexadec
-windrose_env$.polar2xy <- .polar2xy
-rm(windrose, hexadec, .polar2xy)
-
-# attach to search path
-pos_name <- 'user:windrose'
-try(detach(pos_name, character.only = TRUE), silent = TRUE)
-attach(windrose_env, name = pos_name)
-
-cat('\n**~~~~~~~ new environment ~~~~~~~**\n\n')
-cat("Attaching environment '", pos_name, "' to searchpaths().\n\n", sep = '')
-cat("run ls(pos = '", pos_name, "') to list attached objects\n\n", sep = '')
-cat("attached objects:\n")
-print(ls(envir = windrose_env))
-cat('\n**~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~**\n\n')
-
-rm(windrose_env, pos_name)

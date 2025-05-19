@@ -26,6 +26,11 @@ export(get_kappa)
 export(obj2string)
 export(string2obj)
 export(col2hex)
+# ~~~ tc01/ltc2/s31 sensors
+export(read_s31)
+export(read_tc01)
+export(read_ltc2)
+export(read_tc_sensors)
 # ~~~ imports
 importFrom(digest, sha1)
 importFrom(lubridate, fast_strptime, POSIXct, date, with_tz)

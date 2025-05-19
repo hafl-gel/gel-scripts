@@ -1,8 +1,4 @@
 
-library(data.table)
-library(ibts)
-
-
 # read s31 data
 read_s31 <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = FALSE) {
     # process from/to

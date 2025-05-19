@@ -692,13 +692,12 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
                 }
             })
         )
-        # add residuals
-        res <- setdiff(selection, names(dat3))
-        if (length(res) > 0) {
-            dat3 <- cbind(dat3, dat[, res, drop = FALSE])
-        }
-	}
-	dat3 <- dat3[,selection]
+    }
+    # add residuals to dat3
+    res <- setdiff(selection, names(dat3))
+    if (length(res) > 0) {
+        dat3 <- cbind(dat3, dat[, res, drop = FALSE])
+    }
 	### melt and add trends:
 	dat4 <- reshape2::melt(dat3, id = NULL, value.name = "trend")
 	dat2 <- reshape2::melt(dat[,c("st",selection)],id="st")

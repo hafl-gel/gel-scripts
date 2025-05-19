@@ -77,6 +77,10 @@ S3method(get_names, default)
 S3method(get_names, matrix)
 # ~~~ windrose
 export(windrose)
+# ~~~ weatherstation
+export(get_ws700)
+export(get_ws700A)
+export(get_ws700B)
 # ~~~ imports
 importFrom(digest, sha1)
 importFrom(lubridate, fast_strptime, POSIXct, date, with_tz)

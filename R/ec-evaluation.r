@@ -2961,18 +2961,3 @@ get_kappa <- function(tval, pval) {
         dkappa_T_at_P = (out$z[3, 2] - out$z[1, 2]) / (out$x[3] - out$x[1])
     )
 }
-
-### get data to script
-obj2string <- function(x) {
-    key <- keygen(as.raw(rep(1, 32)))
-    nonce <- as.raw(rep(1, 24))
-    xs <- qs2::qd_serialize(x)
-    xr <- data_encrypt(xs, key, nonce = nonce)
-    as.character(xr)
-}
-string2obj <- function(x) {
-    key <- keygen(as.raw(rep(1, 32)))
-    nonce <- as.raw(rep(1, 24))
-    xr <- as.raw(paste0('0x', x))
-    qs2::qd_deserialize(data_decrypt(xr, key, nonce = nonce))
-}

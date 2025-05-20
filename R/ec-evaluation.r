@@ -1037,11 +1037,15 @@ process_ec_fluxes <- function(
     if (parallelism_strategy != 'recursive') {
 
         # check input
-        if (create_graphs) {
+        if (!missing(create_graphs) && create_graphs) {
             # TODO: eventually remove one of either arguments
             if (is.null(graphs_directory)) {
                 stop('argument "create_graphs" is TRUE, but "graphs_directory" is not specified!')
             }
+        }
+        # don't create figures if graphs_directory is missing
+        if (missing(graphs_directory)) {
+            create_graphs <- FALSE
         }
         if (create_graphs && (
                 !is.character(graphs_directory) || !dir.exists(graphs_directory)

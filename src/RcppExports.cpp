@@ -107,6 +107,35 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// calc_penalty
+std::vector<double> calc_penalty(Rcpp::DataFrame mddataIn, Rcpp::List weightsIn, std::vector<int> startsIn, NumericVector minimaIn, int reftimeIn);
+RcppExport SEXP _gel_calc_penalty(SEXP mddataInSEXP, SEXP weightsInSEXP, SEXP startsInSEXP, SEXP minimaInSEXP, SEXP reftimeInSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::DataFrame >::type mddataIn(mddataInSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type weightsIn(weightsInSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type startsIn(startsInSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type minimaIn(minimaInSEXP);
+    Rcpp::traits::input_parameter< int >::type reftimeIn(reftimeInSEXP);
+    rcpp_result_gen = Rcpp::wrap(calc_penalty(mddataIn, weightsIn, startsIn, minimaIn, reftimeIn));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cont_within_range
+// find continuous series within given range std::vector<int> cont_within_range(std::vector<double> xIn, std::vector<bool> bIn, const double dxIn, const int refLengthIn);
+RcppExport SEXP _gel_cont_within_range(SEXP xInSEXP, SEXP bInSEXP, SEXP dxInSEXP, SEXP refLengthInSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector<double> >::type xIn(xInSEXP);
+    Rcpp::traits::input_parameter< std::vector<bool> >::type bIn(bInSEXP);
+    Rcpp::traits::input_parameter< const double >::type dxIn(dxInSEXP);
+    Rcpp::traits::input_parameter< const int >::type refLengthIn(refLengthInSEXP);
+    rcpp_result_gen = Rcpp::wrap(cont_within_range(xIn, bIn, dxIn, refLengthIn));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nakai_correction_2012
 Rcpp::List nakai_correction_2012(std::vector<double>& uIn, std::vector<double>& vIn, std::vector<double>& wIn);
 RcppExport SEXP _gel_nakai_correction_2012(SEXP uInSEXP, SEXP vInSEXP, SEXP wInSEXP) {
@@ -143,6 +172,8 @@ BEGIN_RCPP
 END_RCPP
 }
 
+RcppExport SEXP C_cfilter(SEXP, SEXP, SEXP, SEXP);
+
 static const R_CallMethodDef CallEntries[] = {
     {"_gel_find_window", (DL_FUNC) &_gel_find_window, 3},
     {"_gel_fit_ogive", (DL_FUNC) &_gel_fit_ogive, 5},
@@ -152,9 +183,12 @@ static const R_CallMethodDef CallEntries[] = {
     {"_gel_decal", (DL_FUNC) &_gel_decal, 2},
     {"_gel_licor_read_cpp", (DL_FUNC) &_gel_licor_read_cpp, 1},
     {"_gel_licor_read_cpp_gzip", (DL_FUNC) &_gel_licor_read_cpp_gzip, 1},
+    {"_gel_calc_penalty", (DL_FUNC) &_gel_calc_penalty, 5},
+    {"_gel_cont_within_range", (DL_FUNC) &_gel_cont_within_range, 4},
     {"_gel_nakai_correction_2012", (DL_FUNC) &_gel_nakai_correction_2012, 3},
     {"_gel_hs_read_cpp", (DL_FUNC) &_gel_hs_read_cpp, 1},
     {"_gel_hs_read_cpp_gzip", (DL_FUNC) &_gel_hs_read_cpp_gzip, 1},
+    {"C_cfilter", (DL_FUNC) &C_cfilter, 4},
     {NULL, NULL, 0}
 };
 

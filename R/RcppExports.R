@@ -33,6 +33,14 @@ licor_read_cpp_gzip <- function(filename) {
     .Call(`_gel_licor_read_cpp_gzip`, filename)
 }
 
+calc_penalty <- function(mddataIn, weightsIn, startsIn, minimaIn, reftimeIn) {
+    .Call(`_gel_calc_penalty`, mddataIn, weightsIn, startsIn, minimaIn, reftimeIn)
+}
+
+cont_within_range <- function(xIn, bIn, dxIn, refLengthIn) {
+    .Call(`_gel_cont_within_range`, xIn, bIn, dxIn, refLengthIn)
+}
+
 nakai_correction_2012 <- function(uIn, vIn, wIn) {
     .Call(`_gel_nakai_correction_2012`, uIn, vIn, wIn)
 }

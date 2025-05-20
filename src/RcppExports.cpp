@@ -172,8 +172,6 @@ BEGIN_RCPP
 END_RCPP
 }
 
-RcppExport SEXP C_cfilter(SEXP, SEXP, SEXP, SEXP);
-
 static const R_CallMethodDef CallEntries[] = {
     {"_gel_find_window", (DL_FUNC) &_gel_find_window, 3},
     {"_gel_fit_ogive", (DL_FUNC) &_gel_fit_ogive, 5},
@@ -188,7 +186,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_gel_nakai_correction_2012", (DL_FUNC) &_gel_nakai_correction_2012, 3},
     {"_gel_hs_read_cpp", (DL_FUNC) &_gel_hs_read_cpp, 1},
     {"_gel_hs_read_cpp_gzip", (DL_FUNC) &_gel_hs_read_cpp_gzip, 1},
-    {"C_cfilter", (DL_FUNC) &C_cfilter, 4},
     {NULL, NULL, 0}
 };
 

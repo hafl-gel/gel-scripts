@@ -1170,8 +1170,6 @@ process_ec_fluxes <- function(
             # get files
             sonic_files <- dir(sonic_directory, pattern = '^(py_)?fnf_.*_sonic_.*')
             if (sonic_old_format <- length(sonic_files) == 0) {
-                cat('Implement old CET format sonic!\n')
-                browser()
                 # old loggerbox format
                 sonic_files <- dir(sonic_directory, pattern = '^data_sonic-.')
             }
@@ -1189,13 +1187,22 @@ process_ec_fluxes <- function(
             )
             # prioritize gz files
             i_gz <- grepl('\\.gz$', sonic_files)
-            # remove duplicated non-py
-            sonic_files <- c(
-                setdiff(sonic_files[!i_gz], sub('\\.gz$', '.csv', sonic_files[i_gz])),
-                sonic_files[i_gz]
-            )
+            # remove duplicated
+            if (sonic_old_format) {
+                # remove duplicated old (no ending)
+                sonic_files <- c(
+                    setdiff(sonic_files[!i_gz], sub('\\.gz$', '', sonic_files[i_gz])),
+                    sonic_files[i_gz]
+                )
+            } else {
+                # remove duplicated non-py
+                sonic_files <- c(
+                    setdiff(sonic_files[!i_gz], sub('\\.gz$', '.csv', sonic_files[i_gz])),
+                    sonic_files[i_gz]
+                )
+            }
             # get date
-            sonic_dates <- sub('^(py_)?fnf_0\\d_sonic_', '', sonic_files)
+            sonic_dates <- sub('^((py_)?fnf_0\\d_sonic_|data_sonic-._)', '', sonic_files)
             # sort by date
             sonic_files <- sonic_files[order(sonic_dates)]
             # sort files by date (& time)
@@ -1586,9 +1593,15 @@ process_ec_fluxes <- function(
     } else {
         cat('~~~\nReading sonic files\n')
         # select files
-        sonic_selected <- sonic_files[
-            sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', sonic_files) %in% dates_formatted
-            ]
+        if (sonic_old_format) {
+            sonic_selected <- sonic_files[
+                sub('data_sonic-._(\\d{4})(\\d{2})(\\d{2})_.*', '\\1_\\2_\\3', sonic_files) %in% dates_formatted
+                ]
+        } else {
+            sonic_selected <- sonic_files[
+                sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', sonic_files) %in% dates_formatted
+                ]
+        }
         # read sonic files
         if (length(sonic_selected)) {
             if (run_parallel) {

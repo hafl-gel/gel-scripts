@@ -82,6 +82,8 @@ export(windrose)
 export(get_ws700)
 export(get_ws700A)
 export(get_ws700B)
+# ~~~ meas.fan
+export(read_frequi)
 # ~~~ imports
 importFrom(digest, sha1)
 importFrom(lubridate, fast_strptime, POSIXct, date, with_tz)

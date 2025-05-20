@@ -86,8 +86,9 @@ read_hippie <- function(file, as_ibts = TRUE, time_zone = 'Etc/GMT-1', flatten =
 
 
 read_vials <- function(file, sheet = 1, filter_na = TRUE, as_data_table = TRUE, return_all = FALSE) {
-    require(openxlsx)
-    dat <- read.xlsx(file, sheet = sheet, sep.names = ' ')
+    if (requireNamespace('openxlsx')) {
+        dat <- openxlsx::read.xlsx(file, sheet = sheet, sep.names = ' ')
+    }
     # get column names
     nms <- names(dat)
     # find concentration columns

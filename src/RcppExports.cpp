@@ -123,7 +123,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // cont_within_range
-// find continuous series within given range std::vector<int> cont_within_range(std::vector<double> xIn, std::vector<bool> bIn, const double dxIn, const int refLengthIn);
+std::vector<int> cont_within_range(std::vector<double> xIn, std::vector<bool> bIn, const double dxIn, const int refLengthIn);
 RcppExport SEXP _gel_cont_within_range(SEXP xInSEXP, SEXP bInSEXP, SEXP dxInSEXP, SEXP refLengthInSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;

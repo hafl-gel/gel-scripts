@@ -113,8 +113,8 @@ std::vector<double> calc_penalty(
     return out;
 }
 
-// [[Rcpp::export]]
 // find continuous series within given range
+// [[Rcpp::export]]
 std::vector<int> cont_within_range (
         std::vector<double> xIn, std::vector<bool> bIn, 
         const double dxIn, const int refLengthIn

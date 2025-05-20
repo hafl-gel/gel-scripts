@@ -84,6 +84,10 @@ export(get_ws700A)
 export(get_ws700B)
 # ~~~ meas.fan
 export(read_frequi)
+# ~~~ gasfinder
+export(read_gasfinder)
+export(gf2ppm)
+export(gf2mgm3)
 # ~~~ imports
 importFrom(digest, sha1)
 importFrom(lubridate, fast_strptime, POSIXct, date, with_tz)

@@ -1,14 +1,8 @@
 
 
-library(ibts)
-library(data.table)
-
-
 ### function for reading GasFinder3.0 data:
-read.GF3 <- function(Folder="",From=NULL,To=NULL,tz="Etc/GMT-1",DTA_only=TRUE,asCharacter=FALSE,time_add=0){
-
-	# browser()
-	Data <- NULL
+read_gasfinder <- function(Folder = "", From = NULL, To = NULL, tz = "Etc/GMT-1", 
+    DTA_only = TRUE, asCharacter = FALSE, time_add = 0) {
 
 	# parse time to add
 	time_add <- parse_time_diff(time_add)
@@ -188,20 +182,23 @@ correct.temperature <- function(T,a0,a1,a2,a3,a4,a5,a6,a7){
 # P_30026 <- data.frame(p=(7:12)*10,C=c(0.9261,0.9359,0.9597,0.9946,1.0391,1.0919))
 # T_30026 <- data.frame(T=seq(-50,150,10),C=c(0.7507,0.7812,0.8134,0.8473,0.8830,0.9203,0.9593,1.0000,1.0423,1.0864,1.1321,1.1794,1.2285,1.2793,1.3318,1.3860,1.4419,1.4996,1.5591,1.6203,1.6834))
 
-options(gf.calibration = list(
-	"CH4OP.1003" = list(p = c(-0.09970423838,2567.14526277485),T = c(9.864418e-01,5.977530e-04,4.289765e-06,-1.373450e-08,5.874422e-11,6.124736e-14,-2.473273e-15,8.490556e-18))
-	,"CH4OP.1049" = list(p = c(-0.3362784861,33263.7220313790),T = c(9.086332e-01,4.378029e-03,9.536197e-06,3.367833e-10,2.385533e-11,-6.367599e-14,-1.518728e-16,7.363739e-19))
-	,"CH4OP.30015" = list(p = c(-0.3130739872,21583.3936239178),T = c(9.225870983e-01,3.707544541e-03,8.155413500e-06,-1.531357343e-09,2.666445763e-11,-1.327184828e-13,8.755430303e-17,1.190407513e-18))
-	,"CH4OP.30016" = list(p = c(-0.2886017923,16039.7106450116),T = c(9.327787473e-01,3.217314336e-03,7.313661791e-06,-3.882584765e-09,2.951756048e-11,-8.829885883e-14,4.191947142e-17,2.047602667e-19))
-	,"CH4OP.30017" = list(p = c(-0.3130739872,21583.3936239178),T = c(9.225870983e-01,3.707544541e-03,8.155413500e-06,-1.531357343e-09,2.666445763e-11,-1.327184828e-13,8.755430303e-17,1.190407513e-18))
-	,"CH4OP.30018" = list(p = c(-0.3177601163,23100.0009584746),T = c(9.202979911e-01,3.817143728e-03,8.401503593e-06,-1.683137404e-09,1.661059500e-11,9.442030054e-14,-1.414050661e-15,4.508541276e-18))
-	,"CH4OP.30025" = list(p = c(-0.3020502714,18707.3106621851),T = c(9.274455217e-01,3.474331304e-03,7.764144758e-06,-3.589742775e-09,2.733007984e-11,7.828519152e-14,-1.551044182e-15,4.698039907e-18))
-	,"CH4OP.30026" = list(p = c(-0.3177601163,23100.0009584746),T = c(9.202979911e-01,3.817143728e-03,8.401503593e-06,-1.683137404e-09,1.661059500e-11,9.442030054e-14,-1.414050661e-15,4.508541276e-18))
-	))
+if (FALSE) {
+    gf.calibration = list(
+        "CH4OP.1003" = list(p = c(-0.09970423838,2567.14526277485),T = c(9.864418e-01,5.977530e-04,4.289765e-06,-1.373450e-08,5.874422e-11,6.124736e-14,-2.473273e-15,8.490556e-18))
+        ,"CH4OP.1049" = list(p = c(-0.3362784861,33263.7220313790),T = c(9.086332e-01,4.378029e-03,9.536197e-06,3.367833e-10,2.385533e-11,-6.367599e-14,-1.518728e-16,7.363739e-19))
+        ,"CH4OP.30015" = list(p = c(-0.3130739872,21583.3936239178),T = c(9.225870983e-01,3.707544541e-03,8.155413500e-06,-1.531357343e-09,2.666445763e-11,-1.327184828e-13,8.755430303e-17,1.190407513e-18))
+        ,"CH4OP.30016" = list(p = c(-0.2886017923,16039.7106450116),T = c(9.327787473e-01,3.217314336e-03,7.313661791e-06,-3.882584765e-09,2.951756048e-11,-8.829885883e-14,4.191947142e-17,2.047602667e-19))
+        ,"CH4OP.30017" = list(p = c(-0.3130739872,21583.3936239178),T = c(9.225870983e-01,3.707544541e-03,8.155413500e-06,-1.531357343e-09,2.666445763e-11,-1.327184828e-13,8.755430303e-17,1.190407513e-18))
+        ,"CH4OP.30018" = list(p = c(-0.3177601163,23100.0009584746),T = c(9.202979911e-01,3.817143728e-03,8.401503593e-06,-1.683137404e-09,1.661059500e-11,9.442030054e-14,-1.414050661e-15,4.508541276e-18))
+        ,"CH4OP.30025" = list(p = c(-0.3020502714,18707.3106621851),T = c(9.274455217e-01,3.474331304e-03,7.764144758e-06,-3.589742775e-09,2.733007984e-11,7.828519152e-14,-1.551044182e-15,4.698039907e-18))
+        ,"CH4OP.30026" = list(p = c(-0.3177601163,23100.0009584746),T = c(9.202979911e-01,3.817143728e-03,8.401503593e-06,-1.683137404e-09,1.661059500e-11,9.442030054e-14,-1.414050661e-15,4.508541276e-18))
+        )
+    save(gf.calibration, file = 'data/gf.calibration.rds')
+}
 
-C_pT <- function(instrument,p_hPa,T_deg,p_hPa.inst=1013.25,T_deg.inst=20,units=c("mgm3","ppm")){
+correct_pT <- function(instrument,p_hPa,T_deg,p_hPa.inst=1013.25,T_deg.inst=20,units=c("mgm3","ppm")){
 	# get instrument's calibration
-	CalPars <- getOption("gf.calibration")[[switch(which(sapply(c("1003","1049","15","16","17","18","25","26"),function(x)grepl(x,instrument)))
+	CalPars <- gel::gf.calibration[[switch(which(sapply(c("1003","1049","15","16","17","18","25","26"),function(x)grepl(x,instrument)))
 		,"CH4OP.1003"
 		,"CH4OP.1049"
 		,"CH4OP.30015"
@@ -253,7 +250,7 @@ gf2ppm <- function(data,
     }
     # convert
     data[, 'CH4 (ppm-m)'] * 
-        C_pT(instrument, p_hPa, t_deg, p_hPa.inst, T_deg.inst, units = 'ppm') /
+        correct_pT(instrument, p_hPa, t_deg, p_hPa.inst, T_deg.inst, units = 'ppm') /
         single_path
 }
 
@@ -278,54 +275,7 @@ gf2mgm3 <- function(data,
     }
     # convert
     data[, 'CH4 (ppm-m)'] * 
-        C_pT(instrument, p_hPa, t_deg, p_hPa.inst, T_deg.inst, units = 'mgm3') /
+        correct_pT(instrument, p_hPa, t_deg, p_hPa.inst, T_deg.inst, units = 'mgm3') /
         single_path
-}
-
-
-### function for reading GasFinder2.0 data:
-read.GF2 <- function(Files,tz="Etc/GMT-1",asCharacter=FALSE,time_add=0,d_t=5){
-	Data <- NULL
-
-	for(i in Files){
-		Data <- c(Data,readLines(i))
-	}
-	Header <- sub("^[$]GF([A-Z]{3}).*","\\1",Data)
-
-	Out <- do.call(rbind,strsplit(Data[Header=="DTA"],","))[,-1]
-	Out[,ncol(Out)] <- gsub("[*].*$","",Out[,ncol(Out)])
-
-	colnames(Out) <- c("CH4 (ppm-m)","R2","distance","received_light","date_time","ser_number","status_code")
-
-	dateTime <- parse_date_time(Out[,"date_time"],orders="%Y/%m/%d %H:%M:%S",tz=tz) + time_add
-	st_dateTime <- dateTime[1]
-	diffT <- diff(dateTime)
-	dT0 <- which(diffT==0)
-	dT1 <- c(as.numeric(diffT!=1),1)
-
-	cs <- mapply(function(x,y,z,dt1,dtT){
-		xx <- which(cumsum(dt1[x:y])!=0)[1] - 1
-		if(xx==0){
-			out <- dtT[z] + 0.5
-			names(out) <- z + 1
-		} else {
-			out <- dtT[z] + (1:xx)*xx/(xx+1)
-			names(out) <- z + 1:xx
-		}
-		out
-	},x=dT0+1,y=c(dT0[-1],length(dateTime)),z=dT0,MoreArgs=list(dt1=dT1,dtT=as.numeric(dateTime - st_dateTime,units="secs")))
-
-	csu <- unlist(cs)
-	ind <- as.numeric(names(csu))
-	dateTime[ind] <- st_dateTime + csu
-	TimeDiff <- diff(dateTime) 
-	takeme <- c(TRUE,TimeDiff!=0)
-	stTime <- dateTime[takeme]
-	Out <- as.ibts(Out[takeme,-which(colnames(Out)=="date_time")],st=stTime,et=stTime + c(pmin(TimeDiff[TimeDiff!=0],d_t),median(TimeDiff[TimeDiff!=0])))
-	if(!asCharacter){
-		for(i in 1:4)Out[,i] <- as.numeric(Out[,i])
-		colClasses(Out)[1:4] <- c("avg","min","avg","min")
-	}
-	Out
 }
 

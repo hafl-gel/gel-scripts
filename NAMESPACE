@@ -91,12 +91,15 @@ export(gf2mgm3)
 # ~~~ hippie
 export(read_hippie)
 export(read_vials)
+# ~~~ xnode
+export(read_xnode)
 # ~~~ imports
 importFrom(digest, sha1)
 importFrom(lubridate, fast_strptime, POSIXct, date, with_tz)
 import(Rcpp)
 import(data.table)
 import(ibts)
+importFrom(jsonlite, read_json, fromJSON)
 importFrom(qs2, qd_read, qd_save, qd_serialize, qd_deserialize)
 importFrom(fields, interp.surface.grid)
 importFrom(utils, capture.output)

@@ -7,23 +7,6 @@
 # all file times in UTC
 # from/to => time_zone = '' => CET or CEST == local time
 
-# TODO:
-# add docu
-# add function to read data from several days (read_xnode?)
-#   -> check if zipped or not or both
-# check if "date" is provided in to -> add 24h
-
-## 0. header ----------------------------------------
-
-require(ibts)
-require(jsonlite)
-require(data.table)
-
-# check availability of jq
-jq_available <- !inherits(try(system('type jq', intern = TRUE)), 'try-error')
-
-
-
 ## 1. functions ----------------------------------------
 
 # select files in given time range
@@ -185,6 +168,8 @@ read_xnode <- function(path, from = NULL, to = NULL, time_zone = 'UTC',
     sn <- basename(path)
     gas <- basename(dirname(path))
     cat(sn, ' (', gas, '): reading "', bn[1], '" (1/', length(dirs), ' directories)... ', sep = '')
+    # check availability of jq
+    jq_available <- !inherits(try(system('type jq', intern = TRUE)), 'try-error')
     # read first directory
     xnode_list[[1]] <- read_fun[[1]](dirs[1], from, to, jq_available)
     # read in-between (if more than 2 directories)

@@ -33,6 +33,10 @@ licor_read_cpp_gzip <- function(filename) {
     .Call(`_gel_licor_read_cpp_gzip`, filename)
 }
 
+nakai_correction_2012 <- function(uIn, vIn, wIn) {
+    .Call(`_gel_nakai_correction_2012`, uIn, vIn, wIn)
+}
+
 hs_read_cpp <- function(filename) {
     .Call(`_gel_hs_read_cpp`, filename)
 }

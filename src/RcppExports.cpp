@@ -107,6 +107,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nakai_correction_2012
+Rcpp::List nakai_correction_2012(std::vector<double>& uIn, std::vector<double>& vIn, std::vector<double>& wIn);
+RcppExport SEXP _gel_nakai_correction_2012(SEXP uInSEXP, SEXP vInSEXP, SEXP wInSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector<double>& >::type uIn(uInSEXP);
+    Rcpp::traits::input_parameter< std::vector<double>& >::type vIn(vInSEXP);
+    Rcpp::traits::input_parameter< std::vector<double>& >::type wIn(wInSEXP);
+    rcpp_result_gen = Rcpp::wrap(nakai_correction_2012(uIn, vIn, wIn));
+    return rcpp_result_gen;
+END_RCPP
+}
 // hs_read_cpp
 Rcpp::List hs_read_cpp(String filename);
 RcppExport SEXP _gel_hs_read_cpp(SEXP filenameSEXP) {
@@ -139,6 +152,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_gel_decal", (DL_FUNC) &_gel_decal, 2},
     {"_gel_licor_read_cpp", (DL_FUNC) &_gel_licor_read_cpp, 1},
     {"_gel_licor_read_cpp_gzip", (DL_FUNC) &_gel_licor_read_cpp_gzip, 1},
+    {"_gel_nakai_correction_2012", (DL_FUNC) &_gel_nakai_correction_2012, 3},
     {"_gel_hs_read_cpp", (DL_FUNC) &_gel_hs_read_cpp, 1},
     {"_gel_hs_read_cpp_gzip", (DL_FUNC) &_gel_hs_read_cpp_gzip, 1},
     {NULL, NULL, 0}

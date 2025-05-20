@@ -1,6 +1,7 @@
 useDynLib(gel, .registration=TRUE)
 # ~~~ sonic
 export(read_sonic)
+export(nakai_correction_2012)
 # ~~~ ht8700
 export(read_ht8700)
 export(get_alarms)

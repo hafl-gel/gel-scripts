@@ -166,6 +166,7 @@ export(clean_cal)
 export(plot_cal)
 export(obj2string)
 export(string2obj)
+export(getSpecSet)
 # S3methods
 S3method(print, rawdat)
 S3method(plot, rawdat)

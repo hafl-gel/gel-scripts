@@ -1,16 +1,3 @@
-# set minidoas options (except filter functions)
-options(
-    # # old evaluation (using BmHarris)
-    # md.filter.type = 'BmHarris',
-    # md.filter.strength = 25,
-    # md.filter.window = c(202.2, 230.6),
-    # md.fit.window = c(204.5, 228.4)
-    # new evaluation (using Exp filter)
-    md.filter.type = 'Exp',
-    md.filter.strength = 51,
-    md.filter.window = c(200, 232),
-    md.fit.window = c(204.4, 227.7)
-    )
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

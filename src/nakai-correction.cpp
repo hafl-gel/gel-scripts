@@ -1,5 +1,9 @@
 #include <Rcpp.h>
 
+#ifndef PI 
+#define PI 3.14159265
+#endif
+
 double sinerr(double x, double wd) {
 // Sine correction function phi_sr(alpha, gamma)
 // Eqs. (10), (13), and (14) of Nakai and Shimoyama (submitted)

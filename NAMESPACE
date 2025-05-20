@@ -88,6 +88,9 @@ export(read_frequi)
 export(read_gasfinder)
 export(gf2ppm)
 export(gf2mgm3)
+# ~~~ hippie
+export(read_hippie)
+export(read_vials)
 # ~~~ imports
 importFrom(digest, sha1)
 importFrom(lubridate, fast_strptime, POSIXct, date, with_tz)

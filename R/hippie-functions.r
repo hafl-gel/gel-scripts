@@ -1,9 +1,4 @@
 
-library(data.table)
-library(ibts)
-
-
-
 read_hippie <- function(file, as_ibts = TRUE, time_zone = 'Etc/GMT-1', flatten = FALSE) {
     if (length(file) > 1) {
         if (all(file.exists(file))) {

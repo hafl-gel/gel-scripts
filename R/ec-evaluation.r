@@ -1627,9 +1627,15 @@ process_ec_fluxes <- function(
         } else {
             sonic_raw <- NULL
         }
-        # no UTC conversion needed, since this case is excluded up to now
-        # # convert to UTC
-        # sonic_raw[, Time := with_tz(Time, 'UTC')]
+        # get time zone
+        sonic_tz <- sonic_raw[, tz(Time)]
+        if (sonic_tz != 'UTC') {
+            # convert to UTC
+            sonic_raw[, Time := with_tz(Time, 'UTC')]
+            # fix start_time & end_time
+            start_time <- with_tz(force_tz(start_time, sonic_tz), 'UTC')
+            end_time <- with_tz(force_tz(end_time, sonic_tz), 'UTC')
+        }
     }
     cat('done\n')
     # check sonic data

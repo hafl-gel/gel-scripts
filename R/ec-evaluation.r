@@ -2536,6 +2536,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 list(
                     st = interval_start
                     , et = end_time[.BY[[1]]]
+                    , Hz = rec_Hz
                     , n_values = .N
                     #, SubInts =  subint_n
                 )

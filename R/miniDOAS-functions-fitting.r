@@ -40,9 +40,9 @@ fit.curves.rob <- function(meas.doascurve, ind_fit, Xreg, tau.shift, path.length
         tau.best <- tau.shift
     }
     # fit robust
-    fitcurves <- try(lmrob(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], setting = "KS2014", model = FALSE), silent = TRUE)
+    fitcurves <- try(robustbase::lmrob(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], setting = "KS2014", model = FALSE), silent = TRUE)
     if(inherits(fitcurves,"try-error") || !fitcurves$converged){
-        fitcurves <- try(lmrob(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], setting = "KS2011", model = FALSE), silent = TRUE)
+        fitcurves <- try(robustbase::lmrob(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], setting = "KS2011", model = FALSE), silent = TRUE)
     }
     if(inherits(fitcurves,"try-error") || !fitcurves$converged){
         fitcurves <- try(rlm(as.numeric(meas.doascurve[ind_fit + tau.best]) ~ Xreg[,1] + Xreg[,2] + Xreg[,3], method = "MM", model = FALSE), silent = TRUE)

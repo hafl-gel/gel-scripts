@@ -1123,9 +1123,15 @@ process_ec_fluxes <- function(
         if (is.null(z_ec) || !is.numeric(z_ec)) {
             stop('argument "z_ec" must be provided as numeric value (height in m a.g.l)!')
         }
+        if (length(z_ec) > 1) {
+            stop('argument "z_ec" has length > 1!')
+        }
         if (is.null(z_canopy) || !is.numeric(z_canopy)) {
             stop('argument "z_canopy" must be provided as numeric value ',
                 '(height of canopy in meters)!')
+        }
+        if (length(z_canopy) > 1) {
+            stop('argument "z_canopy" has length > 1 which is not yet accepted!')
         }
         if (is.null(dev_north) || !is.numeric(dev_north)) {
             stop('argument "dev_north" must be provided as numeric value!')
@@ -2131,7 +2137,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
             # calculate some turbulence parameters and collect some wind parameters
             # -------------------------------------------------------------------------- 
-            wind_stats <- wind_statistics(wind, z_canopy, z_ec)
+            wind_stats <- wind_statistics(wind, z_canopy[[1]], z_ec[[1]])
 
             # switch to list with different lengths
             # only for scalar fluxes!

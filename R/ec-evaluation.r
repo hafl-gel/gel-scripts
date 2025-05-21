@@ -2560,6 +2560,12 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 , as.list(c(
                     # wind statistics
                     wind_stats
+                    # bLSmodelR statistics
+                    , setNames(
+                        sqrt(wind_stats[c('var_u', 'var_v', 'var_w')]) / 
+                            wind_stats['Ustar'],
+                        c('sUu', 'sVu', 'sWu')
+                    )
                     # rotation results
                     , WD = WD[1]
                     , if (rotation_method == 'planar fit') {

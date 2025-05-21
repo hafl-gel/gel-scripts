@@ -196,7 +196,7 @@ S3method(print, dc)
 S3method(print, fix_pattern)
 # ~~~ imports
 importFrom(digest, sha1)
-importFrom(lubridate, fast_strptime, POSIXct, date, with_tz)
+importFrom(lubridate, fast_strptime, POSIXct, date, with_tz, force_tz, tz)
 import(Rcpp)
 import(data.table)
 import(ibts)

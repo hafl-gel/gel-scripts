@@ -27,17 +27,17 @@ read_sonic <- function(file_path, gillbug_method = c('gill', 'nakai2012', 'none'
     if (isTRUE(attr(out, 'GillBug'))) {
         switch(match.arg(gillbug_method)
             , gill = {
-                cat("--\nCorrecting data for Gill software bug. Correction is done as proposed by Gill instruments...\n")
+                cat("-- Correcting data for Gill software bug. Correction is done as proposed by Gill instruments...\n")
                 out[, w := w * ifelse(w < 0, 1.289, 1.166)]
                 setattr(out, 'GillBug', 'corrected-gill')
             }
             , nakai2012 = {
-                cat("--\nCorrecting data for Gill software bug. Correction is done as described in Nakai 2012...\n")
+                cat("-- Correcting data for Gill software bug. Correction is done as described in Nakai 2012...\n")
                 out[, c('u', 'v', 'w') := nakai_correction_2012(u, v, w)]
                 setattr(out, 'GillBug', 'corrected-nakai2012')
             }
             , none = {
-                warning("--\nData is intentionally not corrected for Gill software bug!\n")
+                warning("-- Data is intentionally NOT corrected for Gill software bug!\n")
             }
             , stop('Gill software bug correction method not valid')
         )

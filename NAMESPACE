@@ -25,6 +25,7 @@ export(ogive_model)
 export(wpl_correction)
 export(get_kappa)
 export(col2hex)
+export(process_turbulence)
 # ~~~ tc01/ltc2/s31 sensors
 export(read_s31)
 export(read_tc01)

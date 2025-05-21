@@ -933,6 +933,42 @@ fix_defaults <- function(x, vars) {
 
 ## main flux processing function ----------------------------------------
 
+## convenience wrapper for turbulence only
+process_turbulence <- function(
+    sonic_directory
+    , z_sonic = NULL
+    , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', T = 'blockAVG')
+    , na_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE)
+    , limits_lower = c(u = -30, v = -30, w = -10, T = 243)
+    , limits_upper = c(u = 30, v = 30, w = 10, T = 333)
+    , na_limits_window = c(pass = '10secs', replace = '5mins')
+    , na_limits_method = c('norepl', 'median', 'dist', 'squaredist')[4]
+    , covariances = c('uxw', 'wxT')
+    , create_graphs = FALSE
+    , ogive_out = FALSE
+    , ...
+    ) {
+    # remove covar/cospec/ogive calculation if graphs are not created and ogives are not
+    #   included in output
+    if (!create_graphs && !ogive_out) {
+        covariances <- NULL
+    }
+    process_ec_fluxes(
+        sonic_directory = sonic_directory
+        , z_ec = z_sonic
+        , detrending = detrending
+        , na_limits = na_limits
+        , limits_lower = limits_lower
+        , limits_upper = limits_upper
+        , na_limits_window = na_limits_window
+        , na_limits_method = na_limits_method
+        , covariances = covariances
+        , create_graphs = create_graphs
+        , ogive_out = ogive_out
+        , ...
+    )
+}
+
 ## main flux processing function
 process_ec_fluxes <- function(
 		sonic_directory
@@ -1926,8 +1962,8 @@ process_ec_fluxes <- function(
 
 
     # loop over intervals: call MAIN function
-    cat('~~~\nprocessing fluxes...\n')
     if (run_parallel) {
+        cat('~~~\nprocessing fluxes in parallel...\n')
         # export current_env & main function
         parallel::clusterExport(cl, 'current_env', current_env)
         # run main function
@@ -1936,6 +1972,7 @@ process_ec_fluxes <- function(
                 \(x) .ec_main(x, current_env)),
             fill = TRUE)
     } else {
+        cat('~~~\nprocessing fluxes sequentially...')
         results <- .ec_main(daily_data, current_env)
     }
 
@@ -2022,7 +2059,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             dyn_lag <- input_dyn_lag
             damping_reference <- input_damping_reference
             damp_region <- input_damp_region
-            if (SD[, anyNA(.SD), .SDcols = flux_variables]) {
+            if (!is.null(flux_variables) && SD[, anyNA(.SD), .SDcols = flux_variables]) {
                 # loop over flux_variables & check
                 for (fv in flux_variables) {
                     # fv <- flux_variables[1]
@@ -2135,80 +2172,13 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 # next
             }
 
-            # start of flux relevant data manipulation
-            # -------------------------------------------------------------------------- 
-            # -------------------------------------------------------------------------- 
-            cat("~~~\nstarting flux evaluation...\n")
-
-            # # calculate auto-covariances
-            # # -------------------------------------------------------------------------- 
-            # Power <- lapply(names(FFTs), \(i) {
-            #     # check scalars
-            #     if (i %in% scalars && !is.null(na_ind <- na.action(FFTs[[i]]))) {
-            #         # fix lengths
-            #         FFTs[[i]] <- FFTs[[i]][-na_ind]
-            #         # get N
-            #         N <- length(FFTs[[i]])
-            #     } else {
-            #         N <- .N
-            #     }
-            #     # get Re
-            #     re <- Re(fft(Conj(FFTs[[i]]) * FFTs[[i]], inverse = TRUE))
-            #     # get missing
-            #     # subset
-            #     if (N %% 2) {
-            #         out <- re[c(((N + 1) / 2 + 1):N, 1:((N + 1) / 2))] * N / (N - 1)
-            #     } else {
-            #         out <- re[c((N / 2 + 1):N, 1:(N / 2))] * N / (N - 1)
-            #     }
-            #     n_missing <- n_period - N
-            #     if (sign(n_missing) >= 0) {
-            #         if (n_missing %% 2) {
-            #             n1 <- rep(NA_real_, (n_missing + 1) / 2)
-            #             n2 <- rep(NA_real_, (n_missing - 1) / 2)
-            #         } else {
-            #             n1 <- n2 <- rep(NA_real_, n_missing / 2)
-            #         }
-            #         c(n1, out, n2)
-            #     } else {
-            #         if (-n_missing %% 2) {
-            #             ind <- ((1 - n_missing) / 2 + 1):(N - (-n_missing - 1) / 2)
-            #         } else {
-            #             ind <- (1 - n_missing / 2):(N + n_missing / 2)
-            #         }
-            #         out[ind]
-            #     }
-            # })
-            # names(Power) <- flux_variables
-
-            # # power-spectra for flux variables
-            # # ------------------------------------------------------------------------ 			
-            # cat("\t- power-spectra\n")
-            # PowerSpec <- lapply(flux_variables, function(i) {
-            #         # check scalars
-            #         N <- .N
-            #         if (i %in% scalars) {
-            #             if (!is.null(na_ind <- na.action(scalar_list[[i]]))) {
-            #                 # fix lengths
-            #                 FFTs[[i]] <- FFTs[[i]][-na_ind]
-            #                 # get N
-            #                 N <- length(FFTs[[i]])
-            #             }
-            #         }
-            #         re <- Re(Conj(FFTs[[i]]) * FFTs[[i]])[seq(N / 2) + 1] * N / 
-            #             (N - 1) * 2
-            #         # get missing
-            #         n_missing <- n_period / 2 - length(re)
-            #         if (sign(n_missing) >= 0) {
-            #             c(re, rep(NA_real_, n_missing))
-            #         } else {
-            #             re[seq_len(n_period / 2)]
-            #         }
-            #     })
-            # names(PowerSpec) <- names(Power)
-
             # check if any fluxes can be derived
             if (has_flux <- length(covariances_variables)) {
+                # start of flux relevant data manipulation
+                # -------------------------------------------------------------------------- 
+                # -------------------------------------------------------------------------- 
+                cat("~~~\nstarting flux evaluation...\n")
+
                 # calculate covariances with fix lag time:
                 # -------------------------------------------------------------------------- 
                 cat("\t- covariances\n")
@@ -2340,7 +2310,6 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     rev(cumsum(rev(x)))
                 })
                 names(Ogive_dyn) <- covariances
-
 
                 # calculate low frequency contribution
                 i_hi <- which(1 / freq < high_cont_sec)[1]
@@ -2532,6 +2501,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 }
             }
 
+            # get statistics on NA values and hard limits
             v_stats <- unlist(sapply(variables, \(x) {
                 v <- get(x)
                 if (na_limits[x]) {

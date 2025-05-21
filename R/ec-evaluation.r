@@ -1055,6 +1055,7 @@ process_ec_fluxes <- function(
         , ncores = 1
         , parallel_mem_limit = NULL
         , parallelism_strategy = c('sequential', 'all-in-one')[1]
+        , minimal_output = FALSE
         , ...
 	){
     # ARGUMENTS
@@ -1998,6 +1999,17 @@ process_ec_fluxes <- function(
         st = with_tz(st, tz_user),
         et = with_tz(et, tz_user)
     )]
+
+    # check if minimal output is requested
+    if (minimal_output) {
+        results <- results[, .SD, .SDcols = c('st', 'et', 'n_values', 'Hz',
+            'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 'sWu', 'd', 'z_sonic', 'U_sonic',
+            grep('^(phi|alpha|beta|w_bias)$', names(results), value = TRUE),
+            grep('^(avg_|ht_|li_)', names(results), value = TRUE),
+            grep('^flux_', names(results), value = TRUE)
+            )
+        ]
+    }
 
     # convert to ibts
     if (as_ibts) {

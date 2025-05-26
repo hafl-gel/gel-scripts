@@ -1670,6 +1670,11 @@ process_ec_fluxes <- function(
         } else {
             sonic_raw <- NULL
         }
+        # check sonic data
+        if (is.null(sonic_raw) || nrow(sonic_raw) == 0) {
+            cat('No sonic data available within given time range...\n')
+            return(NULL)
+        }
         # get time zone
         sonic_tz <- sonic_raw[, tz(Time)]
         if (sonic_tz != 'UTC') {
@@ -1681,10 +1686,6 @@ process_ec_fluxes <- function(
         }
     }
     cat('done\n')
-    # check sonic data
-    if (is.null(sonic_raw) || nrow(sonic_raw) == 0) {
-        stop('No sonic data available within given time range! Aborting routine!\n')
-    }
 
     # get ht8700 data
     if (ht_provided && ht_has_data) {

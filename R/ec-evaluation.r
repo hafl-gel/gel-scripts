@@ -1454,17 +1454,15 @@ process_ec_fluxes <- function(
 
         # setup parallelism
         if (run_parallel <- (!is.numeric(ncores) || isFALSE(ncores == 1))) {
-            if (inherits(ncores, '')) {
+            if (inherits(ncores, 'cluster')) {
                 # copy cluster
                 cl <- ncores
-                cat('\n=> Processing in parallel using', length(cl), 'cores.\n\n')
             } else {
                 # start cluster
                 cl <- bLSmodelR:::.makePSOCKcluster(ncores, 
                     memory_limit = parallel_mem_limit)
                 # stop cluster on exit
                 on.exit(parallel::stopCluster(cl))
-                cat('\n=> Processing in parallel using', length(cl), 'cores.\n\n')
                 # set data.table threads to 1 on slaves
                 parallel::clusterEvalQ(cl, data.table::setDTthreads(1L))
                 # cat('-> exporting R objects...')
@@ -1473,6 +1471,7 @@ process_ec_fluxes <- function(
                 #         .ht8700_functions, .licor_functions))
                 # cat(' done.\n')
             }
+            cat('\n=> Processing in parallel using', length(cl), 'cores.\n\n')
         }
 
     # if/else RECURSIVE else

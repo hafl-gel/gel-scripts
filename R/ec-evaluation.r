@@ -1613,6 +1613,24 @@ process_ec_fluxes <- function(
         }
         # rbind output list
         out <- rbindlist(out_list, fill = TRUE)
+        # fix ogives out
+        if (ogive_out) {
+            setattr(out, 'covars', 
+                unlist(lapply(out_list, attr, 'covars'), recursive = FALSE)
+            )
+            setattr(out, 'cospec_fix', 
+                unlist(lapply(out_list, attr, 'cospec_fix'), recursive = FALSE)
+            )
+            setattr(out, 'cospec_dyn', 
+                unlist(lapply(out_list, attr, 'cospec_dyn'), recursive = FALSE)
+            )
+            setattr(out, 'ogv_fix', 
+                unlist(lapply(out_list, attr, 'ogv_fix'), recursive = FALSE)
+            )
+            setattr(out, 'ogv_dyn', 
+                unlist(lapply(out_list, attr, 'ogv_dyn'), recursive = FALSE)
+            )
+        }
         # check again if all empty
         if (nrow(out) == 0) {
             return(NULL)

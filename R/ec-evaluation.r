@@ -699,7 +699,7 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
         dat3 <- cbind(dat3, dat[, res, drop = FALSE])
     }
 	### melt and add trends:
-	dat4 <- reshape2::melt(dat3, id = NULL, value.name = "trend")
+	dat4 <- reshape2::melt(dat3[, selection], id = NULL, value.name = "trend")
 	dat2 <- reshape2::melt(dat[,c("st",selection)],id="st")
 	dat2[, "trend"] <- dat4[, "trend"]
 	myxscale.component <- function(...) {
@@ -2104,7 +2104,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             damp_region <- input_damp_region
             if (!is.null(flux_variables) && SD[, anyNA(.SD), .SDcols = flux_variables]) {
                 # loop over flux_variables & check
-                for (fv in flux_variables) {
+                for (fv in unique(c(flux_variables, 'u', 'v', 'w', 'T'))) {
                     # fv <- flux_variables[1]
                     # x <- SD[, unlist(mget(fv, ifnotfound = NA))]
                     x <- SD[, unlist(mget(paste0(fv, '_flag'), ifnotfound = NA))]

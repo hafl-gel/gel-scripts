@@ -1482,6 +1482,12 @@ process_ec_fluxes <- function(
         for (what in names(dots)) {
             assign(what, dots[[what]])
         }
+        # check times (for parallel calculation with less intervals than cores)
+        if (length(start_time) == 0 || length(end_time) == 0) {
+            # return NULL if length is zero
+            return(NULL)
+        }
+
     # if/else RECURSIVE end
     }
 
@@ -1503,8 +1509,9 @@ process_ec_fluxes <- function(
             nc <- length(cl)
             # get unique dates
             st_udates <- unique(st_dates)
-            # number of days > 20h (40 intervals)
+            # get runlength
             nrle <- rle(as.numeric(st_dates))
+            # number of days > 20h (40 intervals)
             full_day <- which(nrle$lengths > 40)
             nd <- length(full_day)
             incomplete_day <- which(nrle$lengths <= 40)

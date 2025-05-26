@@ -1614,7 +1614,8 @@ process_ec_fluxes <- function(
         # rbind output list
         out <- rbindlist(out_list, fill = TRUE)
         # fix ogives out
-        if (ogive_out) {
+        if (ogives_out) {
+        # if (exists('ogives_out') && ogives_out) {
             setattr(out, 'covars', 
                 unlist(lapply(out_list, attr, 'covars'), recursive = FALSE)
             )

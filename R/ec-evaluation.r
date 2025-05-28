@@ -1035,6 +1035,7 @@ process_ec_fluxes <- function(
         , na_alarm_code = c(1:3, 5:8, 11, 13)
         , thresh_period = 0.75
 		, create_graphs = TRUE
+		, create_dailygraphs = TRUE
 		, graphs_directory = NULL
 		, add_name = ''
         , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, 
@@ -1080,11 +1081,17 @@ process_ec_fluxes <- function(
                 stop('argument "create_graphs" is TRUE, but "graphs_directory" is not specified!')
             }
         }
+        if (!missing(create_dailygraphs) && create_dailygraphs) {
+            # TODO: eventually remove one of either arguments
+            if (is.null(graphs_directory)) {
+                stop('argument "create_dailygraphs" is TRUE, but "graphs_directory" is not specified!')
+            }
+        }
         # don't create figures if graphs_directory is missing
         if (missing(graphs_directory)) {
-            create_graphs <- FALSE
+            create_dailygraphs <- create_graphs <- FALSE
         }
-        if (create_graphs && (
+        if ((create_graphs || create_dailygraphs) && (
                 !is.character(graphs_directory) || !dir.exists(graphs_directory)
                 )) {
             stop('argument "graphs_directory": directory "', graphs_directory, 
@@ -1432,7 +1439,7 @@ process_ec_fluxes <- function(
         # create result folder (folder name includes first input-filename) and set this directory as working directory                                      
         # ------------------------------------------------------------------------------ 
         if (is.null(graphs_directory) || isFALSE(graphs_directory)) {
-            create_graphs <- FALSE
+            create_dailygraphs <- create_graphs <- FALSE
         } else {					
             # tstamp <- format(Sys.time(), "%Y%m%d_%H%M")
             if (add_name != "") {
@@ -1446,7 +1453,7 @@ process_ec_fluxes <- function(
         }
 
         # prepare ogive output
-        if (ogives_out) {
+        if (create_dailygraphs || ogives_out) {
             e_ogive <- new.env()
             e_ogive$Cospec_dyn_Out <- e_ogive$Cospec_fix_Out <- e_ogive$Covars_Out <- 
                 e_ogive$Ogive_fix_Out <- e_ogive$Ogive_dyn_Out <- list()
@@ -2032,13 +2039,13 @@ process_ec_fluxes <- function(
                 ogv_dyn = e_ogive$Ogive_dyn_Out
             )
         }
-        # # create daily graphs
-        # if (parallelism_strategy != 'recursive' && create_dailygraphs) {
-        #     if (!dir.exists(path_folder)) {
-        #         dir.create(path_folder, recursive = FALSE)
-        #     }
-        #     browser()
-        # }
+        # create daily graphs
+        if (parallelism_strategy != 'recursive' && create_dailygraphs) {
+            if (!dir.exists(path_folder)) {
+                dir.create(path_folder, recursive = FALSE)
+            }
+            browser()
+        }
     }
 
     cat("\n************************************************************\n") 

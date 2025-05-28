@@ -1452,13 +1452,6 @@ process_ec_fluxes <- function(
             path_folder <- file.path(graphs_directory, folder)
         }
 
-        # prepare ogive output
-        if (create_dailygraphs || ogives_out) {
-            e_ogive <- new.env()
-            e_ogive$Cospec_dyn_Out <- e_ogive$Cospec_fix_Out <- e_ogive$Covars_Out <- 
-                e_ogive$Ogive_fix_Out <- e_ogive$Ogive_dyn_Out <- list()
-        }
-
         # setup parallelism
         if (run_parallel <- (!is.numeric(ncores) || isFALSE(ncores == 1))) {
             if (inherits(ncores, 'cluster')) {
@@ -1583,12 +1576,6 @@ process_ec_fluxes <- function(
             }, env = current_env)
             # check try errors
             try_errors <- sapply(out_list, \(x) inherits(x, 'try-error'))
-            cat("\n************************************************************\n") 
-            cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
-                "time elapsed: ", sprintf('%1.1f', 
-                    d <- difftime(Sys.time(), script_start)),
-                attr(d, 'units'), "\n")
-            cat("************************************************************\n")  
             if (any(try_errors)) {
                 cat('try errors in parallel calls! Returning list for checking..\n')
                 return(out_list)
@@ -1621,31 +1608,12 @@ process_ec_fluxes <- function(
         }
         # rbind output list
         results <- rbindlist(out_list, fill = TRUE)
-        # fix ogives out
-        if (create_dailygraphs || ogives_out) {
-            e_ogive$Covars_Out <- unlist(lapply(out_list, attr, 'covars'), 
-                recursive = FALSE)
-            e_ogive$Cospec_fix_Out <- unlist(lapply(out_list, attr, 'cospec_fix'), 
-                recursive = FALSE)
-            e_ogive$Cospec_dyn_Out <- unlist(lapply(out_list, attr, 'cospec_dyn'), 
-                recursive = FALSE)
-            e_ogive$Ogive_fix_Out <- unlist(lapply(out_list, attr, 'ogv_fix'), 
-                recursive = FALSE)
-            e_ogive$Ogive_dyn_Out <- unlist(lapply(out_list, attr, 'ogv_dyn'), 
-                recursive = FALSE)
-        }
         # SEQUENTIAL END
     } else {
         # ALL-IN-ONE/RECURSIVE
 
         # read raw data:
         # ------------------------------------------------------------------------------
-
-        # TODO: fix missing intervals in sonic/ht/licor!!!
-        #       fix old sonic files format
-        #       fix old sonic time format
-        #       fix gill bug in old sonic
-                # Data[, w := w * ifelse(w < 0, 1.289, 1.166)]
 
         # get sonic data
         if (sonic_has_data) {
@@ -2009,6 +1977,150 @@ process_ec_fluxes <- function(
     if (is.null(results) || nrow(results) == 0) {
         results <- NULL
     } else {
+        # fix ogives out
+        if (create_dailygraphs || ogives_out) {
+            if (parallelism_strategy == 'sequential') {
+                # get ogives etc.
+                Covars_Out <- unlist(lapply(out_list, attr, 'covars'), 
+                    recursive = FALSE)
+                Cospec_fix_Out <- unlist(lapply(out_list, attr, 'cospec_fix'), 
+                    recursive = FALSE)
+                Cospec_dyn_Out <- unlist(lapply(out_list, attr, 'cospec_dyn'), 
+                    recursive = FALSE)
+                Ogive_fix_Out <- unlist(lapply(out_list, attr, 'ogv_fix'), 
+                    recursive = FALSE)
+                Ogive_dyn_Out <- unlist(lapply(out_list, attr, 'ogv_dyn'), 
+                    recursive = FALSE)
+                if (ogives_out) {
+                    # assign to output
+                    results <- structure(
+                        results, 
+                        covars = Covars_Out,
+                        cospec_fix = Cospec_fix_Out, 
+                        cospec_dyn = Cospec_dyn_Out,
+                        ogv_fix = Ogive_fix_Out, 
+                        ogv_dyn = Ogive_dyn_Out
+                    )
+                }
+            } else if (parallelism_strategy == 'all-in-one' && create_dailygraphs) {
+                # get ogives etc. for plotting
+                Covars_Out <- attr(results, 'covars')
+                Cospec_fix_Out <- attr(results, 'cospec_fix')
+                Cospec_dyn_Out <- attr(results, 'cospec_dyn')
+                Ogive_fix_Out <- attr(results, 'ogv_fix')
+                Ogive_dyn_Out <- attr(results, 'ogv_dyn')
+            }
+        }
+        # create daily graphs
+        if (parallelism_strategy != 'recursive' && create_dailygraphs) {
+            if (avg_period != '30mins') {
+                stop('daily figures not yet implemented for avg_period != "30mins"')
+            }
+            cat('~~~\ncreating daily graphs...')
+            if (!dir.exists(path_folder)) {
+                dir.create(path_folder, recursive = FALSE)
+            }
+            # get indices split by date
+            idate <- results[, I(split(format(st, '%Y-%m-%d %H:%M'), date(st)))]
+            # get freq (this might fail!)
+            freq <- Cospec_dyn_Out[[1]]$freq
+            # get covariance range
+            sec_hr <- 50
+            rec_Hz <- unique(sapply(Covars_Out, \(x) x$Hz))
+            n_period <- unique(sapply(Covars_Out, \(x) x$N))
+            x_cov <- seq(-sec_hr * rec_Hz, sec_hr * rec_Hz) / rec_Hz
+            cov_sub <- n_period / 2 + seq(-sec_hr * rec_Hz, sec_hr * rec_Hz)
+            # set resolution
+            res <- 200
+            # loop over covariances
+            for (flux in covariances) {
+                # flux <- covariances[1]
+                # loop over dates
+                for (day in names(idate)) {
+                    # day <- names(idate)[1]
+                    # create covariances figure
+                    fn_covars <- paste0(path_folder, '/dailygraphs-covariances-', 
+                        flux, '-', day, '.png')
+                    png(fn_covars, width = 14, height = 14, units = 'in', res = res, ...)
+                    # x11(width = 14, height = 14)
+                    par(mfrow = c(8, 6), mar = c(2, 4, 2, 2))
+                    # loop over intervals
+                    for (i in idate[[day]]) {
+                        if (!is.null(Covars_Out[[i]][[flux]])) {
+                            itime <- sub('[^ ]+ ', '', i)
+                            plot(x_cov, Covars_Out[[i]][[flux]][cov_sub], type = 'l', 
+                                main = itime,
+                                xlab = '', ylab = flux, 
+                                col = plotting_covar_colors[flux],
+                                panel.first = {grid(); abline(h = 0, col = 'lightgrey')})
+                        }
+                    }
+                    dev.off()
+                    # cospec & ogive (dyn)
+                    fn_dynco <- paste0(path_folder, '/dailygraphs-ogives-dyn-', 
+                        flux, '-', day, '.png')
+                    png(fn_dynco, width = 14, height = 14, units = 'in', res = res, ...)
+                    par(mfrow = c(8, 6), mar = c(2, 4, 2, 2))
+                    # loop over intervals
+                    for (i in idate[[day]]) {
+                        # i <- idate[[day]][1]
+                        if (!is.null(Covars_Out[[i]][[flux]])) {
+                            itime <- sub('[^ ]+ ', '', i)
+                            plot_cospec_ogive(Ogive_dyn_Out[[i]][[flux]], 
+                                Cospec_dyn_Out[[i]][[flux]], freq,
+                                ylab = flux, col = plotting_covar_colors[flux], 
+                                model_cols = c('#F02E42', '#9A33DA'),
+                                model_par = Cospec_dyn_Out[[i]]$model_coef[, flux]
+                            )
+                            om <- Ogive_dyn_Out[[i]][[flux]][1]
+                            y <- par('usr')[3:4]
+                            text(freq[1], y[which.max(abs(y - om))] + diff(y) * sign(om) * 0.05,
+                                labels = itime, pos = 2)
+                            # add tau
+                            text(tail(freq, 1), y[which.min(abs(y - om))] - sign(om) * 
+                                diff(y) * 0.15, pos = 4, labels = sprintf(
+                                    'lag time =\n%1.1f secs', 
+                                results[format(st, '%Y-%m-%d %H:%M') == i, .SD[[1]], 
+                                    .SDcols = paste0('lag_dyn_', flux)]
+                                ), cex = 1
+                            )
+                        }
+                    }
+                    dev.off()
+                    # cospec & ogive (fix)
+                    fn_fixco <- paste0(path_folder, '/dailygraphs-ogives-fix-', 
+                        flux, '-', day, '.png')
+                    png(fn_fixco, width = 14, height = 14, units = 'in', res = res, ...)
+                    par(mfrow = c(8, 6), mar = c(2, 4, 2, 2))
+                    # loop over intervals
+                    for (i in idate[[day]]) {
+                        if (!is.null(Covars_Out[[i]][[flux]])) {
+                            itime <- sub('[^ ]+ ', '', i)
+                            plot_cospec_ogive(Ogive_fix_Out[[i]][[flux]], 
+                                Cospec_fix_Out[[i]][[flux]], freq,
+                                ylab = flux, col = plotting_covar_colors[flux], 
+                                model_cols = c('#F02E42', '#9A33DA'),
+                                model_par = Cospec_fix_Out[[i]]$model_coef[, flux]
+                            )
+                            om <- Ogive_fix_Out[[i]][[flux]][1]
+                            y <- par('usr')[3:4]
+                            text(freq[1], y[which.max(abs(y - om))] + diff(y) * sign(om) * 0.05,
+                                labels = itime, pos = 2)
+                            # add tau
+                            text(tail(freq, 1), y[which.min(abs(y - om))] - sign(om) * 
+                                diff(y) * 0.15, pos = 4, labels = sprintf(
+                                    'lag time =\n%1.1f secs', 
+                                results[format(st, '%Y-%m-%d %H:%M') == i, .SD[[1]], 
+                                    .SDcols = paste0('lag_fix_', flux)]
+                                ), cex = 1
+                            )
+                        }
+                    }
+                    dev.off()
+                }
+            }
+            cat(' done.\n')
+        }
         # fix time zone
         results[, ':='(
             st = with_tz(st, tz_user),
@@ -2025,35 +2137,19 @@ process_ec_fluxes <- function(
             ]
         }
         # convert to ibts
-        if (as_ibts) {
+        if (parallelism_strategy != 'recursive' && as_ibts) {
             results <- as.ibts(results)
-        }
-        # output incl. ogives
-        if (ogives_out) {
-            results <- structure(
-                results, 
-                covars = e_ogive$Covars_Out,
-                cospec_fix = e_ogive$Cospec_fix_Out, 
-                cospec_dyn = e_ogive$Cospec_dyn_Out,
-                ogv_fix = e_ogive$Ogive_fix_Out, 
-                ogv_dyn = e_ogive$Ogive_dyn_Out
-            )
-        }
-        # create daily graphs
-        if (parallelism_strategy != 'recursive' && create_dailygraphs) {
-            if (!dir.exists(path_folder)) {
-                dir.create(path_folder, recursive = FALSE)
-            }
-            browser()
         }
     }
 
-    cat("\n************************************************************\n") 
-    cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
-        "time elapsed: ", sprintf('%1.1f', 
-            d <- difftime(Sys.time(), script_start)), 
-        attr(d, 'units'), "\n")
-    cat("************************************************************\n")  
+    if (parallelism_strategy != 'recursive') {
+        cat("\n************************************************************\n") 
+        cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
+            "time elapsed: ", sprintf('%1.1f', 
+                d <- difftime(Sys.time(), script_start)), 
+            attr(d, 'units'), "\n")
+        cat("************************************************************\n")  
+    }
 
     return(results)
 
@@ -2074,6 +2170,12 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
     # get variables
     for (what in ls(env)) {
         assign(what, get(what, env))
+    }
+    # prepare ogive output
+    if (create_dailygraphs || ogives_out) {
+        e_ogive <- new.env()
+        e_ogive$Cospec_dyn_Out <- e_ogive$Cospec_fix_Out <- e_ogive$Covars_Out <- 
+            e_ogive$Ogive_fix_Out <- e_ogive$Ogive_dyn_Out <- list()
     }
     # call main function
     out <- dat[, {
@@ -2472,7 +2574,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 ogive_quality_dyn <- ogive_quality_dyn[1, ]
 
                 # should ogives be provided with output
-                if (ogives_out) {
+                if (ogives_out || create_dailygraphs) {
                     int_start <- format(interval_start, '%Y-%m-%d %H:%M')
                     e_ogive$Cospec_fix_Out[[int_start]] <- c(
                         list(freq = freq, model_coef = ogive_par_fix), Cospec_fix)
@@ -2483,7 +2585,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     e_ogive$Ogive_dyn_Out[[int_start]] <- c(
                         list(freq = freq, model_coef = ogive_par_dyn), Ogive_dyn)
                     e_ogive$Covars_Out[[int_start]] <- c(
-                        list(Hz = rec_Hz), Covars)
+                        list(Hz = rec_Hz, N = n_period), Covars)
                 }
 
                 # empirical damping estimation, dyn and fix should have best reference (dyn/fix)...
@@ -2856,6 +2958,18 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
     # bind lists to one data.table
     out <- out[, rbindlist(V1, fill = TRUE, use.names = TRUE)]
+
+    # output incl. ogives
+    if (create_dailygraphs || ogives_out) {
+        out <- structure(
+            out, 
+            covars = e_ogive$Covars_Out,
+            cospec_fix = e_ogive$Cospec_fix_Out, 
+            cospec_dyn = e_ogive$Cospec_dyn_Out,
+            ogv_fix = e_ogive$Ogive_fix_Out, 
+            ogv_dyn = e_ogive$Ogive_dyn_Out
+        )
+    }
 
     # return
     out

@@ -1494,6 +1494,7 @@ process_ec_fluxes <- function(
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # check all-in-one vs. sequential
     if (length(start_time) > 1 && parallelism_strategy == 'sequential') {
+        # SEQUENTIAL
         # get current objects as string
         # strip off objects which need changes
         cobj <- setdiff(ls(current_env), 
@@ -1612,449 +1613,443 @@ process_ec_fluxes <- function(
             )
         }
         # rbind output list
-        out <- rbindlist(out_list, fill = TRUE)
+        results <- rbindlist(out_list, fill = TRUE)
         # fix ogives out
-        if (ogives_out) {
-        # if (exists('ogives_out') && ogives_out) {
-            setattr(out, 'covars', 
-                unlist(lapply(out_list, attr, 'covars'), recursive = FALSE)
-            )
-            setattr(out, 'cospec_fix', 
-                unlist(lapply(out_list, attr, 'cospec_fix'), recursive = FALSE)
-            )
-            setattr(out, 'cospec_dyn', 
-                unlist(lapply(out_list, attr, 'cospec_dyn'), recursive = FALSE)
-            )
-            setattr(out, 'ogv_fix', 
-                unlist(lapply(out_list, attr, 'ogv_fix'), recursive = FALSE)
-            )
-            setattr(out, 'ogv_dyn', 
-                unlist(lapply(out_list, attr, 'ogv_dyn'), recursive = FALSE)
+        if (create_dailygraphs || ogives_out) {
+            e_ogive$Covars_Out <- unlist(lapply(out_list, attr, 'covars'), 
+                recursive = FALSE)
+            e_ogive$Cospec_fix_Out <- unlist(lapply(out_list, attr, 'cospec_fix'), 
+                recursive = FALSE)
+            e_ogive$Cospec_dyn_Out <- unlist(lapply(out_list, attr, 'cospec_dyn'), 
+                recursive = FALSE)
+            e_ogive$Ogive_fix_Out <- unlist(lapply(out_list, attr, 'ogv_fix'), 
+                recursive = FALSE)
+            e_ogive$Ogive_dyn_Out <- unlist(lapply(out_list, attr, 'ogv_dyn'), 
+                recursive = FALSE)
+        }
+        # SEQUENTIAL END
+    } else {
+        # ALL-IN-ONE/RECURSIVE
+
+        # read raw data:
+        # ------------------------------------------------------------------------------
+
+        # TODO: fix missing intervals in sonic/ht/licor!!!
+        #       fix old sonic files format
+        #       fix old sonic time format
+        #       fix gill bug in old sonic
+                # Data[, w := w * ifelse(w < 0, 1.289, 1.166)]
+
+        # get sonic data
+        if (sonic_has_data) {
+            cat('~~~\nSubsetting sonic data - ')
+            # subset provided sonic data
+            sonic_raw <- sonic_directory[Time >= start_time[1] & Time < tail(end_time, 1), ]
+        } else {
+            cat('~~~\nReading sonic files\n')
+            # select files
+            if (sonic_old_format) {
+                sonic_selected <- sonic_files[
+                    sub('data_sonic-._(\\d{4})(\\d{2})(\\d{2})_.*', '\\1_\\2_\\3', sonic_files) %in% dates_formatted
+                    ]
+            } else {
+                sonic_selected <- sonic_files[
+                    sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', sonic_files) %in% dates_formatted
+                    ]
+            }
+            # read sonic files
+            if (length(sonic_selected)) {
+                if (run_parallel) {
+                    sonic_raw <- rbindlist(
+                        bLSmodelR:::.clusterApplyLB(
+                            cl,
+                            file.path(sonic_directory, sonic_selected), 
+                            \(x) {
+                                cat('\t')
+                                read_sonic(x)
+                            }
+                        )
+                    )
+                } else {
+                    sonic_raw <- rbindlist(lapply(
+                            file.path(sonic_directory, sonic_selected), 
+                            \(x) {
+                                cat('\t')
+                                read_sonic(x)
+                            }
+                    ))
+                }
+            } else {
+                sonic_raw <- NULL
+            }
+            # check sonic data
+            if (is.null(sonic_raw) || nrow(sonic_raw) == 0) {
+                cat('No sonic data available within given time range...\n')
+                return(NULL)
+            }
+            # get time zone
+            sonic_tz <- sonic_raw[, tz(Time)]
+            if (sonic_tz != 'UTC') {
+                # convert to UTC
+                sonic_raw[, Time := with_tz(Time, 'UTC')]
+                # fix start_time & end_time
+                start_time <- with_tz(force_tz(start_time, sonic_tz), 'UTC')
+                end_time <- with_tz(force_tz(end_time, sonic_tz), 'UTC')
+            }
+        }
+        cat('done\n')
+
+        # get ht8700 data
+        if (ht_provided && ht_has_data) {
+            cat('Subsetting HT8700 data - ')
+            # subset
+            ht <- ht_directory[Time >= start_time[1] & Time < tail(end_time, 1), ]
+            cat('done\n')
+        } else if (ht_provided && !ht_with_sonic) {
+            cat('Reading HT8700 files\n')
+            # select files
+            ht_selected <- ht_files[
+                sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', ht_files) %in% dates_formatted
+                ]
+            # read ht files
+            if (length(ht_selected)) {
+                if (run_parallel) {
+                    ht <- rbindlist(bLSmodelR:::.clusterApplyLB(
+                            cl,
+                            file.path(ht_directory, ht_selected), 
+                            \(x) {
+                                cat('\t')
+                                read_ht8700(x)
+                            }
+                    ))
+                } else {
+                    ht <- rbindlist(lapply(
+                            file.path(ht_directory, ht_selected), 
+                            \(x) {
+                                cat('\t')
+                                read_ht8700(x)
+                            }
+                    ))
+                }
+            } else {
+                ht <- NULL
+            }
+            # no UTC conversion needed, since this case is excluded up to now
+            # # convert to UTC
+            # ht[, Time := with_tz(Time, 'UTC')]
+            cat('done\n')
+        } else {
+            # no ht data
+            ht <- NULL
+        }
+        # check ht
+        if (ht_provided && is.null(ht)) {
+            cat('-> No HT8700 data within given time range.\n')
+        }
+
+        # get licor data
+        if (licor_provided && licor_has_data) {
+            cat('Subsetting LI-7500 data - ')
+            # copy
+            licor <- licor_directory[Time >= start_time[1] & Time < tail(end_time, 1), ]
+            cat('done\n')
+        } else if (licor_provided && !licor_with_sonic) {
+            cat('Reading LI-7500 files\n')
+            # select files
+            licor_selected <- licor_files[
+                sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', licor_files) %in% dates_formatted
+                ]
+            if (length(licor_selected)) {
+                # read new licor files
+                if (run_parallel) {
+                    licor <- rbindlist(bLSmodelR:::.clusterApplyLB(
+                            cl,
+                            file.path(licor_directory, licor_selected), 
+                            \(x) {
+                                cat('\tFile:', x, '- ')
+                                out <- read_licor(x)
+                                cat('done\n')
+                                out
+                            }
+                    ))
+                } else {
+                    licor <- rbindlist(lapply(
+                            file.path(licor_directory, licor_selected), 
+                            \(x) {
+                                cat('\tFile:', x, '- ')
+                                out <- read_licor(x)
+                                cat('done\n')
+                                out
+                            }
+                    ))
+                }
+            } else {
+                licor <- NULL
+            }
+            # no UTC conversion needed, since this case is excluded up to now
+            # # convert to UTC
+            # licor[, Time := with_tz(Time, 'UTC')]
+        } else {
+            # no licor data
+            licor <- NULL
+        }
+        # check licor
+        if (licor_provided && is.null(licor)) {
+            cat('-> No LI-7500 data within given time range.\n')
+        }
+
+        # get Hz/frequency etc.
+        rec_Hz <- sonic_raw[, {
+            d_t <- diff(as.numeric(Time))
+            round(1 / median(d_t, na.rm = TRUE), -1)
+        }]
+        if (rec_Hz < 10) {
+            stop('Frequency is lower than 10 Hz! Aborting script!')
+        }
+        n_period <- avg_secs * rec_Hz
+        n_threshold <- thresh_period * n_period
+        freq <- rec_Hz * seq(floor(n_period / 2)) / floor(n_period / 2)
+
+        # fix time to exactly xx Hz
+        t_basis <- unlist(mapply(\(x_st, x_et) {
+                seq(x_st, x_et - 1 / rec_Hz, by = 1 / rec_Hz)
+            }, x_st = start_time, x_et = end_time,
+            SIMPLIFY = FALSE
+        ))
+        t0 <- t_basis[1]
+        # get matching indices
+        t_indices <- sonic_raw[, {
+            I(match_times(t_basis - t0, as.numeric(Time, units = 'secs') - t0, 
+                rec_Hz
+            ))
+        }]
+        # sonic including all times
+        full_sonic <- data.table(
+            Time = .POSIXct(t_basis, tz = 'UTC'), Hz = rec_Hz,
+            u = NA_real_, v = NA_real_, w = NA_real_, T = NA_real_,
+            sonic = sonic_raw[, sonic[1]]
+        )
+        # fill sonic data
+        full_sonic[t_indices[[1]], c('u', 'v', 'w', 'T') := 
+            sonic_raw[t_indices[[2]], .SD, .SDcols = c('u', 'v', 'w', 'T')]]
+
+        cat('Merging files - ')
+        daily_data <- merge_data(full_sonic, ht, licor)
+        cat('done\n~~~\n')
+
+        # check variables and covars and subset by columns
+        if (!all(cn_check <- variables %in% names(daily_data))) {
+            stop(
+                "cannot find variable(s): ", 
+                paste(variables[!cn_check], collapse = ", "),
+                "\nAvailable column names are: ", 
+                paste(names(daily_data), collapse = ", ")
             )
         }
-        # check again if all empty
-        if (nrow(out) == 0) {
-            return(NULL)
+
+        # define bins & subset again & just make sure sonic has no missing data
+        daily_data[, bin := getIntervals(Time, start_time, end_time)]
+
+        # # remove incomplete intervals
+        # cat('checking interval data threshold...\n')
+        # np0 <- daily_data[, uniqueN(bin)]
+        # daily_data <- daily_data[, keep := .N >= n_threshold, by = bin][(keep)][,
+            # keep := NULL]
+        # np <- daily_data[, uniqueN(bin)]
+        # if (np0 - np > 1) {
+            # cat(np0 - np, 'intervals have less than', thresh_period * 100, '% of valid data\n')
+        # } else if (np0 - np > 0) {
+            # cat(np0 - np, 'interval has less than', thresh_period * 100, '% of valid data\n')
+        # }
+
+        # # check again if empty
+        # if (nrow(daily_data) == 0) {
+            # stop('No valid data available within given time range!')
+        # }
+
+        # --------------------- read fix lags from lag_lookuptable ---------------------
+        # TODO: only if necessary/wanted
+
+        # fix and dyn lags:                                      
+        # ------------------------------------------------------------------------------ 
+        input_fix_lag <- round(lag_fix * rec_Hz)
+        input_dyn_lag <- rbind(
+            lower = round((lag_fix - lag_dyn) * rec_Hz)
+            , upper = round((lag_fix + lag_dyn) * rec_Hz)
+        )
+
+        # be verbose
+        cat("\n~~~\nCalculation will include",
+            daily_data[, uniqueN(bin)] , "intervals between", 
+            format(start_time[1], format = "%Y-%m-%d %H:%M"), "and", 
+            format(tail(end_time, 1), 
+                format = "%Y-%m-%d %H:%M", usetz = TRUE), 
+            "on a", avg_secs / 60, "minute basis\n~~~\n\n"
+        )
+
+        # check HT8700 quality: alarm codes & OSS
+        if (ht_provided) {
+            cat('~~~\nChecking HT-8700 OSS and alarm codes - ')
+            # add alarm code
+            if (!('ht_alarm_code' %in% names(daily_data))) {
+                daily_data[, ht_alarm_code := get_alarms(.SD)]
+            }
+            # create regex pattern
+            na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'),
+                collapse = '|')
+            # check alarms and set nh3 NA
+            nh3_vars <- grep('nh3', names(daily_data), value = TRUE)
+            na0 <- daily_data[, sum(is.na(get(nh3_vars[1])))]
+            daily_data[grepl(na_alarm_pattern, ht_alarm_code), (nh3_vars) := NA_real_]
+            na1 <- daily_data[, sum(is.na(get(nh3_vars[1])))]
+            # check oss
+            daily_data[ht_oss < oss_threshold, (nh3_vars) := NA_real_]
+            cat('done\nBad alarms:', na1 - na0, '\nValues below OSS threshold:', 
+                daily_data[, sum(ht_oss < oss_threshold, na.rm = TRUE)], '\n')
+        }
+
+        # check licor ss
+        if (licor_provided) {
+            cat('~~~\nChecking LI-7500 signal strength - ')
+            # get variables
+            li_vars <- grep('^(co2|h2o)_', names(daily_data), value = TRUE)
+            # check li_co2ss
+            daily_data[li_co2ss < co2ss_threshold, (li_vars) := NA_real_]
+            cat('done\nValues below "co2ss" threshold:', 
+                daily_data[, sum(li_co2ss < co2ss_threshold, na.rm = TRUE)], '\n')
+        }
+
+        # raw data quality control I, i.e. hard limits = physical range
+        # --------------------------------------------------------------------------
+        cat("~~~\nchecking NA-values and hard limits...\n")
+        hl_vars <- names(na_limits)[na_limits]
+        if (any(!(hl_vars %in% colnames(lim_range)))) {
+            hl_missing <- !(hl_vars %in% colnames(lim_range))
+            stop(
+                'hard limits are missing for variables: ',
+                paste(names(na_limits)[hl_missing], collapse = ', ')
+            )
+        }
+        check_limits(daily_data, lim_range[, hl_vars], na_limits_window, 
+            na_limits_method, rec_Hz, n_threshold)
+
+        # define coordinate system
+        if (daily_data[, sonic[1] == 'HS']) {
+            coord.system <-  'HS-Wauwilermoos'
+        } else {
+            coord.system <-  'Windmaster'
+        }
+
+        # declination
+        current_declination <- daily_data[, mag_dec(Time[1]), by = bin][, V1]
+        d_north <- dev_north + current_declination
+
+        ## coordinate rotation
+        cat("~~~\nrotating data...\n")
+        # apply planar fit
+        if (rotation_method == 'planar fit') {
+            cat('applying planar-fit rotation...\n')
+            daily_data <- planar_fit(daily_data, coord_system = coord.system, 
+                method = rotation_args[['pf_method']],
+                avg_time = rotation_args[['pf_avg_time']],
+                wd_sectors = rotation_args[['pf_wd_sectors']],
+                u_thresh = rotation_args[['pf_U_thresh']],
+                n_thresh = rotation_args[['pf_N_thresh']],
+                reg_fun = rotation_args[['pf_FUN']],
+                start_time = start_time[1], data_threshold = thresh_period, Hz = rec_Hz, 
+                dev_north = d_north
+            )
+        } else {
+            cat('applying two-axis rotation...\n')
+        }
+
+        # apply two-axis rotation (if planar fit has not been applied successfully)
+        daily_data[, c("WD", "phi", "urot", "vrot", "wrot") := rotate_twoaxis(u, v, w,
+            phi = if (rotation_method[1] %in% "two axis") {
+                # two-axis rotation
+                rotation_args$phi 
+            } else if (is.na(alpha[1])) {
+                # planar fit failed
+                NULL 
+            } else {
+                # planar fit successful
+                0
+            }, c.system = coord.system)
+            , by = bin]
+
+        ### correct for sonic north deviation
+        daily_data[, WD := (WD + d_north[.GRP]) %% 360, by = bin]
+
+
+        # loop over intervals: call MAIN function
+        if (run_parallel) {
+            cat('~~~\nprocessing fluxes in parallel...\n')
+            # export current_env & main function
+            parallel::clusterExport(cl, 'current_env', current_env)
+            # run main function
+            results <- rbindlist(bLSmodelR:::.clusterApplyLB(
+                    cl, split(daily_data, by = 'bin'),
+                    \(x) .ec_main(x, current_env)),
+                fill = TRUE)
+        } else {
+            cat('~~~\nprocessing fluxes sequentially...')
+            results <- .ec_main(daily_data, current_env)
+        }
+        # ALL-IN-ONE/RECURSIVE end
+    }
+
+    # check if no results
+    if (is.null(results) || nrow(results) == 0) {
+        results <- NULL
+    } else {
+        # fix time zone
+        results[, ':='(
+            st = with_tz(st, tz_user),
+            et = with_tz(et, tz_user)
+        )]
+        # check if minimal output is requested
+        if (minimal_output) {
+            results <- results[, .SD, .SDcols = c('st', 'et', 'n_values', 'Hz',
+                'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 'sWu', 'd', 'z_sonic', 'U_sonic',
+                grep('^(phi|alpha|beta|w_bias)$', names(results), value = TRUE),
+                grep('^(avg_|ht_|li_)', names(results), value = TRUE),
+                grep('^flux_', names(results), value = TRUE)
+                )
+            ]
         }
         # convert to ibts
         if (as_ibts) {
-            out <- as.ibts(out)
+            results <- as.ibts(results)
         }
-        # exit main function
-        return(out)
-    }
-
-    # read raw data:
-    # ------------------------------------------------------------------------------
-
-    # TODO: fix missing intervals in sonic/ht/licor!!!
-    #       fix old sonic files format
-    #       fix old sonic time format
-    #       fix gill bug in old sonic
-			# Data[, w := w * ifelse(w < 0, 1.289, 1.166)]
-
-    # get sonic data
-    if (sonic_has_data) {
-        cat('~~~\nSubsetting sonic data - ')
-        # subset provided sonic data
-        sonic_raw <- sonic_directory[Time >= start_time[1] & Time < tail(end_time, 1), ]
-    } else {
-        cat('~~~\nReading sonic files\n')
-        # select files
-        if (sonic_old_format) {
-            sonic_selected <- sonic_files[
-                sub('data_sonic-._(\\d{4})(\\d{2})(\\d{2})_.*', '\\1_\\2_\\3', sonic_files) %in% dates_formatted
-                ]
-        } else {
-            sonic_selected <- sonic_files[
-                sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', sonic_files) %in% dates_formatted
-                ]
+        # output incl. ogives
+        if (ogives_out) {
+            results <- structure(
+                results, 
+                covars = e_ogive$Covars_Out,
+                cospec_fix = e_ogive$Cospec_fix_Out, 
+                cospec_dyn = e_ogive$Cospec_dyn_Out,
+                ogv_fix = e_ogive$Ogive_fix_Out, 
+                ogv_dyn = e_ogive$Ogive_dyn_Out
+            )
         }
-        # read sonic files
-        if (length(sonic_selected)) {
-            if (run_parallel) {
-                sonic_raw <- rbindlist(
-                    bLSmodelR:::.clusterApplyLB(
-                        cl,
-                        file.path(sonic_directory, sonic_selected), 
-                        \(x) {
-                            cat('\t')
-                            read_sonic(x)
-                        }
-                    )
-                )
-            } else {
-                sonic_raw <- rbindlist(lapply(
-                        file.path(sonic_directory, sonic_selected), 
-                        \(x) {
-                            cat('\t')
-                            read_sonic(x)
-                        }
-                ))
-            }
-        } else {
-            sonic_raw <- NULL
-        }
-        # check sonic data
-        if (is.null(sonic_raw) || nrow(sonic_raw) == 0) {
-            cat('No sonic data available within given time range...\n')
-            return(NULL)
-        }
-        # get time zone
-        sonic_tz <- sonic_raw[, tz(Time)]
-        if (sonic_tz != 'UTC') {
-            # convert to UTC
-            sonic_raw[, Time := with_tz(Time, 'UTC')]
-            # fix start_time & end_time
-            start_time <- with_tz(force_tz(start_time, sonic_tz), 'UTC')
-            end_time <- with_tz(force_tz(end_time, sonic_tz), 'UTC')
-        }
-    }
-    cat('done\n')
-
-    # get ht8700 data
-    if (ht_provided && ht_has_data) {
-        cat('Subsetting HT8700 data - ')
-        # subset
-        ht <- ht_directory[Time >= start_time[1] & Time < tail(end_time, 1), ]
-        cat('done\n')
-    } else if (ht_provided && !ht_with_sonic) {
-        cat('Reading HT8700 files\n')
-        # select files
-        ht_selected <- ht_files[
-            sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', ht_files) %in% dates_formatted
-            ]
-        # read ht files
-        if (length(ht_selected)) {
-            if (run_parallel) {
-                ht <- rbindlist(bLSmodelR:::.clusterApplyLB(
-                        cl,
-                        file.path(ht_directory, ht_selected), 
-                        \(x) {
-                            cat('\t')
-                            read_ht8700(x)
-                        }
-                ))
-            } else {
-                ht <- rbindlist(lapply(
-                        file.path(ht_directory, ht_selected), 
-                        \(x) {
-                            cat('\t')
-                            read_ht8700(x)
-                        }
-                ))
-            }
-        } else {
-            ht <- NULL
-        }
-        # no UTC conversion needed, since this case is excluded up to now
-        # # convert to UTC
-        # ht[, Time := with_tz(Time, 'UTC')]
-        cat('done\n')
-    } else {
-        # no ht data
-        ht <- NULL
-    }
-    # check ht
-    if (ht_provided && is.null(ht)) {
-        cat('-> No HT8700 data within given time range.\n')
+        # # create daily graphs
+        # if (parallelism_strategy != 'recursive' && create_dailygraphs) {
+        #     if (!dir.exists(path_folder)) {
+        #         dir.create(path_folder, recursive = FALSE)
+        #     }
+        #     browser()
+        # }
     }
 
-    # get licor data
-    if (licor_provided && licor_has_data) {
-        cat('Subsetting LI-7500 data - ')
-        # copy
-        licor <- licor_directory[Time >= start_time[1] & Time < tail(end_time, 1), ]
-        cat('done\n')
-    } else if (licor_provided && !licor_with_sonic) {
-        cat('Reading LI-7500 files\n')
-        # select files
-        licor_selected <- licor_files[
-            sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', licor_files) %in% dates_formatted
-            ]
-        if (length(licor_selected)) {
-            # read new licor files
-            if (run_parallel) {
-                licor <- rbindlist(bLSmodelR:::.clusterApplyLB(
-                        cl,
-                        file.path(licor_directory, licor_selected), 
-                        \(x) {
-                            cat('\tFile:', x, '- ')
-                            out <- read_licor(x)
-                            cat('done\n')
-                            out
-                        }
-                ))
-            } else {
-                licor <- rbindlist(lapply(
-                        file.path(licor_directory, licor_selected), 
-                        \(x) {
-                            cat('\tFile:', x, '- ')
-                            out <- read_licor(x)
-                            cat('done\n')
-                            out
-                        }
-                ))
-            }
-        } else {
-            licor <- NULL
-        }
-        # no UTC conversion needed, since this case is excluded up to now
-        # # convert to UTC
-        # licor[, Time := with_tz(Time, 'UTC')]
-    } else {
-        # no licor data
-        licor <- NULL
-    }
-    # check licor
-    if (licor_provided && is.null(licor)) {
-        cat('-> No LI-7500 data within given time range.\n')
-    }
-
-    # get Hz/frequency etc.
-    rec_Hz <- sonic_raw[, {
-        d_t <- diff(as.numeric(Time))
-        round(1 / median(d_t, na.rm = TRUE), -1)
-    }]
-    if (rec_Hz < 10) {
-        stop('Frequency is lower than 10 Hz! Aborting script!')
-    }
-    n_period <- avg_secs * rec_Hz
-    n_threshold <- thresh_period * n_period
-    freq <- rec_Hz * seq(floor(n_period / 2)) / floor(n_period / 2)
-
-    # fix time to exactly xx Hz
-    t_basis <- unlist(mapply(\(x_st, x_et) {
-            seq(x_st, x_et - 1 / rec_Hz, by = 1 / rec_Hz)
-        }, x_st = start_time, x_et = end_time,
-        SIMPLIFY = FALSE
-    ))
-    t0 <- t_basis[1]
-    # get matching indices
-    t_indices <- sonic_raw[, {
-        I(match_times(t_basis - t0, as.numeric(Time, units = 'secs') - t0, 
-            rec_Hz
-        ))
-    }]
-    # sonic including all times
-    full_sonic <- data.table(
-        Time = .POSIXct(t_basis, tz = 'UTC'), Hz = rec_Hz,
-        u = NA_real_, v = NA_real_, w = NA_real_, T = NA_real_,
-        sonic = sonic_raw[, sonic[1]]
-    )
-    # fill sonic data
-    full_sonic[t_indices[[1]], c('u', 'v', 'w', 'T') := 
-        sonic_raw[t_indices[[2]], .SD, .SDcols = c('u', 'v', 'w', 'T')]]
-
-    cat('Merging files - ')
-    daily_data <- merge_data(full_sonic, ht, licor)
-    cat('done\n~~~\n')
-
-    # check variables and covars and subset by columns
-    if (!all(cn_check <- variables %in% names(daily_data))) {
-        stop(
-            "cannot find variable(s): ", 
-            paste(variables[!cn_check], collapse = ", "),
-            "\nAvailable column names are: ", 
-            paste(names(daily_data), collapse = ", ")
-        )
-    }
-
-    # define bins & subset again & just make sure sonic has no missing data
-    daily_data[, bin := getIntervals(Time, start_time, end_time)]
-
-	# # remove incomplete intervals
-    # cat('checking interval data threshold...\n')
-    # np0 <- daily_data[, uniqueN(bin)]
-	# daily_data <- daily_data[, keep := .N >= n_threshold, by = bin][(keep)][,
-        # keep := NULL]
-    # np <- daily_data[, uniqueN(bin)]
-    # if (np0 - np > 1) {
-        # cat(np0 - np, 'intervals have less than', thresh_period * 100, '% of valid data\n')
-    # } else if (np0 - np > 0) {
-        # cat(np0 - np, 'interval has less than', thresh_period * 100, '% of valid data\n')
-    # }
-
-    # # check again if empty
-    # if (nrow(daily_data) == 0) {
-        # stop('No valid data available within given time range!')
-    # }
-
-    # --------------------- read fix lags from lag_lookuptable ---------------------
-    # TODO: only if necessary/wanted
-
-    # fix and dyn lags:                                      
-    # ------------------------------------------------------------------------------ 
-    input_fix_lag <- round(lag_fix * rec_Hz)
-    input_dyn_lag <- rbind(
-        lower = round((lag_fix - lag_dyn) * rec_Hz)
-        , upper = round((lag_fix + lag_dyn) * rec_Hz)
-    )
-
-    # be verbose
-    cat("\n~~~\nCalculation will include",
-        daily_data[, uniqueN(bin)] , "intervals between", 
-        format(start_time[1], format = "%Y-%m-%d %H:%M"), "and", 
-        format(tail(end_time, 1), 
-            format = "%Y-%m-%d %H:%M", usetz = TRUE), 
-        "on a", avg_secs / 60, "minute basis\n~~~\n\n"
-    )
-
-    # check HT8700 quality: alarm codes & OSS
-    if (ht_provided) {
-        cat('~~~\nChecking HT-8700 OSS and alarm codes - ')
-        # add alarm code
-        if (!('ht_alarm_code' %in% names(daily_data))) {
-            daily_data[, ht_alarm_code := get_alarms(.SD)]
-        }
-        # create regex pattern
-        na_alarm_pattern <- paste(paste0('\\b', na_alarm_code, '\\b'),
-            collapse = '|')
-        # check alarms and set nh3 NA
-        nh3_vars <- grep('nh3', names(daily_data), value = TRUE)
-        na0 <- daily_data[, sum(is.na(get(nh3_vars[1])))]
-        daily_data[grepl(na_alarm_pattern, ht_alarm_code), (nh3_vars) := NA_real_]
-        na1 <- daily_data[, sum(is.na(get(nh3_vars[1])))]
-        # check oss
-        daily_data[ht_oss < oss_threshold, (nh3_vars) := NA_real_]
-        cat('done\nBad alarms:', na1 - na0, '\nValues below OSS threshold:', 
-            daily_data[, sum(ht_oss < oss_threshold, na.rm = TRUE)], '\n')
-    }
-
-    # check licor ss
-    if (licor_provided) {
-        cat('~~~\nChecking LI-7500 signal strength - ')
-        # get variables
-        li_vars <- grep('^(co2|h2o)_', names(daily_data), value = TRUE)
-        # check li_co2ss
-        daily_data[li_co2ss < co2ss_threshold, (li_vars) := NA_real_]
-        cat('done\nValues below "co2ss" threshold:', 
-            daily_data[, sum(li_co2ss < co2ss_threshold, na.rm = TRUE)], '\n')
-    }
-
-    # raw data quality control I, i.e. hard limits = physical range
-    # --------------------------------------------------------------------------
-    cat("~~~\nchecking NA-values and hard limits...\n")
-    hl_vars <- names(na_limits)[na_limits]
-    if (any(!(hl_vars %in% colnames(lim_range)))) {
-        hl_missing <- !(hl_vars %in% colnames(lim_range))
-        stop(
-            'hard limits are missing for variables: ',
-            paste(names(na_limits)[hl_missing], collapse = ', ')
-        )
-    }
-    check_limits(daily_data, lim_range[, hl_vars], na_limits_window, 
-        na_limits_method, rec_Hz, n_threshold)
-
-    # define coordinate system
-    if (daily_data[, sonic[1] == 'HS']) {
-        coord.system <-  'HS-Wauwilermoos'
-    } else {
-        coord.system <-  'Windmaster'
-    }
-
-    # declination
-    current_declination <- daily_data[, mag_dec(Time[1]), by = bin][, V1]
-    d_north <- dev_north + current_declination
-
-    ## coordinate rotation
-	cat("~~~\nrotating data...\n")
-    # apply planar fit
-    if (rotation_method == 'planar fit') {
-        cat('applying planar-fit rotation...\n')
-        daily_data <- planar_fit(daily_data, coord_system = coord.system, 
-            method = rotation_args[['pf_method']],
-            avg_time = rotation_args[['pf_avg_time']],
-            wd_sectors = rotation_args[['pf_wd_sectors']],
-            u_thresh = rotation_args[['pf_U_thresh']],
-            n_thresh = rotation_args[['pf_N_thresh']],
-            reg_fun = rotation_args[['pf_FUN']],
-            start_time = start_time[1], data_threshold = thresh_period, Hz = rec_Hz, 
-            dev_north = d_north
-        )
-    } else {
-        cat('applying two-axis rotation...\n')
-    }
-
-    # apply two-axis rotation (if planar fit has not been applied successfully)
-	daily_data[, c("WD", "phi", "urot", "vrot", "wrot") := rotate_twoaxis(u, v, w,
-        phi = if (rotation_method[1] %in% "two axis") {
-            # two-axis rotation
-            rotation_args$phi 
-        } else if (is.na(alpha[1])) {
-            # planar fit failed
-            NULL 
-        } else {
-            # planar fit successful
-            0
-        }, c.system = coord.system)
-		, by = bin]
-
-	### correct for sonic north deviation
-	daily_data[, WD := (WD + d_north[.GRP]) %% 360, by = bin]
-
-
-    # loop over intervals: call MAIN function
-    if (run_parallel) {
-        cat('~~~\nprocessing fluxes in parallel...\n')
-        # export current_env & main function
-        parallel::clusterExport(cl, 'current_env', current_env)
-        # run main function
-        results <- rbindlist(bLSmodelR:::.clusterApplyLB(
-                cl, split(daily_data, by = 'bin'),
-                \(x) .ec_main(x, current_env)),
-            fill = TRUE)
-    } else {
-        cat('~~~\nprocessing fluxes sequentially...')
-        results <- .ec_main(daily_data, current_env)
-    }
-
-	cat("\n************************************************************\n") 
-	cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
+    cat("\n************************************************************\n") 
+    cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
         "time elapsed: ", sprintf('%1.1f', 
             d <- difftime(Sys.time(), script_start)), 
         attr(d, 'units'), "\n")
-	cat("************************************************************\n")  
+    cat("************************************************************\n")  
 
-    if (is.null(results) || nrow(results) == 0) {
-        return(NULL)
-    }
+    return(results)
 
-    # fix time zone
-    results[, ':='(
-        st = with_tz(st, tz_user),
-        et = with_tz(et, tz_user)
-    )]
-
-    # check if minimal output is requested
-    if (minimal_output) {
-        results <- results[, .SD, .SDcols = c('st', 'et', 'n_values', 'Hz',
-            'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 'sWu', 'd', 'z_sonic', 'U_sonic',
-            grep('^(phi|alpha|beta|w_bias)$', names(results), value = TRUE),
-            grep('^(avg_|ht_|li_)', names(results), value = TRUE),
-            grep('^flux_', names(results), value = TRUE)
-            )
-        ]
-    }
-
-    # convert to ibts
-    if (as_ibts) {
-        results <- as.ibts(results)
-    }
-
-    # output incl. ogives
-	if (ogives_out) {
-		structure(
-            results, 
-            covars = e_ogive$Covars_Out,
-            cospec_fix = e_ogive$Cospec_fix_Out, 
-            cospec_dyn = e_ogive$Cospec_dyn_Out,
-            ogv_fix = e_ogive$Ogive_fix_Out, 
-            ogv_dyn = e_ogive$Ogive_dyn_Out
-        )
-	} else {
-        results
-	}
 }
 
 # convenience functions for theoretical cospec/ogive models

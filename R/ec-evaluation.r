@@ -219,7 +219,8 @@ filter_list <- list(
     # Hann:
     "Hann" = function(n, ...){
       N <- n - 1 
-      sin(pi * seq.int(0, N) / N) ^ 2 / (0.5 * N)
+      x <- sin(pi * seq.int(0, N) / N) ^ 2 / (0.5 * N)
+      x / sum(x)
     },
     # Hamming:
     "Hamming" = function(n, p1 = 25 / 46, p2 = 21 / 46, ...){
@@ -233,7 +234,7 @@ filter_list <- list(
       x <- p1 - 
         p2 * cos(2 * pi * seq.int(0, N) / N) + 
         p3 * cos(4 * pi * seq.int(0, N) / N)
-      x/sum(x)
+      x / sum(x)
     },
     # Blackman-Nuttall:
     "BmNuttall" = function(n, ...){
@@ -249,15 +250,17 @@ filter_list <- list(
       rep(1 / n, n)
     },
     # Exponential:
-    "Exp" = function(n, p1 = n / 2, ...){
+    "Exp" = function(n, p1 = min(n / 2, 30), ...){
       N <- (n - 1) / 2
       x <- exp(p1 * sqrt(1 - (seq.int(-N, N) / N) ^ 2)) / exp(p1)
+      x <- na.omit(x)
       x / sum(x)
     },
     # Poisson:
     "Poisson" = function(n, p1 = n / 2 / 6.9, ...){
       N <- n - 1
       x <- exp(-abs(seq.int(0, N) - N / 2) / p1)
+      x <- na.omit(x)
       x / sum(x)
     }
 )
@@ -336,8 +339,8 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
                 ym <- yfin - (yh2 - yh1)
                 yp <- yfin - (yh1 - yh2)
                 z <- c(ym[n + 1 - ihalf], yfin, yp[ihalf])
-                fitted[isfin] <- stats::filter(z, filt, 'convolution', 2, circular = FALSE)[1:n +
-                    ihalf[length(ihalf)]]
+                fitted[isfin] <- stats::filter(z, filt, 'convolution', 2, 
+                    circular = FALSE)[1:n + ihalf[length(ihalf)]]
                 list(
                     coefficients = c(intercept = NA, slope = NA)
                     , fitted = fitted

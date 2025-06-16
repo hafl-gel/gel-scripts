@@ -206,6 +206,7 @@ check_limits <- function(dat, limits, lim_window = 500,
 
 # filter functions for higph-pass filtering time series
 # (copied from minidoas scripts)
+# https://en.wikipedia.org/wiki/Window_function
 filter_list <- list(
     # Blackman-Harris:
     "BmHarris" = function(n, ...){

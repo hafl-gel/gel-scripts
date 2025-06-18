@@ -2133,7 +2133,8 @@ process_ec_fluxes <- function(
         # check if minimal output is requested
         if (minimal_output) {
             results <- results[, .SD, .SDcols = c('st', 'et', 'n_values', 'Hz',
-                'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 'sWu', 'd', 'z_sonic', 'U_sonic',
+                'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 'sWu', 'd', 'z_sonic', 
+                'U_sonic', 'T_sonic',
                 grep('^(phi|alpha|beta|w_bias)$', names(results), value = TRUE),
                 grep('^(avg_|ht_|li_)', names(results), value = TRUE),
                 grep('^flux_', names(results), value = TRUE)

@@ -437,6 +437,7 @@ coord_transf <- function(x, crs_to,
                 out[, c(x_column, y_column)] <- .coord_transf(
                     x[, x_column], x[, y_column],
                     crs_from = crs_from, crs_to = crs_to)
+                colnames(out)[c(x_column, y_column)] <- c('x', 'y')
             } else if (inherits(x, 'area_sources')) {
                 out[, c('x', 'y') :=  coord_transf(
                     x, y, crs_from = crs_from,
@@ -461,6 +462,7 @@ coord_transf <- function(x, crs_to,
                 colnames(coords) <- c('x', 'y')
                 out[[x_column]] <- coords[, 'x']
                 out[[y_column]] <- coords[, 'y']
+                names(out)[c(x_column, y_column)] <- c('x', 'y')
 			} else {
 				y <- x[[y_column]]
 				x <- x[[x_column]]

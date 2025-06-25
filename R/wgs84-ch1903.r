@@ -127,7 +127,7 @@ setMethod('check_numeric',
             )
     })
 
-guess_coord_x <- function(obj, value = TRUE) {
+guess_coord_x <- function(obj) {
     isn <- check_numeric(obj)
     nms <- get_names(obj)[isn]
     # check null
@@ -139,10 +139,10 @@ guess_coord_x <- function(obj, value = TRUE) {
         }
     }
     # check x
-    x_nm <- grep('^((x|X)(.*(c|C)oord.*)?)$|^((c|C)oord.*(x|X))$', nms, value = value)
+    x_nm <- grep('^((x|X)(.*(c|C)oord.*)?)$|^((c|C)oord.*(x|X))$', nms)
     if (length(x_nm) == 0) {
         # check lon
-        x_nm <- grep('^(l|L)on((g|gitude).*)?$', nms, value = value)
+        x_nm <- grep('^(l|L)on((g|gitude).*)?$', nms)
     }
     # check length
     if (length(x_nm) == 0) {
@@ -171,7 +171,7 @@ guess_coord_x <- function(obj, value = TRUE) {
     )
     x_nm[1]
 }
-guess_coord_y <- function(obj, value = TRUE) {
+guess_coord_y <- function(obj) {
     isn <- check_numeric(obj)
     nms <- get_names(obj)[isn]
     # check null
@@ -183,10 +183,10 @@ guess_coord_y <- function(obj, value = TRUE) {
         }
     }
     # check y
-    y_nm <- grep('^((y|Y)(.*(c|C)oord.*)?)$|^((c|C)oord.*(y|Y))$', nms, value = value)
+    y_nm <- grep('^((y|Y)(.*(c|C)oord.*)?)$|^((c|C)oord.*(y|Y))$', nms)
     if (length(y_nm) == 0) {
         # check lat
-        y_nm <- grep('^(l|L)at(itude.*)?$', nms, value = value)
+        y_nm <- grep('^(l|L)at(itude.*)?$', nms)
     }
     # check length
     if (length(y_nm) == 0) {
@@ -215,7 +215,7 @@ guess_coord_y <- function(obj, value = TRUE) {
     )
     y_nm[1]
 }
-guess_coords <- function(obj, value = TRUE) {
+guess_coords <- function(obj) {
     c(
         guess_coord_x(obj)[1], 
         guess_coord_y(obj)[1]

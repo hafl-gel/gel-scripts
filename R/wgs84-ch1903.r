@@ -135,7 +135,7 @@ guess_coord_x <- function(obj, value = TRUE) {
         if (is.character(obj)) {
             nms <- obj
         } else {
-            return(which(isn)[1])
+            nms <- NULL
         }
     }
     # check x
@@ -143,9 +143,33 @@ guess_coord_x <- function(obj, value = TRUE) {
     if (length(x_nm) == 0) {
         # check lon
         x_nm <- grep('^(l|L)on((g|gitude).*)?$', nms, value = value)
-        if (length(x_nm) == 0) return(which(isn)[1])
     }
-    x_nm
+    # check length
+    if (length(x_nm) == 0) {
+        # find numeric
+        obj <- as.data.frame(obj)
+        x_nm <- which(sapply(which(isn), \(x) {
+            # wgs84
+            all(
+                (obj[[x]] > 4 & obj[[x]] < 12) |
+                (obj[[x]] > 2400000 & obj[[x]] < 2900000) |
+                (obj[[x]] > 400000 & obj[[x]] < 900000)
+            )
+        }))
+    }
+    switch(as.character(length(x_nm))
+        # 0
+        , '0' = {
+            stop('x-coordinates could not be guessed successfully!')
+        }
+        # 1
+        , '1' = {}
+        # >1
+        , {
+            warning('more than one potential x coordinate found. returning first finding')
+        }
+    )
+    x_nm[1]
 }
 guess_coord_y <- function(obj, value = TRUE) {
     isn <- check_numeric(obj)
@@ -155,17 +179,41 @@ guess_coord_y <- function(obj, value = TRUE) {
         if (is.character(obj)) {
             nms <- obj
         } else {
-            return(which(isn)[2])
+            nms <- NULL
         }
     }
     # check y
     y_nm <- grep('^((y|Y)(.*(c|C)oord.*)?)$|^((c|C)oord.*(y|Y))$', nms, value = value)
     if (length(y_nm) == 0) {
-        # check lon
+        # check lat
         y_nm <- grep('^(l|L)at(itude.*)?$', nms, value = value)
-        if (length(y_nm) == 0) return(which(isn)[2])
     }
-    y_nm
+    # check length
+    if (length(y_nm) == 0) {
+        # find numeric
+        obj <- as.data.frame(obj)
+        y_nm <- which(sapply(which(isn), \(x) {
+            # wgs84
+            all(
+                (obj[[x]] > 44 & obj[[x]] < 49) |
+                (obj[[x]] > 1050000 & obj[[x]] < 1400000) |
+                (obj[[x]] > 50000 & obj[[x]] < 400000)
+            )
+        }))
+    }
+    switch(as.character(length(y_nm))
+        # 0
+        , '0' = {
+            stop('y-coordinates could not be guessed successfully!')
+        }
+        # 1
+        , '1' = {}
+        # >1
+        , {
+            warning('more than one potential y coordinate found. returning first finding')
+        }
+    )
+    y_nm[1]
 }
 guess_coords <- function(obj, value = TRUE) {
     c(

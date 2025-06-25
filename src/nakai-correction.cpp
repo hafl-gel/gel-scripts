@@ -111,17 +111,21 @@ Rcpp::List nakai_correction_2012(std::vector<double> &uIn, std::vector<double> &
     Rcpp::NumericVector Uout(N);
     Rcpp::NumericVector Vout(N);
     Rcpp::NumericVector Wout(N);
-    double aoa, sin_err, cos_err, wd, ws;
-    int i;	
     for(int i = 0; i < N; i++){
+        double aoa, sin_err, cos_err, wd;
         if (wIn[i] == 0){
             aoa = 0.0;
+            wd = 0;
         } else {
+            double ws;
             ws = sqrt(pow(uIn[i], 2) + pow(vIn[i], 2));
             
             if (ws == 0) {
-                if (wIn[i] >= 0) aoa = 90;
-                if (wIn[i] < 0)  aoa = -90;
+                if (wIn[i] >= 0) {
+                    aoa = 90;
+                } else {
+                    aoa = -90;
+                }
             } else {
                 aoa = atan(wIn[i]/ws) * 180 / PI;
             }

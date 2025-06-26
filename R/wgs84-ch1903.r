@@ -147,7 +147,9 @@ guess_coord_x <- function(obj) {
     # check length
     if (length(x_nm) == 0) {
         # find numeric
-        obj <- as.data.frame(obj)
+        if (is.matrix(obj)) {
+            obj <- as.data.frame(obj)
+        }
         x_nm <- which(sapply(which(isn), \(x) {
             # wgs84
             all(
@@ -191,7 +193,9 @@ guess_coord_y <- function(obj) {
     # check length
     if (length(y_nm) == 0) {
         # find numeric
-        obj <- as.data.frame(obj)
+        if (is.matrix(obj)) {
+            obj <- as.data.frame(obj)
+        }
         y_nm <- which(sapply(which(isn), \(x) {
             # wgs84
             all(
@@ -466,9 +470,12 @@ coord_transf <- function(x, crs_to,
 			} else {
 				y <- x[[y_column]]
 				x <- x[[x_column]]
-                out <- .coord_transf(x, y, 
+                coords <- .coord_transf(x, y, 
                     crs_from = crs_from, crs_to = crs_to)
-                colnames(out) <- c('x', 'y')
+                colnames(coords) <- c('x', 'y')
+                out[[x_column]] <- coords[, 'x']
+                out[[y_column]] <- coords[, 'y']
+                names(out)[c(x_column, y_column)] <- c('x', 'y')
                 if (as_list) {
                     out <- as.list(as.data.frame(out))
                 }

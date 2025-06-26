@@ -105,20 +105,20 @@ read_sonic <- function(file_path, from = NULL, to = NULL, tz = 'UTC',
 read_windmaster_ascii <- function(file_path){
 	### get Date
 	bn <- basename(file_path)
-	if(!grepl("^data_", bn)){
+	if(!grepl("^data_|^py_fnf_0", bn)){
 		# run old script
 		return(read_windmaster_old_ascii(file_path))
 	}
     # be verbose
     cat("File:", path.expand(file_path), "- ")
-	Date <- gsub("^data_.*_([0-9]{8})_.*", "\\1", bn)
+	Date <- gsub("^.*_(20[0-9]{2})_?(\\d{2})_?(\\d{2}).*", "\\1\\2\\3", bn)
 	### read File
     raw <- readLines(file_path, warn = FALSE)
     # filter out erroneous multibyte strings
-    raw <- raw[grepl('^\\d{2}[0-9.:]+,[^,]+,([0-9.+-]+,){3}M,([0-9.+-]+,){2}[^,]+$', raw, 
-        useBytes = TRUE)]
-    out <- fread(text = raw, header = FALSE, na.strings = '999.99', showProgress = FALSE, 
-        blank.lines.skip = TRUE)
+    raw <- raw[grepl('^[^,]+,[^,]+,([0-9.+-]+,){3}M,([0-9.+-]+,){2}[^,]+$', 
+        raw, useBytes = TRUE)]
+    out <- fread(text = raw, header = FALSE, na.strings = '999.99', 
+        showProgress = FALSE, blank.lines.skip = TRUE)
     # check if file is empty
 	if(nrow(out) == 0){
         cat('no valid data\n')
@@ -143,10 +143,12 @@ read_windmaster_ascii <- function(file_path){
     if (length(sonic_label) == 0) stop('sonic label not available!')
     if (length(sonic_label) > 1) stop('more than one unique sonic label!')
     cat(paste0("data recorded by sonic-", tolower(sonic_label), "\n"))
-    sonic_file <- sub("data_(.*)_[0-9]{8}_[0-9]{6}([.]gz)?$", "\\1", bn)
-    if(sonic_label != toupper(sub("sonic-", "", sonic_file))){
-        warning(paste0("Sonic label '", sonic_label, "', and hostname '", sonic_file, 
-                "' don't match!"), call. = FALSE)
+    if (!(loggerbox <- grepl('^py_fnf_0', bn))) {
+        sonic_file <- sub("data_(.*)_[0-9]{8}_[0-9]{6}([.]gz)?$", "\\1", bn)
+        if(sonic_label != toupper(sub("sonic-", "", sonic_file))){
+            warning(paste0("Sonic label '", sonic_label, "', and hostname '", sonic_file, 
+                    "' don't match!"), call. = FALSE)
+        }
     }
     # check units
     if(out[, V6[1]] != "M"){
@@ -163,8 +165,12 @@ read_windmaster_ascii <- function(file_path){
         'V7'
         ) := {
         # set times correctly
-        st.dec <- fast_strptime(paste(Date, V1), lt = FALSE, 
-            format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")
+        if (loggerbox) {
+            st.dec <- V1
+        } else {
+            st.dec <- fast_strptime(paste(Date, V1), lt = FALSE, 
+                format = "%Y%m%d %H:%M:%OS", tz = "Etc/GMT-1")
+        }
         # get Hz (faster than as.factor(sub('[.].*', '', V1)) !
         Hz <- round(median(tabulate(trunc(as.numeric(st.dec) - 
                         as.numeric(st.dec[1])))), -1)

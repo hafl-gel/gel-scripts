@@ -76,7 +76,7 @@ read_licor <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
         # place Time first
         setcolorder(out, 'Time')
         cat('done\n')
-        # remove NA entries
-        na.omit(out)
+        # remove invalid Time entries
+        na.omit(out, cols = 'Time')
     }
 }

@@ -90,7 +90,7 @@ read_ht8700 <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
         out[, Time := fast_strptime(time_string, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE, 
             tz = 'UTC')]
         # remove NA lines that come from conversion
-        out <- na.omit(out)
+        out <- na.omit(out, cols = 'Time')
         # check if empty again
         if (out[, .N == 0]) {
             cat('file empty\n')

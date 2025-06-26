@@ -18,10 +18,10 @@ Rcpp::List ht8700_read_cpp(String filename) {
     int max_lines = 870000;
     // create output
     CharacterVector col1_time(max_lines);
-    CharacterVector col2(max_lines);
     CharacterVector col17(max_lines);
     CharacterVector col18(max_lines);
     CharacterVector col20(max_lines);
+    IntegerVector col2(max_lines);
     IntegerVector col19(max_lines);
     NumericVector col3(max_lines);
     NumericVector col4(max_lines);
@@ -62,7 +62,7 @@ Rcpp::List ht8700_read_cpp(String filename) {
                 // line ok
                 // assign to vectors
                 col1_time[cline] = line[0];
-                col2[cline] = line[1];
+                col2[cline] = std::stoi(line[1]);
                 col3[cline] = std::stod(line[2]);
                 col4[cline] = std::stod(line[3]);
                 col5[cline] = std::stod(line[4]);
@@ -135,10 +135,10 @@ Rcpp::List ht8700_read_cpp_gzip(Rcpp::String filename) {
     int max_lines = 870000;
     // create output
     Rcpp::CharacterVector col1_time(max_lines);
-    Rcpp::CharacterVector col2(max_lines);
     Rcpp::CharacterVector col17(max_lines);
     Rcpp::CharacterVector col18(max_lines);
     Rcpp::CharacterVector col20(max_lines);
+    Rcpp::IntegerVector col2(max_lines);
     Rcpp::IntegerVector col19(max_lines);
     Rcpp::NumericVector col3(max_lines);
     Rcpp::NumericVector col4(max_lines);
@@ -171,7 +171,7 @@ Rcpp::List ht8700_read_cpp_gzip(Rcpp::String filename) {
                 // line ok
                 // assign to vectors
                 col1_time[cline] = line[0];
-                col2[cline] = line[1];
+                col2[cline] = std::stoi(line[1]);
                 col3[cline] = std::stod(line[2]);
                 col4[cline] = std::stod(line[3]);
                 col5[cline] = std::stod(line[4]);

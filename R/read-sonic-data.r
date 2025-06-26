@@ -5,44 +5,96 @@
 #' @return A data.table containing the processed sonic data or NULL if no valid data is found.
 #' @export
 ## main function to read sonic data
-read_sonic <- function(file_path, gillbug_method = c('gill', 'nakai2012', 'none')[1]) {
-	bn <- basename(file_path)
-    # check if provided as qs or rds
-    if (grepl('[.]qdata$', bn)) {
-        out <- alloc.col(qs2::qd_read(file_path))
-    } else if (grepl('[.]qs$', bn)) {
-        if (!requireNamespace('qs')) {
-            stop('data is provided as *.qs file -> install qs library',
-                ' running "install.packages("qs")"')
+read_sonic <- function(file_path, from = NULL, to = NULL, tz = 'UTC',
+    gillbug_method = c('gill', 'nakai2012', 'none')[1]) {
+    # parse from/to
+    from <- parse_date_time3(from, tz = tz)
+    to <- parse_date_time3(to, tz = tz)
+    # check if directory is provided
+    if (file.info(file_path)$isdir) {
+        files <- dir(file_path)
+        if (length(files) == 0L) {
+            stop('directory is empty!')
         }
-        out <- alloc.col(qs::qread(file_path))
-    } else if (grepl('[.]rds$', bn)) {
-        out <- readRDS(file_path)
-    } else if (grepl("^(py_)?fnf_", bn)) {
-        out <- read_hs_ascii(file_path)
-    } else {
-        out <- read_windmaster_ascii(file_path)
-    }
-    # correct for Gill bug
-    if (isTRUE(attr(out, 'GillBug'))) {
-        switch(match.arg(gillbug_method)
-            , gill = {
-                cat("-- Correcting data for Gill software bug. Correction is done as proposed by Gill instruments...\n")
-                out[, w := w * ifelse(w < 0, 1.289, 1.166)]
-                setattr(out, 'GillBug', 'corrected-gill')
-            }
-            , nakai2012 = {
-                cat("-- Correcting data for Gill software bug. Correction is done as described in Nakai 2012...\n")
-                out[, c('u', 'v', 'w') := nakai_correction_2012(u, v, w)]
-                setattr(out, 'GillBug', 'corrected-nakai2012')
-            }
-            , none = {
-                warning("-- Data is intentionally NOT corrected for Gill software bug!\n")
-            }
-            , stop('Gill software bug correction method not valid')
+        # check dates in filenames
+        suppressWarnings(
+            file_dates <- as.integer(
+                sub('.*(20[2-9]\\d)_?(\\d{2})_?(\\d{2}).*', '\\1\\2\\3', files)
+            )
         )
+        # check from & to
+        read_me <- rep(TRUE, length(file_dates))
+        if (length(from) > 0) {
+            read_me <- read_me & file_dates >= as.integer(
+                        format(floor_date(from, unit = 'days'), '%Y%m%d')
+                        )
+        }
+        if (length(to) > 0) {
+            read_me <- read_me & file_dates <= as.integer(
+                        format(floor_date(to, unit = 'days'), '%Y%m%d')
+                        )
+        }
+        # if no dates => read
+        read_me <- read_me | is.na(read_me)
+        # loop over files
+        if (any(read_me)) {
+            out <- lapply(file.path(file_path, files[read_me]), read_sonic,
+                from = from, to = to, tz = tz, gillbug_method = gillbug_method)
+            # return sorted
+            rbindlist(out)[order(Time)]
+        } else {
+            stop('No files available within provided time range!')
+        }
+    } else {
+        bn <- basename(file_path)
+        # check if provided as qs or rds
+        if (grepl('[.]qdata$', bn)) {
+            out <- alloc.col(qs2::qd_read(file_path))
+        } else if (grepl('[.]qs$', bn)) {
+            if (!requireNamespace('qs')) {
+                stop('data is provided as *.qs file -> install qs library',
+                    ' running "install.packages("qs")"')
+            }
+            out <- alloc.col(qs::qread(file_path))
+        } else if (grepl('[.]rds$', bn)) {
+            out <- readRDS(file_path)
+        } else if (grepl("^(py_)?fnf_01_", bn)) {
+            out <- read_hs_ascii(file_path)
+        } else {
+            out <- read_windmaster_ascii(file_path)
+        }
+        # correct for Gill bug
+        if (isTRUE(attr(out, 'GillBug'))) {
+            switch(match.arg(gillbug_method)
+                , gill = {
+                    cat("-- Correcting data for Gill software bug. Correction is done as proposed by Gill instruments...\n")
+                    out[, w := w * ifelse(w < 0, 1.289, 1.166)]
+                    setattr(out, 'GillBug', 'corrected-gill')
+                }
+                , nakai2012 = {
+                    cat("-- Correcting data for Gill software bug. Correction is done as described in Nakai 2012...\n")
+                    out[, c('u', 'v', 'w') := nakai_correction_2012(u, v, w)]
+                    setattr(out, 'GillBug', 'corrected-nakai2012')
+                }
+                , none = {
+                    warning("-- Data is intentionally NOT corrected for Gill software bug!\n")
+                }
+                , stop('Gill software bug correction method not valid')
+            )
+        }
+        if (is.null(out)) {
+            # not valid
+            return(NULL)
+        }
+        # filter by from/to
+        if (length(from) > 0) {
+            out <- out[Time >= from]
+        }
+        if (length(to) > 0) {
+            out <- out[Time <= to]
+        }
+        out
     }
-    out
 }
 
 #' @title Read New Windmaster ASCII Data

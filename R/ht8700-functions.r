@@ -9,61 +9,108 @@
 #' @export
 #'
 # main function to read HT8700 raw data
-read_ht8700 <- function(file_path) {
-    # be verbose
-    cat("File:", path.expand(file_path), "- ")
-	# get file name
-	bn <- basename(file_path)
-    # check file name
-    if (grepl('[.]qdata$', bn)) {
-        return(alloc.col(qs2::qd_read(file_path)))
-    } else if (grepl('[.]qs$', bn)) {
-        if (!requireNamespace('qs')) {
-            stop('data is provided as *.qs file -> install qs library',
-                ' running "install.packages("qs")"')
+read_ht8700 <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
+    # parse from/to
+    from <- parse_date_time3(from, tz = tz)
+    to <- parse_date_time3(to, tz = tz)
+    # check if directory is provided
+    if (file.info(file_path)$isdir) {
+        files <- dir(file_path)
+        if (length(files) == 0L) {
+            stop('directory is empty!')
         }
-        return(alloc.col(qs::qread(file_path)))
-    } else if (grepl('[.]rds$', bn)) {
-        return(readRDS(file_path))
-    } else if (is_old_structure <- grepl('^ht8700_', bn)) {
-        # read with old function
-        return(read_ht8700_old(file_path, tz = 'Etc/GMT-1'))
-    } else if (!grepl('^(py_)?fnf_0\\d_ht8700', bn)) {
-        # wrong file name
-        stop('data filename not valid')
-    }
-	### read File
-    if (grepl('[.]gz$', bn)) {
-        # gzip-ped data
-        raw <- ht8700_read_cpp_gzip(normalizePath(file_path))
+        # check dates in filenames
+        suppressWarnings(
+            file_dates <- as.integer(
+                sub('.*(20[2-9]\\d)_?(\\d{2})_?(\\d{2}).*', '\\1\\2\\3', files)
+            )
+        )
+        # check from & to
+        read_me <- rep(TRUE, length(file_dates))
+        if (length(from) > 0) {
+            read_me <- read_me & file_dates >= as.integer(
+                        format(floor_date(from, unit = 'days'), '%Y%m%d')
+                        )
+        }
+        if (length(to) > 0) {
+            read_me <- read_me & file_dates <= as.integer(
+                        format(floor_date(to, unit = 'days'), '%Y%m%d')
+                        )
+        }
+        # if no dates => read
+        read_me <- read_me | is.na(read_me)
+        # loop over files
+        if (any(read_me)) {
+            out <- lapply(file.path(file_path, files[read_me]), read_ht8700,
+                from = from, to = to, tz = tz)
+            # return sorted
+            rbindlist(out)[order(Time)]
+        } else {
+            stop('No files available within provided time range!')
+        }
     } else {
-        # uncompressed data
-        raw <- ht8700_read_cpp(normalizePath(file_path))
+        # be verbose
+        cat("File:", path.expand(file_path), "- ")
+        # get file name
+        bn <- basename(file_path)
+        # check file name
+        if (grepl('[.]qdata$', bn)) {
+            return(alloc.col(qs2::qd_read(file_path)))
+        } else if (grepl('[.]qs$', bn)) {
+            if (!requireNamespace('qs')) {
+                stop('data is provided as *.qs file -> install qs library',
+                    ' running "install.packages("qs")"')
+            }
+            return(alloc.col(qs::qread(file_path)))
+        } else if (grepl('[.]rds$', bn)) {
+            return(readRDS(file_path))
+        } else if (is_old_structure <- grepl('^ht8700_', bn)) {
+            # read with old function
+            return(read_ht8700_old(file_path, tz = 'Etc/GMT-1'))
+        } else if (!grepl('^(py_)?fnf_0\\d_ht8700', bn)) {
+            # wrong file name
+            stop('data filename not valid')
+        }
+        ### read File
+        if (grepl('[.]gz$', bn)) {
+            # gzip-ped data
+            raw <- ht8700_read_cpp_gzip(normalizePath(file_path))
+        } else {
+            # uncompressed data
+            raw <- ht8700_read_cpp(normalizePath(file_path))
+        }
+        # convert to data.table
+        out <- as.data.table(raw)
+        # check empty
+        if (nrow(out) == 0) {
+            cat('no valid data!\n')
+            return(NULL)
+        }
+        # fix time column
+        out[, Time := fast_strptime(time_string, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE, 
+            tz = 'UTC')]
+        # remove NA lines that come from conversion
+        out <- na.omit(out)
+        # check if empty again
+        if (out[, .N == 0]) {
+            cat('file empty\n')
+            return(NULL)
+        }
+        # remove V1
+        out[, time_string := NULL]
+        # filter by from/to
+        if (length(from) > 0) {
+            out <- out[Time >= from]
+        }
+        if (length(to) > 0) {
+            out <- out[Time <= to]
+        }
+        # place Time column first
+        setcolorder(out, 'Time')
+        cat('done\n')
+        # return
+        out
     }
-    # convert to data.table
-    out <- as.data.table(raw)
-    # check empty
-    if (nrow(out) == 0) {
-        cat('no valid data!\n')
-        return(NULL)
-    }
-    # fix time column
-    out[, Time := fast_strptime(time_string, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE, 
-        tz = 'UTC')]
-    # remove NA lines that come from conversion
-    out <- na.omit(out)
-    # check if empty again
-    if (out[, .N == 0]) {
-        cat('file empty\n')
-        return(NULL)
-    }
-    # remove V1
-    out[, time_string := NULL]
-    # place Time column first
-    setcolorder(out, 'Time')
-    cat('done\n')
-    # return
-    out
 }
 
 #' Merge Sonic and HT8700 Data Based on Time

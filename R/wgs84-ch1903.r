@@ -98,13 +98,13 @@ get_col_classes <- function(obj) UseMethod('get_col_classes')
 setMethod('get_col_classes',
     signature(obj = 'ANY'),
     function(obj) {
-        unlist(lapply(obj, class))
+        unlist(lapply(obj, \(x) class(x)[[1]]))
     })
 setMethod('get_col_classes',
     signature(obj = 'matrix'),
     function(obj) {
         setNames(
-            rep(class(obj[[1]]), ncol(obj)),
+            rep(class(obj[[1]])[[1]], ncol(obj)),
             colnames(obj)
             )
     })

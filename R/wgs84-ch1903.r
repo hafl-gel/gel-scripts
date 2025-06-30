@@ -129,7 +129,10 @@ setMethod('check_numeric',
 
 guess_coord_x <- function(obj) {
     isn <- check_numeric(obj)
-    nms <- get_names(obj)[isn]
+    if (sum(isn) < 2) {
+        stop('coordinates must be provided as numeric values!')
+    }
+    nms <- get_names(obj)
     # check null
     if (is.null(nms)) {
         if (is.character(obj)) {
@@ -138,11 +141,13 @@ guess_coord_x <- function(obj) {
             nms <- NULL
         }
     }
+    nnms <- nms[isn]
+    wisn <- which(isn)
     # check x
-    x_nm <- grep('^((x|X)(.*(c|C)oord.*)?)$|^((c|C)oord.*(x|X))$', nms)
+    x_nm <- grep('^((x|X)(.*(c|C)oord.*)?)$|^((c|C)oord.*(x|X))$', nnms)
     if (length(x_nm) == 0) {
         # check lon
-        x_nm <- grep('^(l|L)on((g|gitude).*)?$', nms)
+        x_nm <- grep('^(l|L)o?n((g|gitude).*)?$', nnms)
     }
     # check length
     if (length(x_nm) == 0) {
@@ -150,7 +155,7 @@ guess_coord_x <- function(obj) {
         if (is.matrix(obj)) {
             obj <- as.data.frame(obj)
         }
-        x_nm <- which(sapply(which(isn), \(x) {
+        x_nm <- which(sapply(wisn, \(x) {
             # wgs84
             all(
                 (obj[[x]] > 4 & obj[[x]] < 12) |
@@ -171,11 +176,14 @@ guess_coord_x <- function(obj) {
             warning('more than one potential x coordinate found. returning first finding')
         }
     )
-    x_nm[1]
+    wisn[x_nm[1]]
 }
 guess_coord_y <- function(obj) {
     isn <- check_numeric(obj)
-    nms <- get_names(obj)[isn]
+    if (sum(isn) < 2) {
+        stop('coordinates must be provided as numeric values!')
+    }
+    nms <- get_names(obj)
     # check null
     if (is.null(nms)) {
         if (is.character(obj)) {
@@ -184,11 +192,13 @@ guess_coord_y <- function(obj) {
             nms <- NULL
         }
     }
+    nnms <- nms[isn]
+    wisn <- which(isn)
     # check y
-    y_nm <- grep('^((y|Y)(.*(c|C)oord.*)?)$|^((c|C)oord.*(y|Y))$', nms)
+    y_nm <- grep('^((y|Y)(.*(c|C)oord.*)?)$|^((c|C)oord.*(y|Y))$', nnms)
     if (length(y_nm) == 0) {
         # check lat
-        y_nm <- grep('^(l|L)at(itude.*)?$', nms)
+        y_nm <- grep('^(l|L)at(itude.*)?$', nnms)
     }
     # check length
     if (length(y_nm) == 0) {
@@ -196,7 +206,7 @@ guess_coord_y <- function(obj) {
         if (is.matrix(obj)) {
             obj <- as.data.frame(obj)
         }
-        y_nm <- which(sapply(which(isn), \(x) {
+        y_nm <- which(sapply(wisn, \(x) {
             # wgs84
             all(
                 (obj[[x]] > 44 & obj[[x]] < 49) |
@@ -217,7 +227,7 @@ guess_coord_y <- function(obj) {
             warning('more than one potential y coordinate found. returning first finding')
         }
     )
-    y_nm[1]
+    wisn[y_nm[1]]
 }
 guess_coords <- function(obj) {
     c(

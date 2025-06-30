@@ -127,7 +127,7 @@ setMethod('check_numeric',
             )
     })
 
-guess_coord_x <- function(obj) {
+guess_coord_x <- function(obj, coord_system = NULL) {
     isn <- check_numeric(obj)
     if (sum(isn) < 2) {
         stop('coordinates must be provided as numeric values!')
@@ -143,9 +143,24 @@ guess_coord_x <- function(obj) {
     }
     nnms <- nms[isn]
     wisn <- which(isn)
+    # check coord_system
+    if (!is.null(coord_system)) {
+        if (is.list(coord_system)) {
+            coord_system <- switch(sub('.*,(\\d+)[]]*$', '\\1', coord_system$wkt)
+                , '4326' = 'wgs84'
+                , '21781' = 'lv03'
+                , '2056' = 'lv95'
+            )
+        } else {
+            coord_system <- sub('ch1903/', '', match.arg(tolower(coord_system), 
+                    c('wgs84', 'lv03', 'lv95', 'ch1903/lv03', 'ch1903/lv95')), fixed = TRUE)
+        }
+    }
     # check x
-    x_nm <- grep('^((x|X)(.*(c|C)oord.*)?)$|^((c|C)oord.*(x|X))$', nnms)
-    if (length(x_nm) == 0) {
+    if (is.null(coord_system) || coord_system %in% c('lv03', 'lv95')) {
+        x_nm <- grep('^((x|X)(.*(c|C)oord.*)?)$|^((c|C)oord.*(x|X))$', nnms)
+    }
+    if ((is.null(coord_system) && length(x_nm) == 0) || coord_system == 'wgs84') {
         # check lon
         x_nm <- grep('^(l|L)o?n((g|gitude).*)?$', nnms)
     }
@@ -155,14 +170,31 @@ guess_coord_x <- function(obj) {
         if (is.matrix(obj)) {
             obj <- as.data.frame(obj)
         }
-        x_nm <- which(sapply(wisn, \(x) {
-            # wgs84
-            all(
-                (obj[[x]] > 4 & obj[[x]] < 12) |
-                (obj[[x]] > 2400000 & obj[[x]] < 2900000) |
-                (obj[[x]] > 400000 & obj[[x]] < 900000)
-            )
-        }))
+        if (is.null(coord_system)) {
+            x_nm <- which(sapply(wisn, \(x) {
+                # wgs84
+                all(
+                    (obj[[x]] > 4 & obj[[x]] < 12) |
+                    (obj[[x]] > 2400000 & obj[[x]] < 2900000) |
+                    (obj[[x]] > 400000 & obj[[x]] < 900000)
+                )
+            }))
+        } else if (coord_system == 'wgs84') {
+            x_nm <- which(sapply(wisn, \(x) {
+                # wgs84
+                all(obj[[x]] > 4 & obj[[x]] < 12)
+            }))
+        } else if (coord_system == 'lv95') {
+            x_nm <- which(sapply(wisn, \(x) {
+                # lv95
+                all(obj[[x]] > 2400000 & obj[[x]] < 2900000)
+            }))
+        } else {
+            x_nm <- which(sapply(wisn, \(x) {
+                # lv03
+                all(obj[[x]] > 400000 & obj[[x]] < 900000)
+            }))
+        }
     }
     switch(as.character(length(x_nm))
         # 0
@@ -178,7 +210,8 @@ guess_coord_x <- function(obj) {
     )
     wisn[x_nm[1]]
 }
-guess_coord_y <- function(obj) {
+
+guess_coord_y <- function(obj, coord_system = NULL) {
     isn <- check_numeric(obj)
     if (sum(isn) < 2) {
         stop('coordinates must be provided as numeric values!')
@@ -194,9 +227,24 @@ guess_coord_y <- function(obj) {
     }
     nnms <- nms[isn]
     wisn <- which(isn)
+    # check coord_system
+    if (!is.null(coord_system)) {
+        if (is.list(coord_system)) {
+            coord_system <- switch(sub('.*,(\\d+)[]]*$', '\\1', coord_system$wkt)
+                , '4326' = 'wgs84'
+                , '21781' = 'lv03'
+                , '2056' = 'lv95'
+            )
+        } else {
+            coord_system <- sub('ch1903/', '', match.arg(tolower(coord_system), 
+                    c('wgs84', 'lv03', 'lv95', 'ch1903/lv03', 'ch1903/lv95')), fixed = TRUE)
+        }
+    }
     # check y
-    y_nm <- grep('^((y|Y)(.*(c|C)oord.*)?)$|^((c|C)oord.*(y|Y))$', nnms)
-    if (length(y_nm) == 0) {
+    if (is.null(coord_system) || coord_system %in% c('lv03', 'lv95')) {
+        y_nm <- grep('^((y|Y)(.*(c|C)oord.*)?)$|^((c|C)oord.*(y|Y))$', nnms)
+    }
+    if ((is.null(coord_system) && length(y_nm) == 0) || coord_system == 'wgs84') {
         # check lat
         y_nm <- grep('^(l|L)at(itude.*)?$', nnms)
     }
@@ -206,14 +254,31 @@ guess_coord_y <- function(obj) {
         if (is.matrix(obj)) {
             obj <- as.data.frame(obj)
         }
-        y_nm <- which(sapply(wisn, \(x) {
-            # wgs84
-            all(
-                (obj[[x]] > 44 & obj[[x]] < 49) |
-                (obj[[x]] > 1050000 & obj[[x]] < 1400000) |
-                (obj[[x]] > 50000 & obj[[x]] < 400000)
-            )
-        }))
+        if (is.null(coord_system)) {
+            y_nm <- which(sapply(wisn, \(x) {
+                # wgs84
+                all(
+                    (obj[[x]] > 44 & obj[[x]] < 49) |
+                    (obj[[x]] > 1050000 & obj[[x]] < 1400000) |
+                    (obj[[x]] > 50000 & obj[[x]] < 400000)
+                )
+            }))
+        } else if (coord_system == 'wgs84') {
+            y_nm <- which(sapply(wisn, \(x) {
+                # wgs84
+                all(obj[[x]] > 44 & obj[[x]] < 49)
+            }))
+        } else if (coord_system == 'lv95') {
+            y_nm <- which(sapply(wisn, \(x) {
+                # lv95
+                all(obj[[x]] > 1050000 & obj[[x]] < 1400000)
+            }))
+        } else {
+            y_nm <- which(sapply(wisn, \(x) {
+                # lv03
+                all(obj[[x]] > 50000 & obj[[x]] < 400000)
+            }))
+        }
     }
     switch(as.character(length(y_nm))
         # 0
@@ -229,10 +294,12 @@ guess_coord_y <- function(obj) {
     )
     wisn[y_nm[1]]
 }
-guess_coords <- function(obj) {
+
+# TODO: add option to indicate coord system
+guess_coords <- function(obj, coord_system = NULL) {
     c(
-        guess_coord_x(obj)[1], 
-        guess_coord_y(obj)[1]
+        guess_coord_x(obj, coord_system = coord_system)[1], 
+        guess_coord_y(obj, coord_system = coord_system)[1]
     )
 }
 
@@ -387,16 +454,22 @@ guess_ch <- function(x, y = NULL) {
 }
 
 
-.coord_transf <- function(x, y, crs_from = NULL, crs_to = NULL) {
-    sf::sf_project(crs_from, crs_to, cbind(x, y))
+.coord_transf <- function(x, y, crs_from = NULL, crs_to = NULL, as_list = FALSE) {
+    out <- sf::sf_project(crs_from, crs_to, cbind(x, y))
+    if (as_list) {
+        out <- as.list(as.data.table(out))
+    }
+    out
 }
 
 coord_transf <- function(x, crs_to,
     y = NULL, crs_from = NULL, 
-    x_column = guess_coord_x(x), 
-    y_column = guess_coord_y(x),
+    x_column = guess_coord_x(x, coord_system = crs_from), 
+    y_column = guess_coord_y(x, coord_system = crs_from),
     as_list = FALSE, new_origin_at = NULL,
-    old_origin_at = NULL, add_crs = TRUE) {
+    old_origin_at = NULL, add_crs = TRUE, append = TRUE) {
+    # copy original x
+    x_in <- copy(x)
     # check crs_to
     if (missing(crs_to)) {
         stop('argument crs_to is missing')
@@ -432,10 +505,12 @@ coord_transf <- function(x, crs_to,
     crs_out <- list(crs = crs_to, new_origin_at = new_origin_at)
     crs_to <- fix_crs(crs_to, new_origin_at)
 	if (inherits(x, "Sources") && ncol(x) == 4) {
+        append <- FALSE
 		out <- x
 		out[, 2:3] <- .coord_transf(x[, 2], x[, 3], 
             crs_from = crs_from, crs_to = crs_to)
 	} else if (inherits(x, "Sensors") && ncol(x) >= 7) {
+        append <- FALSE
 		out <- convert(x)
         out[, c('x-Coord (m)', 'y-Coord (m)')] <- .coord_transf(
             x[, 'x-Coord (m)'], x[, 'y-Coord (m)'], 
@@ -464,7 +539,7 @@ coord_transf <- function(x, crs_to,
             } else if (inherits(x, 'data.table')) {
                 if (is.numeric(x_column)) x_column <- names(out)[x_column]
                 if (is.numeric(y_column)) y_column <- names(out)[y_column]
-                out[, c(x_column, y_column) :=  coord_transf(
+                out[, c(x_column, y_column) :=  .coord_transf(
                     get(x_column), get(y_column), crs_from = crs_from,
                     crs_to = crs_to, as_list = TRUE)]
             } else if (is.data.frame(x) || is.list(x)) {
@@ -499,6 +574,33 @@ coord_transf <- function(x, crs_to,
             }
         }
 	}
+    # add coords?
+    if (append) {
+        if (isdt <- is.data.table(out)) {
+            out <- as.data.frame(out)
+        }
+        if (is_wgs(crs_from)) {
+            if (any(c('x', 'y') %in% names(out))) {
+                out <- cbind(x_in,
+                    xnew = out[, x_column],
+                    ynew = out[, y_column]
+                )
+            } else {
+                out <- cbind(x_in,
+                    x = out[, x_column],
+                    y = out[, y_column]
+                )
+            }
+        } else {
+            out <- cbind(x_in,
+                lat = out[, y_column],
+                lon = out[, x_column]
+            )
+        }
+        if (isdt) {
+            setDT(out)
+        }
+    }
     # add crs
     if (add_crs) {
         out <- set_crs(out, crs = crs_out$crs, new_origin_at = crs_out$new_origin_at)
@@ -512,10 +614,25 @@ coord_transf <- function(x, crs_to,
 	return(out)
 }
 
+is_wgs <- function(x) {
+    if (is.list(x)) {
+        if ('wkt' %in% names(x)) {
+            sub('.*,(\\d+)[]]*$', '\\1', x$wkt) == '4326'
+        } else {
+            stop('not able to guess coordinate system from the provided list')
+        }
+    } else if (is.numeric(x)) {
+        x == 4326
+    } else {
+        grepl('^ *wgs[ _-]?84 *$', x, ignore.case = TRUE)
+    }
+}
+
 ##
+# FIXME: add append argument
 wgs_to_map <- function(MyMap, lon, lat = NULL, zoom,
-    x_column = guess_coord_x(lon), 
-    y_column = guess_coord_y(lon)) {
+    x_column = guess_coord_x(lon, coord_system = 'wgs84'), 
+    y_column = guess_coord_y(lon, coord_system = 'wgs84'), append = TRUE) {
     require(RgoogleMaps, quietly = TRUE)
     if (missing(zoom)) zoom <- MyMap$zoom
 	if (inherits(lon, "Sources") && ncol(lon) == 4) {
@@ -613,23 +730,25 @@ map_to_wgs <- function(MyMap, x, y = NULL, zoom,
 }
 
 ## 
-ch_to_wgs <- function(x, y = NULL) {
+ch_to_wgs <- function(x, y = NULL, append = TRUE) {
     crs_ch <- guess_ch(x, y)
     coord_transf(x, y, 
-        crs_from = crs_ch, crs_to = 4326)
+        crs_from = crs_ch, crs_to = 4326, append = append)
 }
 ch_to_map <- function(MyMap, x, y = NULL, ...) {
 	WGS84 <- ch_to_wgs(x, y)
 	wgs_to_map(MyMap, WGS84, ...)
 } 
-ch_to_user <- function(x, new_origin_at = NULL, y = NULL) {
+ch_to_user <- function(x, new_origin_at = NULL, y = NULL, append = TRUE) {
     crs_from <- guess_ch(x)
     coord_transf(x, y = y, crs_from = crs_from,
-        crs_to = crs_from, new_origin_at = new_origin_at)
+        crs_to = crs_from, new_origin_at = new_origin_at,
+        append = append
+    )
 }
 
 user_to_ch <- function(x, crs_from, origin_at, lv95 = TRUE,
-    y = NULL, x_column = 'x', y_column = 'y') {
+    y = NULL, x_column = 'x', y_column = 'y', append = TRUE) {
     # check crs
     crs_x <- get_crs(x)
     if (!is.null(crs_x)) {
@@ -641,10 +760,10 @@ user_to_ch <- function(x, crs_from, origin_at, lv95 = TRUE,
     coord_transf(x, y, 
         crs_from = crs_from, crs_to = if (lv95) 2056 else 21781, 
         old_origin_at = origin_at, x_column = x_column, 
-        y_column = y_column)
+        y_column = y_column, append = append)
 }
 user_to_wgs <- function(x, crs_from, origin_at, y = NULL,
-    x_column = 'x', y_column = 'y') {
+    x_column = 'x', y_column = 'y', append = TRUE) {
     # check crs
     crs_x <- get_crs(x)
     if (!is.null(crs_x)) {
@@ -655,7 +774,7 @@ user_to_wgs <- function(x, crs_from, origin_at, y = NULL,
     }
     coord_transf(x, y, x_column = x_column, y_column = y_column,
         crs_from = crs_from, crs_to = 4326, 
-        old_origin_at = origin_at)
+        old_origin_at = origin_at, append = append)
 }
 user_to_map <- function(MyMap, x, crs_from, origin_at,
     x_column = 'x', y_column = 'y', y = NULL, ...) {
@@ -665,13 +784,16 @@ user_to_map <- function(MyMap, x, crs_from, origin_at,
 	wgs_to_map(MyMap, WGS84, x_column = x_column, y_column = y_column, ...)
 }
 
-wgs_to_user <- function(lon, crs_to, new_origin_at = NULL, lat = NULL) {
+wgs_to_user <- function(lon, crs_to, new_origin_at = NULL, lat = NULL, 
+    append = TRUE) {
     coord_transf(lon, crs_to = crs_to, new_origin_at = new_origin_at,
-        crs_from = 'wgs84', y = lat)
+        crs_from = 'wgs84', y = lat, append = append)
 }
-wgs_to_ch <- function(lon, lv95 = TRUE, lat = NULL) {
+wgs_to_ch <- function(lon, lv95 = TRUE, lat = NULL, append = TRUE) {
     coord_transf(lon, lat, 
-        crs_from = 4326, crs_to = if (lv95) 2056 else 21781)
+        crs_from = 4326, crs_to = if (lv95) 2056 else 21781,
+        append = append
+    )
 }
 # wgs_to_map -> see above
 

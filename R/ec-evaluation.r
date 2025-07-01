@@ -663,6 +663,38 @@ calcU <- function (ustar, Zo, L, z, kv = 0.4){
     ustar/kv * (log(z/Zo) + psiMz - psiMZo)
 }
 
+# aerodynamic resistance of heat & trace gases
+Ra <- function(z, ustar, L, z0, d = 0, kv = 0.4) {
+    z_d <- z - d
+    1 / (kv * ustar) * (log(z_d / z0) - psi_h(z_d, L) + psi_h(z0, L))
+}
+psi_h <- function(z_d, L) {
+    zL <- z_d / L
+    suppressWarnings(ifelse(zL >= 0, -5 * zL, 2 * log((1 + sqrt(1 - 16 * zL)) / 2)))
+}
+# pseudo-laminar layer resistance Rb of NH3
+Rb_nh3 <- function(ustar, Tc, Zo, p_hPA = 960) {
+    Diff.Ammon <- function(Tc, p_hPA) {
+        # Temp <- c(293, 296, 298)
+        # Dm <- c(173, 180, 173) 
+        # DopoTo <- mean(Dm / (760 / 1013.25) / Temp ^ 1.5)
+        out <- 0.04598255 / p_hPA * (Tc + 273.15) ^ 1.5 
+        out * 10 ^ -4 
+    }
+    kin.visc <- function(Tc, p_hPA) {
+        Tk <- Tc + 273.15
+        b <- 1.458 * 10 ^ -6
+        S <- 110.4
+        p <- p_hPA * 100
+        R <- 8.314
+        M <- 29
+        (b * Tk ^ (5 / 2) * R * 1000) / (p * M * (Tk + S))
+    }
+    1.45 * (Zo * ustar / kin.visc(Tc, p_hPA)) ^ 0.24 * 
+        (kin.visc(Tc, p_hPA) / Diff.Ammon(Tc, p_hPA)) ^ 0.8 / ustar
+}
+
+
 # plot time series including filtered trend
 plot.tseries <- function(dat,wind,scal,selection,color,units){
 	msg <- paste(c(format(dat[1,1],"%d.%m.%Y")," - time series"),collapse="")
@@ -2134,7 +2166,7 @@ process_ec_fluxes <- function(
         if (minimal_output) {
             results <- results[, .SD, .SDcols = c('st', 'et', 'n_values', 'Hz',
                 'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 'sWu', 'd', 'z_sonic', 
-                'U_sonic', 'T_sonic',
+                'U_sonic', 'T_sonic', 'Ra', 'Rb_nh3',
                 grep('^(phi|alpha|beta|w_bias)$', names(results), value = TRUE),
                 grep('^(avg_|ht_|li_)', names(results), value = TRUE),
                 grep('^flux_', names(results), value = TRUE)
@@ -2678,7 +2710,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             }, simplify = FALSE))
 
             # write results:
-            # -------------------------------------------------------------------------- 
+            # -----------------------------------------------------------------------
+
             out <- c(
                 list(
                     st = interval_start
@@ -2714,8 +2747,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                             wind_stats['Ustar'],
                         c('sUu', 'sVu', 'sWu')
                     )
-                    # rotation results
+                    # wind direction
                     , WD = WD[1]
+                    # rotation parameters
                     , if (rotation_method == 'planar fit') {
                         c(
                             alpha = alpha[1],
@@ -2727,7 +2761,11 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                             phi = phi[1]
                         )
                     }
-                    # and wind direction
+                    # Ra(z_ec - d) & Rb
+                    , Ra = Ra(wind_stats[['z_sonic']], wind_stats[['Ustar']], wind_stats[['L']], 
+                        wind_stats[['Zo']], d = wind_stats[['d']], kv = 0.4)
+                    , Rb_nh3 = Rb_nh3(wind_stats[['Ustar']], wind_stats[['T_sonic']] - 273.14, 
+                        wind_stats[['Zo']], p_hPA = 960)
                     # scalar avg & sd
                     , if (length(input_scalars) > 0) {
                         as.list(c(

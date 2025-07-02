@@ -62,7 +62,11 @@ Rcpp::List ht8700_read_cpp(String filename) {
                 // line ok
                 // assign to vectors
                 col1_time[cline] = line[0];
-                col2[cline] = std::stoi(line[1]);
+                try {
+                    col2[cline] = std::stoi(line[1]);
+                } catch (...) {
+                    col2[cline] = NA_INTEGER;
+                }
                 col3[cline] = std::stod(line[2]);
                 col4[cline] = std::stod(line[3]);
                 col5[cline] = std::stod(line[4]);
@@ -171,7 +175,11 @@ Rcpp::List ht8700_read_cpp_gzip(Rcpp::String filename) {
                 // line ok
                 // assign to vectors
                 col1_time[cline] = line[0];
-                col2[cline] = std::stoi(line[1]);
+                try {
+                    col2[cline] = std::stoi(line[1]);
+                } catch (...) {
+                    col2[cline] = NA_INTEGER;
+                }
                 col3[cline] = std::stod(line[2]);
                 col4[cline] = std::stod(line[3]);
                 col5[cline] = std::stod(line[4]);

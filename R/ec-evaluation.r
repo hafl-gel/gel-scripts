@@ -2501,10 +2501,10 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 i_hi <- which(1 / freq < high_cont_sec)[1]
                 if (length(i_hi) != 1) stop('check argument "high_cont_sec"!')
                 hi_cont_fix <- sapply(Ogive_fix, \(x) {
-                    mean(x[i_hi + seq(-cont_pts, cont_pts)])/ x[1]
+                    (x[1] - mean(x[i_hi + seq(-cont_pts, cont_pts)]))/ x[1]
                 })
                 hi_cont_dyn <- sapply(Ogive_dyn, \(x) {
-                    mean(x[i_hi + seq(-cont_pts, cont_pts)])/ x[1]
+                    (x[1] - mean(x[i_hi + seq(-cont_pts, cont_pts)]))/ x[1]
                 })
                 i_lo <- which(1 / freq <= low_cont_sec)[1]
                 if (length(i_lo) != 1) stop('check argument "low_cont_sec"!')

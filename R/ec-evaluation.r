@@ -1187,7 +1187,8 @@ process_ec_fluxes <- function(
             if (!requireNamespace('oce')) {
                 stop('R package "oce" must be installed when lat/lon is provided')
             }
-            mag_dec <- \(x) oce::magneticField(declination$lon, declination$lat, x)$declination
+            mag_dec <- \(x) oce::magneticField(declination[['lon']], 
+                declination[['lat']], x)$declination
         } else if (!is.numeric(declination) || length(declination) != 1) {
             stop('argument "declination" must be a single numeric value!')
         } else {

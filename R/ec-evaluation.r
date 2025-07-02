@@ -1039,7 +1039,7 @@ process_ec_fluxes <- function(
             nh3_ppb = -100, nh3_ugm3 = -100, h2o_mmolm3 = -100, 
             co2_mmolm3 = -100)
         , limits_upper = c(u = 30, v = 30, w = 10, T = 333, 
-            nh3_ppb = 5000, nh3_ugm3 = 5000, h2o_mmolm3 = 5000, 
+            nh3_ppb = 22000, nh3_ugm3 = 15000, h2o_mmolm3 = 5000, 
             co2_mmolm3 = 5000)
         , na_limits_window = c(pass = '10secs', replace = '5mins')
         , na_limits_method = c('norepl', 'median', 'dist', 'squaredist')[4]

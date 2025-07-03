@@ -151,7 +151,7 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
     ht_vars <- names(out)[8:14]
     ht_orig <- c('nh3_ppb', 'nh3_ugm3', 'temp_amb', 'press_amb', 'oss', 'peak_pos', 
         'alarm_code')
-    if (!is.null(draw_ht)) {
+    if (!is.null(draw_ht) && nrow(draw_ht) > 0) {
         # check alarm codes
         if (!('alarm_code' %in% names(draw_ht))) {
             draw_ht[, alarm_code := get_alarms(.SD)]
@@ -186,7 +186,7 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
     # fill licor
     licor_vars <- names(out)[15:19]
     licor_orig <- c('H2OD', 'CO2D', 'Temp', 'Pres', 'CO2SS')
-    if (!is.null(draw_licor)) {
+    if (!is.null(draw_licor) && nrow(draw_licor) > 0) {
         t_basis <- basis_sonic[, as.numeric(Time)]
         t_licor <- draw_licor[, as.numeric(Time)]
         t0 <- t_basis[1]

@@ -860,6 +860,8 @@ getSpecSet <- function(
                     lite = TRUE)
         }
     } else {
+        if (is.null(DOAS.model)) 
+            stop('Please specify DOAS model (argument DOAS.model)!')
         if (is.null(ref.dark.spec)) ref.dark.spec <- spec.dir
         if (is.null(dark.spec)) dark.spec <- spec.dir
         if (is.null(NH3.cal.spec)) NH3.cal.spec <- spec.dir

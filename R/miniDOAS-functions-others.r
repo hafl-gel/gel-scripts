@@ -831,7 +831,7 @@ getSpecSet <- function(
         if (file.exists(spec.dir)) {
             spec.dir <- switch(
                 sub('.*[.]([a-z]+)$', '\\1', spec.dir)
-                , qs = qread(spec.dir)
+                , qs = qs::qread(spec.dir)
                 , rds = readRDS(spec.dir)
                 , stop('unknown calref file format: *.',
                     sub('.*[.]([a-z]+)$', '\\1', spec.dir))
@@ -1251,7 +1251,7 @@ evalOffline <- function(
                     if (!require(qs)) {
                         stop("package 'qs' needs to be installed")
                     }
-                    qread(CalRefSpecs)
+                    qs::qread(CalRefSpecs)
                 }
             )
         }

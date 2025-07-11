@@ -101,39 +101,67 @@ read_vials <- function(file, sheet = 1, filter_na = TRUE, as_data_table = TRUE, 
     dat[, start_col] <- parse_date_time3(dat[[start_col]])
     # find Cycle/Position/etc.
     cycle_cols <- grep('(C|c)ycle|(P|p)osition|(C|c)hannel|(R|r)ank', nms, value = TRUE)
-    # find net ml
-    net_col <- grep('net.*m(l|L)', nms, value = TRUE)
+    # find full/empty weights
+    full_col <- grep('full', nms, value = TRUE)
+    empty_col <- grep('empty', nms, value = TRUE)
+    # calculate net ml
+    net_col <- 'net_ml'
+    dat[, net_col] <- dat[, full_col] - dat[, empty_col]
+    # fix volume if weighted after analysis
+    add_vol_col <- grep('add.*vol.*ml', nms, value = TRUE)
+    suppressWarnings({
+        add <- as.numeric(dat[, add_vol_col])
+        add[is.na(add)] <- 0
+        dat[, net_col] <- dat[, net_col] + add
+    })
     # find vial nr.
     vial_col <- grep('vial.*nr', nms, value = TRUE)
     # find measurement date
     date_col <- grep('meas.*(D|d)ate', nms, value = TRUE)
-    # build output
-    if (return_all) {
-        cols <- c(date_col, vial_col, cycle_cols, net_col, conc_cols, start_col, time_cols)
-        resid_cols <- nms[!(nms %in% cols)]
-        out <- dat[, c(cols, resid_cols)]
-    } else {
-        out <- dat[, c(date_col, vial_col, cycle_cols, net_col, conc_cols, start_col, time_cols)]
-    }
+    # find dilution and cuvette type
+    dil_col <- grep('dilut(e|ion)', nms, value = TRUE)
+    cuvette_col <- grep('cuvette.+type', nms, value = TRUE)
     # fix numeric values
-    suppressWarnings(out[, c(net_col, conc_cols)] <- lapply(out[, c(net_col, conc_cols)], as.numeric))
+    suppressWarnings(dat[, conc_cols] <- lapply(dat[, conc_cols], as.numeric))
     # add mg in Solution and time difference
     for (i in seq_along(conc_cols)) {
         # total NH4-N
-        out[, paste0('nh4.n.tot.mg', i)] <- out[, conc_cols[i]] * out[, net_col] / 1000
+        dat[, paste0('nh4.n.tot.mg.', i)] <- dat[, conc_cols[i]] * dat[, net_col] /
+            1000 / dat[, dil_col]
         # reaction time
-        out[, paste0('reaction.time', i)] <- difftime(parse_date_time3(out[[time_cols[i]]]), out[, start_col], units = 'mins')
+        dat[, paste0('reaction.time.', i)] <- difftime(parse_date_time3(dat[[time_cols[i]]]), dat[, start_col], units = 'mins')
+    }
+    # get max NH4-N
+    dat[, 'nh4_n_tot_mg'] <- apply(dat[, paste0('nh4.n.tot.mg.', 
+            seq_along(conc_cols))], 1, max, na.rm = TRUE)
+    # get limits
+    dat[, c('nh4_n_mg_min', 'nh4_n_mg_max')] <- list(
+        c('304' = 0.015, '305' = 1.0, '303' = 2.0, '302' = 47, '502' = 100)[
+            sub('^[^0-9]*([0-9]+)$', '\\1', dat[[cuvette_col]])],
+        c('304' = 2.0, '305' = 12.0, '303' = 47.0, '302' = 130, '502' = 1800)[
+            sub('^[^0-9]*([0-9]+)$', '\\1', dat[[cuvette_col]])]
+    )
+    # build output
+    cols <- c(date_col, cycle_cols, net_col, 'nh4_n_tot_mg')
+    if (return_all) {
+        resid_cols <- nms[!(nms %in% cols)]
+        out <- dat[, c(cols, resid_cols)]
+    } else {
+        out <- dat[, cols]
     }
     # filter NA values in cycle, position, ...
     setDT(out)
-    # fix analysis start
-    setnames(out, start_col, 'analysis.start')
+    if (return_all) {
+        # fix analysis start & weights
+        setnames(out, c(start_col, empty_col, full_col), 
+            c('analysis.start', 'empty.weight.g', 'full.weight.g'))
+    }
     # fix meas.date
     setnames(out, date_col, 'meas.date')
     # fix format
     out[, meas.date := as.Date(parse_date_time3(meas.date))]
     # fix names
-    setnames(out,make.names(tolower(names(out))))
+    setnames(out, make.names(tolower(names(out))))
     if (filter_na) {
         out <- na.omit(out, cols = c('cycle', 'position', 'channel'))
     }

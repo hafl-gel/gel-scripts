@@ -62,7 +62,7 @@ write_daily <- function(files, obj, path) {
     # write files
     writeBin(files, con, endian = 'big')
     # serialize object
-    ser <- qserialize(obj, preset = 'high')
+    ser <- qs::qserialize(obj, preset = 'high')
     # write length of ser
     writeBin(length(ser), con, endian = 'big')
     # write list
@@ -84,7 +84,7 @@ read_daily <- function(path, files = FALSE) {
         # read length of serialized data
         N2 <- readBin(con, 'int', 1L, endian = 'big')
         # read serialized data and unserialize
-        out <- qdeserialize(readBin(con, 'raw', N2, endian = 'big'))
+        out <- qs::qdeserialize(readBin(con, 'raw', N2, endian = 'big'))
     }
     # close connection
     close(con)

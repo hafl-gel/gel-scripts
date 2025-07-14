@@ -1389,7 +1389,7 @@ evalOffline <- function(
     if (parl) {
 
         # verbose
-        cat("\nParallel computing doascurve and fit...\n\n")
+        cat("\nParallel computing doascurve and fit.\nSetting up parallelism...\n")
 
         # # call libraries for robust fit
         # if (use.robust) {
@@ -1427,7 +1427,7 @@ evalOffline <- function(
             envir = environment())
 
         # parallel calculation
-        cat("This might take a while...\n\n")
+        cat("Starting calculation.\nThis might take a while...\n\n")
         if (requireNamespace('bLSmodelR')) {
             # split diffspec indices into 
             j_frac <- ceiling(length(diff_specs) / n_chunks)

@@ -1223,12 +1223,12 @@ find_refperiod <- function(data, ref_duration = 20, n = 1, dn = ref_duration - 1
     ord <- ind_all[order(penalties)]
     out <- character(n)
     for (i in seq_len(n)) {
-        out[i] <- deparse_timerange(x = st(data)[ord[i]], 
-            y = et(data)[ord[i] + ref_duration - 1], sep = ' to ')
-        ord <- ord[abs(ord - ord[i]) > dn]
+        out[i] <- deparse_timerange(x = st(data)[ord[1]], 
+            y = et(data)[ord[1] + ref_duration - 1], sep = ' to ')
+        ord <- ord[abs(ord - ord[1]) > dn]
         if (length(ord) == 0) break
     }
-    out
+    out[out != '']
 }
 # get limits from ibts object
 get_limits <- function(data, expansion = 1, cols = c('i_max', 'nh3', 'so2', 'no')) {

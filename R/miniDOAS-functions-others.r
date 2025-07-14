@@ -332,6 +332,10 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
     # read header
     header <- do.call(rbind, lapply(raw_data, function(x) data.frame(x[[2]])))
 
+    # fix time zone
+    header$st <- lubridate::force_tz(header$st, tz(timerange))
+    header$et <- lubridate::force_tz(header$et, tz(timerange))
+
     # get eval period subset
     takeme <- (header$et >= timerange[1]) & (header$st <= timerange[2])
 

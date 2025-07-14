@@ -1443,6 +1443,9 @@ evalOffline <- function(
                 doas_win = DOAS.win, path_length = path.length)
         }
 
+        # unlist list of lists
+        out <- unlist(out, recursive = FALSE)
+
         if (!cl_was_up) {
             parallel::stopCluster(cl)
             on.exit()

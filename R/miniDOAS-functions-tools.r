@@ -1367,6 +1367,28 @@ get_header <- function(rawdat) {
     rawdat$calref.info
 }
 
+get_refspec <- function(rawdat, tr) {
+    aspec <- suppressWarnings(
+        avg_spec(rawdat, tr, correct.straylight = FALSE, correct.linearity = FALSE)
+    )
+    list(
+        dat.spec = c(aspec),
+        ambient = list(
+            pathLength = NA,
+            NH3ambient_ug = NA,
+            NOambient_ug = NA,
+            SO2ambient_ug = NA
+        ),
+        cuvette = list(
+            cuvetteLength = NA,
+            cuvetteConc_mg = NA
+        ),
+        timerange = attr(aspec, 'RawData')$DOASinfo$timerange,
+        # FIXME: add info below
+        info.spec = 'no info available'
+    )
+}
+
 get_refcal_spec <- function(rawdat, timerange, SpecName, tz = 'Etc/GMT-1', lite = FALSE) {
     tr <- parse_timerange(timerange, tz = tz)
     rd <- list(

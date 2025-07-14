@@ -1177,6 +1177,7 @@ evalOffline <- function(
     force.write.daily=FALSE,
     lite=TRUE,
     ncores=1,
+    n_chunks = 1e2,
     add.name="",
     RawData = NULL,
     CalRefSpecs = NULL,
@@ -1387,14 +1388,30 @@ evalOffline <- function(
 
     if (parl) {
 
+        # verbose
+        cat("\nParallel computing doascurve and fit...\n\n")
+
+        # # call libraries for robust fit
+        # if (use.robust) {
+        #     parallel::clusterCall(cl, library, package = 'robustbase', character.only = TRUE)
+        #     parallel::clusterCall(cl, library, package = 'MASS', character.only = TRUE)
+        # }
+
+        # get calibration curves
+        xreg <- Cal.dc$Xreg[DOAS.win$pixel_dc, ]
+
+        # export functions & objects
+        hpf2 <- compiler::cmpfun(highpass.filter2)
+        diff_specs <- DiffSpec$diffspec
         # FIXME: fix parallel comp, move functions outside, remove process_fit, change fitparallel
-        fit_parallel <- function(index, ds, doas_win, xreg, path_length) {
+        fit_parallel <- function(index, doas_win, path_length) {
+            # xreg & diff_specs need to be exported
             lapply(index, function(i) {
                 # check if light
-                if (isTRUE(median(ds[[i]], na.rm = TRUE) > -5)) {
+                if (isTRUE(median(diff_specs[[i]], na.rm = TRUE) > -5)) {
                     # highpass filter and fit curve to calibration
                     fitcurve(
-                        hpf2(ds[[i]], doas_win$filt), 
+                        hpf2(diff_specs[[i]], doas_win$filt), 
                         doas_win$pixel_dc, xreg, doas_win$tau.shift, path_length)
                 } else {
                     # return NAs if too few light
@@ -1405,30 +1422,26 @@ evalOffline <- function(
                 }
             })
         }
-
-        # verbose
-        cat("\nParallel computing doascurve and fit...\n\n")
-
-        # split diffspecs
-        p_index <- parallel::splitIndices(length(DiffSpec$diffspec), length(cl))
-
-        # call libraries for robust fit
-        if (use.robust) {
-            parallel::clusterCall(cl, library, package = 'robustbase', character.only = TRUE)
-            parallel::clusterCall(cl, library, package = 'MASS', character.only = TRUE)
-        }
-
-        # get calibration curves
-        xreg <- Cal.dc$Xreg[DOAS.win$pixel_dc, ]
-
-        # export functions
-        hpf2 <- compiler::cmpfun(highpass.filter2)
-        parallel::clusterExport(cl, list('hpf2', "fitcurve","fit_parallel"), envir = environment())
+        parallel::clusterExport(cl, 
+            list('hpf2', 'fitcurve','fit_parallel', 'diff_specs', 'xreg'), 
+            envir = environment())
 
         # parallel calculation
         cat("This might take a while...\n\n")
-        p <- parallel::clusterApply(cl, p_index, fit_parallel, ds = DiffSpec$diffspec, 
-            doas_win = DOAS.win, xreg = xreg, path_length = path.length)
+        if (requireNamespace('bLSmodelR')) {
+            # split diffspec indices into 
+            j_frac <- ceiling(length(diff_specs) / n_chunks)
+            lcl <- ceiling(j_frac / length(cl))
+            p_index <- parallel::splitIndices(length(DiffSpec$diffspec), length(cl) * lcl)
+            out <- bLSmodelR:::.clusterApplyLB(cl, p_index,
+                fit_parallel, doas_win = DOAS.win, path_length = path.length)
+        } else {
+            # split diffspec indices
+            p_index <- parallel::splitIndices(length(DiffSpec$diffspec), length(cl))
+            # run in chunks
+            out <- parallel::clusterApply(cl, p_index, fit_parallel, 
+                doas_win = DOAS.win, path_length = path.length)
+        }
 
         if (!cl_was_up) {
             parallel::stopCluster(cl)

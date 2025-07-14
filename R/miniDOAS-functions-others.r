@@ -1219,6 +1219,10 @@ evalOffline <- function(
         DOAS.model <- DOAS.info[['DOASmodel']]
     }
 
+    ### set tzone output
+    RawData$Header$st <- lubridate::with_tz(RawData$Header$st, tz.Output)
+    RawData$Header$et <- lubridate::with_tz(RawData$Header$et, tz.Output)
+
     ### get DOAS windows:
     DOAS.win <- getWindows(DOAS.info, filter.type, timerange, 
         straylight.window, filter.window, fit.window, 

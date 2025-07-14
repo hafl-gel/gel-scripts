@@ -1195,7 +1195,7 @@ convert_calref <- function(obj, ref.spec = NULL, dark.spec = NULL) {
 
 # helper function: find best reference period
 find_refperiod <- function(data, ref_duration = 20, n = 1, dn = ref_duration - 1,
-    limits = c(i_min = 5e4, d_imax = 5e3, d_nh3 = 0.5, d_so2 = 1, d_no = 1),
+    limits = c(i_min = NA, d_imax = 5e3, d_nh3 = 0.5, d_so2 = 1, d_no = 1),
     wts = list(
         abs = c(nh3 = 10, so2 = 1, no = 1, i_max = 1e-4),
         diff = c(nh3 = 10, so2 = 5, no = 5, i_max = 2e-3),
@@ -1205,7 +1205,11 @@ find_refperiod <- function(data, ref_duration = 20, n = 1, dn = ref_duration - 1
     # subset data
     data <- data[, cols]
     # get i_max subset
-    ind_imax <- data$i_max > limits[['i_min']]
+    if (is.finite(limits[['i_min']])) {
+        ind_imax <- data$i_max > limits[['i_min']]
+    } else {
+        ind_imax <- rep(TRUE, nrow(data))
+    }
     # get individual series
     n_nh3 <- cont_within_range(data$nh3, ind_imax, limits[['d_nh3']], ref_duration)
     n_so2 <- cont_within_range(data$so2, ind_imax, limits[['d_so2']], ref_duration)

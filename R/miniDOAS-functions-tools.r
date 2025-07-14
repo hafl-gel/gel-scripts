@@ -1219,6 +1219,10 @@ find_refperiod <- function(data, ref_duration = 20, n = 1, dn = ref_duration - 1
     n_all <- pmin(n_nh3, n_so2, n_no, n_imax)
     # which are above ref_duration?
     ind_all <- which(n_all == ref_duration - 1)
+    if (length(ind_all) == 0) {
+        stop('No period qualifies. Changes limits or consider decreasing "ref_duration"',
+            ' from ', ref_duration, ' to ', max(n_all) + 1)
+    }
     # get minimum of nh3, so2, no
     mins <- apply(data[ind_imax, ], 2, min, na.rm = TRUE)
     # calculate penalties

@@ -1755,7 +1755,7 @@ process_ec_fluxes <- function(
             ht <- NULL
         }
         # check ht
-        if (nrow(ht) == 0) ht <- NULL
+        if (!is.null(ht) && nrow(ht) == 0) ht <- NULL
         if (ht_provided && is.null(ht)) {
             cat('-> No HT8700 data within time range.\n')
         }
@@ -1807,7 +1807,7 @@ process_ec_fluxes <- function(
             licor <- NULL
         }
         # check licor
-        if (nrow(licor) == 0) licor <- NULL
+        if (!is.null(licor) && nrow(licor) == 0) licor <- NULL
         if (licor_provided && is.null(licor)) {
             cat('-> No LI-7500 data within time range.\n')
         }

@@ -1414,6 +1414,13 @@ process_ec_fluxes <- function(
         # parse time diff
         avg_secs <- parse_time_diff(avg_period)
 
+        # check gamma_time_window
+        if (max(gamma_time_window) * 60 >= avg_secs) {
+            warning('"gamma_time_window" is too large compared to "avg_period"',
+                ' -> changing to smaller values!')
+            gamma_time_window <- c(5, 10) / 30 * avg_secs / 60
+        }
+
         # check times
         if (is.null(start_time) && is.null(end_time)) {
             start_time <- 'first'

@@ -157,10 +157,11 @@ guess_coord_x <- function(obj, coord_system = NULL) {
         }
     }
     # check x
+    x_nm <- integer(0)
     if (is.null(coord_system) || coord_system %in% c('lv03', 'lv95')) {
         x_nm <- grep('^((x|X)(.*(c|C)oord.*)?)$|^((c|C)oord.*(x|X))$', nnms)
     }
-    if ((is.null(coord_system) && length(x_nm) == 0) || coord_system == 'wgs84') {
+    if ((is.null(coord_system) && length(x_nm) == 0) || (!is.null(coord_system) && coord_system == 'wgs84')) {
         # check lon
         x_nm <- grep('^(l|L)o?n((g|gitude).*)?$', nnms)
     }
@@ -241,10 +242,11 @@ guess_coord_y <- function(obj, coord_system = NULL) {
         }
     }
     # check y
+    y_nm <- integer(0)
     if (is.null(coord_system) || coord_system %in% c('lv03', 'lv95')) {
         y_nm <- grep('^((y|Y)(.*(c|C)oord.*)?)$|^((c|C)oord.*(y|Y))$', nnms)
     }
-    if ((is.null(coord_system) && length(y_nm) == 0) || coord_system == 'wgs84') {
+    if ((is.null(coord_system) && length(y_nm) == 0) || (!is.null(coord_system) && coord_system == 'wgs84')) {
         # check lat
         y_nm <- grep('^(l|L)at(itude.*)?$', nnms)
     }
@@ -467,7 +469,7 @@ coord_transf <- function(x, crs_to,
     x_column = guess_coord_x(x, coord_system = crs_from), 
     y_column = guess_coord_y(x, coord_system = crs_from),
     as_list = FALSE, new_origin_at = NULL,
-    old_origin_at = NULL, add_crs = TRUE, append = TRUE) {
+    old_origin_at = NULL, add_crs = inherits(x, 'data.frame'), append = TRUE) {
     # copy original x
     x_in <- copy(x)
     # check crs_to
@@ -551,7 +553,6 @@ coord_transf <- function(x, crs_to,
                 colnames(coords) <- c('x', 'y')
                 out[[x_column]] <- coords[, 'x']
                 out[[y_column]] <- coords[, 'y']
-                names(out)[c(x_column, y_column)] <- c('x', 'y')
 			} else {
 				y <- x[[y_column]]
 				x <- x[[x_column]]
@@ -560,41 +561,40 @@ coord_transf <- function(x, crs_to,
                 colnames(coords) <- c('x', 'y')
                 out[[x_column]] <- coords[, 'x']
                 out[[y_column]] <- coords[, 'y']
-                names(out)[c(x_column, y_column)] <- c('x', 'y')
-                if (as_list) {
-                    out <- as.list(as.data.frame(out))
-                }
 			}
 		} else {
             out <- .coord_transf(x, y, 
                 crs_from = crs_from, crs_to = crs_to)
-            colnames(out) <- c('x', 'y')
-            if (as_list) {
-                out <- as.list(as.data.frame(out))
-            }
         }
 	}
     # add coords?
     if (append) {
+        cx <- function(x, ...) {
+            if (inherits(x, c('data.frame', 'matrix'))) {
+                cbind(x, ...)
+            } else {
+                c(x, ...)
+            }
+        }
         if (isdt <- is.data.table(out)) {
             out <- as.data.frame(out)
         }
         if (is_wgs(crs_from)) {
             if (any(c('x', 'y') %in% names(out))) {
-                out <- cbind(x_in,
-                    xnew = out[, x_column],
-                    ynew = out[, y_column]
+                out <- cx(x_in,
+                    xnew = getElement(out, x_column),
+                    ynew = getElement(out, y_column)
                 )
             } else {
-                out <- cbind(x_in,
-                    x = out[, x_column],
-                    y = out[, y_column]
+                out <- cx(x_in,
+                    x = getElement(out, x_column),
+                    y = getElement(out, y_column)
                 )
             }
         } else {
-            out <- cbind(x_in,
-                lat = out[, y_column],
-                lon = out[, x_column]
+            out <- cx(x_in,
+                lat = getElement(out, y_column),
+                lon = getElement(out, x_column)
             )
         }
         if (isdt) {
@@ -610,6 +610,9 @@ coord_transf <- function(x, crs_to,
     if (post_convert) {
         out <- wgs_to_map(map, out, x_column = x_column,
             y_column = y_column)
+    }
+    if (as_list) {
+        out <- as.list(as.data.frame(out))
     }
 	return(out)
 }

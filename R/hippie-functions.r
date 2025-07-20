@@ -1,5 +1,6 @@
 
-read_hippie <- function(file, as_ibts = TRUE, time_zone = 'Etc/GMT-1', flatten = FALSE) {
+read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC', 
+    flatten = FALSE) {
     if (length(file) > 1) {
         if (all(file.exists(file))) {
             cat('Fix providing multiple files!\n')
@@ -36,7 +37,8 @@ read_hippie <- function(file, as_ibts = TRUE, time_zone = 'Etc/GMT-1', flatten =
     #       a) no data (tair, pair) 
     #       b) different values tair (-> always take minimum?)
     dat[, c('st', 'et', 'Date_Time') := {
-        Time <- with_tz(fast_strptime(Date_Time, format = '%Y%m%dT%H%M%SZ', lt = FALSE, tz = 'Etc/GMT-1'), time_zone)
+        Time <- with_tz(fast_strptime(Date_Time, format = '%Y%m%dT%H%M%SZ', lt = FALSE, 
+                tz = tz_data), tz_out)
         dT <- median(diff(Time), na.rm = TRUE)
         list(
             Time - dT,

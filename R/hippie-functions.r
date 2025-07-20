@@ -73,7 +73,8 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
         flow1_mol_min = mean(nFlow_1, na.rm = TRUE) * 101325 / 8.3144598 / 273.14 / 1e6,
         flow2_mol_min = mean(nFlow_2, na.rm = TRUE) * 101325 / 8.3144598 / 273.14 / 1e6,
         t_outside = mean(Tair) + 273.14,
-        p_outside = mean(Air_pressure)
+        p_outside = mean(Air_pressure),
+        sn = Serial[1]
         ), by = .(Valve_Is, Cycle_Set)
     ]
 

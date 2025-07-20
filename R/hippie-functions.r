@@ -27,7 +27,7 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
     }
 
     hdr <- unlist(read.table(text = dat_raw[1], nrows = 1, sep = ';'))
-    dat <- fread(text = dat_raw[-hdr_lines], header = FALSE)
+    dat <- na.omit(fread(text = dat_raw[-hdr_lines], header = FALSE, fill = TRUE))
 
     setnames(dat, sub('\\s+.*$', '', hdr))
 

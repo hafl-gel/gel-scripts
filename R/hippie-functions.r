@@ -65,7 +65,7 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
         et = et[.N],
         # mt = st[1] + (et[.N] - st[1]) / 2,
         duration_mins = as.numeric(et[.N] - st[1], units = 'mins'),
-        N_int = .N,
+        n_data = .N,
         flow1_lmin = mean(Flow_1, na.rm = TRUE) / 1e3,
         flow2_lmin = mean(Flow_2, na.rm = TRUE) / 1e3,
         flow1_Ln_min = mean(nFlow_1, na.rm = TRUE) / 1e3,
@@ -75,7 +75,7 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
         t_outside = mean(Tair) + 273.14,
         p_outside = mean(Air_pressure),
         sn = Serial[1]
-        ), by = .(Valve_Is, Cycle_Set)
+        ), by = .(position = Valve_Is, cycle = Cycle_Set)
     ]
 
     # as ibts

@@ -80,11 +80,11 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
 
     # as ibts
     if (as_ibts) {
-        hi_res <- as.ibts(dat)
-        lo_res <- as.ibts(dat_avg)
+        dat <- as.ibts(dat)
+        dat_avg <- as.ibts(dat_avg)
     }
 
-    structure(lo_res, hi_res = hi_res)
+    structure(dat_avg, data = dat)
 }
 
 

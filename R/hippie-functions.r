@@ -78,6 +78,9 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
         ), by = .(position = Valve_Is, cycle = Cycle_Set)
     ]
 
+    # reorder columns
+    setcolorder(dat_avg, c('st', 'et', 'sn', 'cycle', 'position'))
+
     # as ibts
     if (as_ibts) {
         dat <- as.ibts(dat)

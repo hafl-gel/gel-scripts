@@ -105,7 +105,7 @@ ws_10minute <- function(file_names) {
 }
 
 # add function read data from / to
-get_ws700 <- function(folder, from = NULL, to = NULL, 
+read_ws700 <- function(folder, from = NULL, to = NULL, 
     pooled = c('data.table', 'ibts', '1mins')[1],
     ws_label = NULL, tz_ws700 = 'Etc/GMT-1', 
     keep_recorded = FALSE) {
@@ -223,10 +223,10 @@ get_ws700 <- function(folder, from = NULL, to = NULL,
         }
     )
 }
-get_ws700A <- function(...) {
-    get_ws700(ws_label = 'A', ...)
+read_ws700A <- function(...) {
+    read_ws700(ws_label = 'A', ...)
 }
-get_ws700B <- function(...) {
-    get_ws700(ws_label = 'B', ...)
+read_ws700B <- function(...) {
+    read_ws700(ws_label = 'B', ...)
 }
 

@@ -569,15 +569,12 @@ coord_transf <- function(x, crs_to,
 	}
     # add coords?
     if (append) {
-        cx <- function(x, ...) {
-            if (inherits(x, c('data.frame', 'matrix'))) {
-                cbind(x, ...)
+        cx <- function(.x, ...) {
+            if (inherits(.x, c('data.frame', 'matrix'))) {
+                cbind(.x, ...)
             } else {
-                c(x, ...)
+                c(.x, ...)
             }
-        }
-        if (isdt <- is.data.table(out)) {
-            out <- as.data.frame(out)
         }
         if (is_wgs(crs_from)) {
             if (any(c('x', 'y') %in% names(out))) {
@@ -596,9 +593,6 @@ coord_transf <- function(x, crs_to,
                 lat = getElement(out, y_column),
                 lon = getElement(out, x_column)
             )
-        }
-        if (isdt) {
-            setDT(out)
         }
     }
     # add crs

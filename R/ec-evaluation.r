@@ -1502,6 +1502,7 @@ process_ec_fluxes <- function(
                 # copy cluster
                 cl <- ncores
             } else {
+                cat('\nSetting up parallelism...\n')
                 # start cluster
                 cl <- bLSmodelR:::.makePSOCKcluster(ncores, 
                     memory_limit = parallel_mem_limit)
@@ -1596,28 +1597,33 @@ process_ec_fluxes <- function(
             # set ncores to 1 & run_parallel to FALSE
             ncores <- 1
             run_parallel <- FALSE
-            # export current_env & main function
-            # parallel::clusterExport(cl, c('current_env', 'st_dates', 'et_dates'),
-            parallel::clusterExport(cl, c('st_dates', 'et_dates', 'start_time',
-                    'end_time'), current_env)
+            # create tempfiles
+            tf <- tempfile()
+            tf_cobj <- paste0(tf, '-cobj.qdata')
+            tf_resid <- paste0(tf, '-resid.qdata')
+            # save cobj exports as qdata
+            qd_save(mget(cobj, envir = current_env), tf_cobj, 
+                warn_unsupported_types = FALSE)
+            # save residual exports
+            qd_save(list(
+                    st_dates = st_dates, 
+                    et_dates = et_dates, 
+                    start_time = start_time, 
+                    end_time = end_time
+                    ), tf_resid, warn_unsupported_types = FALSE)
+
+
+            # save on ssd (cruncher)
+
+            browser()
+
             # # call main function in parallel
-            out_list <- bLSmodelR:::.clusterApplyLB(cl, ind_split, \(ind, env) {
-                utc_dates <- unique(c(st_dates[ind], et_dates[ind]))
-                formatted_dates <- gsub('-', '_', utc_dates, fixed = TRUE)
-                try(do.call(process_ec_fluxes,
-                    c(
-                        list(
-                            dates_utc = utc_dates,
-                            dates_formatted = formatted_dates,
-                            start_time = start_time[ind],
-                            end_time = end_time[ind],
-                            as_ibts = FALSE,
-                            parallelism_strategy = 'recursive'
-                        ),
-                        mget(cobj, envir = env)
-                    )
-                ))
-            }, env = current_env)
+            out_list <- bLSmodelR:::.clusterApplyLB(cl, ind_split, .pef_wrapper, 
+                tf_cobj = tf_cobj, tf_resid = tf_resid)
+            str(out_list[[1]])
+            out_list[[1]]
+
+
             # check try errors
             try_errors <- sapply(out_list, \(x) inherits(x, 'try-error'))
             if (any(try_errors)) {
@@ -1962,6 +1968,7 @@ process_ec_fluxes <- function(
         }
 
         # declination
+        return(mag_dec)
         current_declination <- daily_data[, mag_dec(Time[1]), by = bin][, V1]
         d_north <- dev_north + current_declination
 
@@ -3028,6 +3035,29 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
     out
 }
 # EC MAIN end
+
+
+# parallel helper
+.pef_wrapper <- function(ind, tf_cobj, tf_resid) {
+    cobj_list <- qs2::qd_read(tf_cobj)
+    resid_list <- qs2::qd_read(tf_resid)
+    utc_dates <- unique(c(resid_list$st_dates[ind], 
+            resid_list$et_dates[ind]))
+    formatted_dates <- gsub('-', '_', utc_dates, fixed = TRUE)
+    try(do.call(process_ec_fluxes,
+        c(
+            list(
+                dates_utc = utc_dates,
+                dates_formatted = formatted_dates,
+                start_time = resid_list$start_time[ind],
+                end_time = resid_list$end_time[ind],
+                as_ibts = FALSE,
+                parallelism_strategy = 'recursive'
+            ),
+            cobj_list
+        )
+    ))
+}
 
 ## wpl post-processing ----------------------------------------
 

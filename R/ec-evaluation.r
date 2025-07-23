@@ -1521,11 +1521,14 @@ process_ec_fluxes <- function(
 
     # if/else RECURSIVE else
     } else {
-        # get extra data from top function environment
-        dots <- list(...)
+        # # get extra data from top function environment
+        # dots <- list(...)
         # assign dots to current env
-        for (what in names(dots)) {
-            assign(what, dots[[what]])
+        nms <- ...names()
+        for (i in seq_len(...length())) {
+        # for (what in names(dots)) {
+            # assign(what, dots[[what]])
+            assign(nms[i], ...elt(i))
         }
         # check times (for parallel calculation with less intervals than cores)
         if (length(start_time) == 0 || length(end_time) == 0) {
@@ -1599,11 +1602,10 @@ process_ec_fluxes <- function(
             run_parallel <- FALSE
             # create tempfiles
             tf <- tempfile()
-            tf_cobj <- paste0(tf, '-cobj.qdata')
+            tf_cobj <- paste0(tf, '-cobj.qs2')
             tf_resid <- paste0(tf, '-resid.qdata')
             # save cobj exports as qdata
-            qd_save(mget(cobj, envir = current_env), tf_cobj, 
-                warn_unsupported_types = FALSE)
+            qs2::qs_save(mget(cobj, envir = current_env), tf_cobj)
             # save residual exports
             qd_save(list(
                     st_dates = st_dates, 
@@ -1611,19 +1613,12 @@ process_ec_fluxes <- function(
                     start_time = start_time, 
                     end_time = end_time
                     ), tf_resid, warn_unsupported_types = FALSE)
-
-
             # save on ssd (cruncher)
-
-            browser()
 
             # # call main function in parallel
             out_list <- bLSmodelR:::.clusterApplyLB(cl, ind_split, .pef_wrapper, 
                 tf_cobj = tf_cobj, tf_resid = tf_resid)
-            str(out_list[[1]])
-            out_list[[1]]
-
-
+            browser()
             # check try errors
             try_errors <- sapply(out_list, \(x) inherits(x, 'try-error'))
             if (any(try_errors)) {
@@ -1968,7 +1963,6 @@ process_ec_fluxes <- function(
         }
 
         # declination
-        return(mag_dec)
         current_declination <- daily_data[, mag_dec(Time[1]), by = bin][, V1]
         d_north <- dev_north + current_declination
 
@@ -3039,7 +3033,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
 # parallel helper
 .pef_wrapper <- function(ind, tf_cobj, tf_resid) {
-    cobj_list <- qs2::qd_read(tf_cobj)
+    cobj_list <- qs2::qs_read(tf_cobj)
     resid_list <- qs2::qd_read(tf_resid)
     utc_dates <- unique(c(resid_list$st_dates[ind], 
             resid_list$et_dates[ind]))

@@ -1504,7 +1504,7 @@ process_ec_fluxes <- function(
             } else {
                 cat('\nSetting up parallelism...\n')
                 # start cluster
-                cl <- bLSmodelR:::.makePSOCKcluster(ncores, 
+                cl <- .makePSOCKcluster(ncores, 
                     memory_limit = parallel_mem_limit)
                 # stop cluster on exit
                 on.exit(parallel::stopCluster(cl))
@@ -1640,9 +1640,9 @@ process_ec_fluxes <- function(
             # be verbose
             cat('~~~\nRunning main function in parallel...\n')
             # # call main function in parallel
-            out_list <- bLSmodelR:::.clusterApplyLB(cl, ind_split, .pef_wrapper, 
-                tf_cobj = tf_cobj, tf_resid = tf_resid, tf_sonic = tf_sonic,
-                tf_ht = tf_ht, tf_licor = tf_licor
+            out_list_paths <- .clusterApplyLB(cl, ind_split, 
+                .pef_wrapper, tf_cobj = tf_cobj, tf_resid = tf_resid, 
+                tf_sonic = tf_sonic, tf_ht = tf_ht, tf_licor = tf_licor
             )
             # remove files
             unlink(tf_resid)
@@ -1712,7 +1712,7 @@ process_ec_fluxes <- function(
             if (length(sonic_selected)) {
                 if (run_parallel) {
                     sonic_raw <- rbindlist(
-                        bLSmodelR:::.clusterApplyLB(
+                        .clusterApplyLB(
                             cl,
                             file.path(sonic_directory, sonic_selected), 
                             \(x) {
@@ -1767,7 +1767,7 @@ process_ec_fluxes <- function(
             # read ht files
             if (length(ht_selected)) {
                 if (run_parallel) {
-                    ht <- rbindlist(bLSmodelR:::.clusterApplyLB(
+                    ht <- rbindlist(.clusterApplyLB(
                             cl,
                             file.path(ht_directory, ht_selected), 
                             \(x) {
@@ -1818,7 +1818,7 @@ process_ec_fluxes <- function(
             if (length(licor_selected)) {
                 # read new licor files
                 if (run_parallel) {
-                    licor <- rbindlist(bLSmodelR:::.clusterApplyLB(
+                    licor <- rbindlist(.clusterApplyLB(
                             cl,
                             file.path(licor_directory, licor_selected), 
                             \(x) {
@@ -2048,7 +2048,7 @@ process_ec_fluxes <- function(
             # export current_env & main function
             parallel::clusterExport(cl, 'current_env', current_env)
             # run main function
-            results <- rbindlist(bLSmodelR:::.clusterApplyLB(
+            results <- rbindlist(.clusterApplyLB(
                     cl, split(daily_data, by = 'bin'),
                     \(x) .ec_main(x, current_env)),
                 fill = TRUE)

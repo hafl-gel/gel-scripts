@@ -228,11 +228,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
         parallel::clusterCall(cl, library, package = 'lubridate', character.only = TRUE)
         parallel::clusterCall(cl, library, package = 'qs', character.only = TRUE)
         # get progress bar if blsmodelr is available
-        if (requireNamespace('bLSmodelR', quietly = TRUE)) {
-            cluster_apply_lb <- bLSmodelR:::.clusterApplyLB
-        } else {
-            cluster_apply_lb <- parallel::clusterApplyLB
-        }
+        cluster_apply_lb <- .clusterApplyLB
     }
 
     if(inherits(DOASinfo, "character")){
@@ -1428,20 +1424,12 @@ evalOffline <- function(
 
         # parallel calculation
         cat("Starting calculation.\nThis might take a while...\n\n")
-        if (requireNamespace('bLSmodelR')) {
-            # split diffspec indices into 
-            j_frac <- ceiling(length(diff_specs) / n_chunks)
-            lcl <- ceiling(j_frac / length(cl))
-            p_index <- parallel::splitIndices(length(DiffSpec$diffspec), length(cl) * lcl)
-            out <- bLSmodelR:::.clusterApplyLB(cl, p_index,
-                fit_parallel, doas_win = DOAS.win, path_length = path.length)
-        } else {
-            # split diffspec indices
-            p_index <- parallel::splitIndices(length(DiffSpec$diffspec), length(cl))
-            # run in chunks
-            out <- parallel::clusterApply(cl, p_index, fit_parallel, 
-                doas_win = DOAS.win, path_length = path.length)
-        }
+        # split diffspec indices into 
+        j_frac <- ceiling(length(diff_specs) / n_chunks)
+        lcl <- ceiling(j_frac / length(cl))
+        p_index <- parallel::splitIndices(length(DiffSpec$diffspec), length(cl) * lcl)
+        out <- .clusterApplyLB(cl, p_index,
+            fit_parallel, doas_win = DOAS.win, path_length = path.length)
 
         # unlist list of lists
         out <- unlist(out, recursive = FALSE)

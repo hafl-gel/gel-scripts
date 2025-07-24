@@ -1526,12 +1526,8 @@ process_ec_fluxes <- function(
         for (i in seq_len(...length())) {
             assign(nms[i], ...elt(i))
         }
-        if ('tf_cobj' %in% nms) {
-            dots <- qs2::qs_read(tf_cobj)
-            # TODO: sonic_directory, ht_directory, licor_directory einzeln abspeichern -> verwende qd_save/qd_read!
-        } else {
-            stop('recursive call must have "tf_cobj" as dots argument!')
-        }
+        # read cobj dots
+        dots <- qs2::qs_read(tf_cobj)
         # assign dots to current env
         for (what in names(dots)) {
             assign(what, dots[[what]])
@@ -1539,6 +1535,10 @@ process_ec_fluxes <- function(
         }
         rm(dots)
         for (i in 1:10) gc()
+        # read sonic_directory
+        sonic_directory <- qs2::qd_read(tf_sonic)
+        ht_directory <- qs2::qd_read(tf_ht)
+        licor_directory <- qs2::qd_read(tf_licor)
         # check times (for parallel calculation with less intervals than cores)
         if (length(start_time) == 0 || length(end_time) == 0) {
             # return NULL if length is zero
@@ -1553,10 +1553,11 @@ process_ec_fluxes <- function(
     if (length(start_time) > 1 && parallelism_strategy == 'sequential') {
         # SEQUENTIAL
         # get current objects as string
-        # strip off objects which need changes
+        #   -> strip off objects which need changes
         cobj <- setdiff(ls(envir = current_env), 
             c('start_time', 'end_time', 'parallelism_strategy', 'dates_utc', 
-                'dates_formatted', 'as_ibts', 'current_env'))
+                'dates_formatted', 'as_ibts', 'current_env',
+                'sonic_directory', 'ht_directory', 'licor_directory'))
         # get start/end time dates
         st_dates <- as.Date(start_time)
         et_dates <- as.Date(end_time - 1e-4)
@@ -1564,8 +1565,19 @@ process_ec_fluxes <- function(
         tf <- tempfile()
         tf_cobj <- paste0(tf, '-cobj.qs2')
         tf_resid <- paste0(tf, '-resid.qdata')
-        # save cobj exports as qdata
-        qs2::qs_save(mget(cobj, envir = current_env), tf_cobj)
+        tf_sonic <- paste0(tf, 'sonic.qdata')
+        tf_ht <- paste0(tf, 'ht.qdata')
+        tf_licor <- paste0(tf, 'licor.qdata')
+        # save cobj exports as qs2 & qdata
+        qs2::qs_save(mget(cobj, envir = current_env), tf_cobj, 
+            compress_level = -7)
+        qs2::qd_save(sonic_directory, tf_sonic, warn_unsupported_types = FALSE, 
+            compress_level = -7)
+        qs2::qd_save(ht_directory, tf_ht, warn_unsupported_types = FALSE,
+            compress_level = -7)
+        qs2::qd_save(licor_directory, tf_licor, warn_unsupported_types = FALSE,
+            compress_level = -7)
+        # TODO: clean up tempfiles later!!!
         rm(sonic_directory, ht_directory, licor_directory)
         for (i in 1:10) gc()
         # copy files to # of workers ??
@@ -1629,7 +1641,11 @@ process_ec_fluxes <- function(
             cat('~~~\nRunning main function in parallel...\n')
             # # call main function in parallel
             out_list <- bLSmodelR:::.clusterApplyLB(cl, ind_split, .pef_wrapper, 
-                tf_cobj = tf_cobj, tf_resid = tf_resid)
+                tf_cobj = tf_cobj, tf_resid = tf_resid, tf_sonic = tf_sonic,
+                tf_ht = tf_ht, tf_licor = tf_licor
+            )
+            # remove files
+            unlink(tf_resid)
             browser()
             # check try errors
             try_errors <- sapply(out_list, \(x) inherits(x, 'try-error'))
@@ -1659,6 +1675,11 @@ process_ec_fluxes <- function(
                 }
             )
         }
+        # remove files
+        unlink(tf_cobj)
+        unlink(tf_ht)
+        unlink(tf_sonic)
+        unlink(tf_licor)
         # rbind output list
         results <- rbindlist(out_list, fill = TRUE)
         # SEQUENTIAL END
@@ -3050,7 +3071,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
 
 # parallel helper
-.pef_wrapper <- function(ind, tf_cobj, tf_resid) {
+.pef_wrapper <- function(ind, tf_cobj, tf_resid, tf_sonic, tf_ht,
+    tf_licor) {
     resid_list <- qs2::qd_read(tf_resid)
     utc_dates <- unique(c(resid_list$st_dates[ind], 
             resid_list$et_dates[ind]))
@@ -3062,7 +3084,10 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
         end_time = resid_list$end_time[ind],
         as_ibts = FALSE,
         parallelism_strategy = 'recursive',
-        tf_cobj = tf_cobj
+        tf_cobj = tf_cobj,
+        tf_sonic = tf_sonic,
+        tf_ht = tf_ht,
+        tf_licor = tf_licor
     ))
 }
 

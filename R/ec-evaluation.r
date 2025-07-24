@@ -1647,11 +1647,19 @@ process_ec_fluxes <- function(
             # remove files
             unlink(tf_resid)
             browser()
-            # check try errors
-            try_errors <- sapply(out_list, \(x) inherits(x, 'try-error'))
-            if (any(try_errors)) {
-                cat('try errors in parallel calls! Returning list for checking..\n')
-                return(out_list)
+            # loop over list
+            out_list <- vector('list', length(out_list_paths))
+            for (i in seq_along(out_list_paths)) {
+                # check on try errors
+                if (inherits(out_list_paths[[i]], 'try-error')) {
+                    cat('try errors in parallel calls!',
+                        'Returning worker results list for checking..\n')
+                    return(out_list_paths)
+                }
+                # read file
+                out_list[[i]] <- qs2::qd_read(out_list_paths[[i]])
+                # delete file
+                unlink(out_list_paths[[i]])
             }
         } else {
             # loop over dates
@@ -1682,6 +1690,8 @@ process_ec_fluxes <- function(
         unlink(tf_licor)
         # rbind output list
         results <- rbindlist(out_list, fill = TRUE)
+        rm(out_list)
+        for (i in 1:10) gc()
         # SEQUENTIAL END
     } else {
         # ALL-IN-ONE/RECURSIVE
@@ -3077,7 +3087,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
     utc_dates <- unique(c(resid_list$st_dates[ind], 
             resid_list$et_dates[ind]))
     formatted_dates <- gsub('-', '_', utc_dates, fixed = TRUE)
-    try(process_ec_fluxes(
+    out <- try(process_ec_fluxes(
         dates_utc = utc_dates,
         dates_formatted = formatted_dates,
         start_time = resid_list$start_time[ind],
@@ -3089,6 +3099,17 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
         tf_ht = tf_ht,
         tf_licor = tf_licor
     ))
+    # save to tmpfile on success
+    if (inherits(out, 'try-error')) {
+        # return error
+        return(out)
+    }
+    # get path
+    tf_out <- sub('resid', paste(ind, collapse = '-'), tf_resid)
+    # save file
+    qs2::qd_save(out, tf_out, warn_unsupported_types = FALSE)
+    # return path
+    tf_out
 }
 
 ## wpl post-processing ----------------------------------------

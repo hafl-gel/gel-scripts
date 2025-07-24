@@ -14,3 +14,4 @@ LinkingTo: Rcpp
 LazyData: true
 RoxygenNote: 7.3.2
 Remotes: ChHaeni/ibts
+StagedInstall: no

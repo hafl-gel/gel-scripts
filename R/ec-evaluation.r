@@ -1534,7 +1534,17 @@ process_ec_fluxes <- function(
             dots[[what]] <- NULL
         }
         rm(dots)
-        for (i in 1:10) gc()
+        # fix mag_dec
+        # if (is.null(mag_dec)) {
+        #     mag_dec <- function(x) oce::magneticField(declination[["lon"]], 
+        #         declination[["lat"]], x)$declination
+        # }
+        if (is.call(mag_dec)) {
+            tmp <- function(x) {}
+            body(tmp) <- mag_dec
+            mag_dec <- tmp
+            rm(tmp)
+        }
         # read sonic_directory
         sonic_directory <- qs2::qd_read(tf_sonic)
         ht_directory <- qs2::qd_read(tf_ht)
@@ -1556,7 +1566,8 @@ process_ec_fluxes <- function(
         #   -> strip off objects which need changes
         cobj <- setdiff(ls(envir = current_env), 
             c('start_time', 'end_time', 'parallelism_strategy', 'dates_utc', 
-                'dates_formatted', 'as_ibts', 'current_env',
+                'dates_formatted', 'as_ibts', 'current_env', 'mag_dec',
+                'ncores', 'run_parallel', 'cl', 
                 'sonic_directory', 'ht_directory', 'licor_directory'))
         # get start/end time dates
         st_dates <- as.Date(start_time)
@@ -1569,8 +1580,16 @@ process_ec_fluxes <- function(
         tf_ht <- paste0(tf, 'ht.qdata')
         tf_licor <- paste0(tf, 'licor.qdata')
         # save cobj exports as qs2 & qdata
-        qs2::qs_save(mget(cobj, envir = current_env), tf_cobj, 
-            compress_level = -7)
+        dots <- mget(cobj, envir = current_env)
+        if (is.function(mag_dec)) {
+            # mag_dec <- NULL
+            mag_dec <- body(mag_dec)
+        }
+        #   -> fix parallel settings & mag_dec
+        # set ncores to 1 & run_parallel to FALSE
+        dots <- c(dots, list(mag_dec = mag_dec, ncores = 1, run_parallel = FALSE))
+        qs2::qs_save(dots, tf_cobj, compress_level = -7)
+        rm(dots)
         qs2::qd_save(sonic_directory, tf_sonic, warn_unsupported_types = FALSE, 
             compress_level = -7)
         qs2::qd_save(ht_directory, tf_ht, warn_unsupported_types = FALSE,
@@ -1627,9 +1646,6 @@ process_ec_fluxes <- function(
                     parallel::clusterSplit(cl, ints)
                 )
             }
-            # set ncores to 1 & run_parallel to FALSE
-            ncores <- 1
-            run_parallel <- FALSE
             # save residual exports
             qd_save(list(
                     st_dates = st_dates, 
@@ -1646,7 +1662,6 @@ process_ec_fluxes <- function(
             )
             # remove files
             unlink(tf_resid)
-            browser()
             # loop over list
             out_list <- vector('list', length(out_list_paths))
             for (i in seq_along(out_list_paths)) {
@@ -1678,7 +1693,10 @@ process_ec_fluxes <- function(
                         end_time = end_time[ind],
                         as_ibts = FALSE,
                         parallelism_strategy = 'recursive',
-                        tf_cobj = tf_cobj
+                        tf_cobj = tf_cobj,
+                        tf_sonic = tf_sonic,
+                        tf_ht = tf_ht,
+                        tf_licor = tf_licor
                     )
                 }
             )

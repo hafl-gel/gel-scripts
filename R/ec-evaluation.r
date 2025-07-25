@@ -1093,6 +1093,7 @@ process_ec_fluxes <- function(
         , parallel_mem_limit = NULL
         , processing_strategy = c('sequential', 'all-in-one')[1]
         , minimal_output = FALSE
+        , parallel_tmpdir = tempdir()
         , ...
 	){
     # ARGUMENTS
@@ -1521,7 +1522,7 @@ process_ec_fluxes <- function(
         }
 
         # get temporary file name base
-        tf <- tempfile()
+        tf <- tempfile(tmpdir = parallel_tmpdir)
     # if/else RECURSIVE else
     } else {
         # assign dots to current env

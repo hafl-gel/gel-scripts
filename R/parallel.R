@@ -245,5 +245,5 @@
 .addClusterOptions <- getFromNamespace('addClusterOptions', 'parallel')
 .defaultClusterOptions <- getFromNamespace('defaultClusterOptions', 'parallel')
 .getClusterOption <- getFromNamespace('getClusterOption', 'parallel')
-.sendCall <- getFromNamespace('sendCall', 'parallel')
 .recvResult <- getFromNamespace('recvResult', 'parallel')
+.workerCommand <- getFromNamespace('workerCommand', 'parallel')

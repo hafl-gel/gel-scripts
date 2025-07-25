@@ -1200,6 +1200,7 @@ process_ec_fluxes <- function(
         rot_args <- rotation_args
         rotation_args <- eval(formals(process_ec_fluxes)$rotation_args)
         rotation_args[names(rot_args)] <- rot_args
+        rm(rot_args)
         detrending <- fix_defaults(detrending, variables)
         na_limits <- fix_defaults(na_limits, variables)
         limits_lower <- fix_defaults(limits_lower, variables)
@@ -1519,6 +1520,8 @@ process_ec_fluxes <- function(
             cat('\n=> Processing in parallel using', length(cl), 'cores.\n\n')
         }
 
+        # get temporary file name base
+        tf <- tempfile()
     # if/else RECURSIVE else
     } else {
         # assign dots to current env
@@ -1534,11 +1537,6 @@ process_ec_fluxes <- function(
             dots[[what]] <- NULL
         }
         rm(dots)
-        # fix mag_dec
-        # if (is.null(mag_dec)) {
-        #     mag_dec <- function(x) oce::magneticField(declination[["lon"]], 
-        #         declination[["lat"]], x)$declination
-        # }
         if (is.call(mag_dec)) {
             tmp <- function(x) {}
             body(tmp) <- mag_dec
@@ -1573,12 +1571,11 @@ process_ec_fluxes <- function(
         st_dates <- as.Date(start_time)
         et_dates <- as.Date(end_time - 1e-4)
         # create tempfile paths
-        tf <- tempfile()
         tf_cobj <- paste0(tf, '-cobj.qs2')
         tf_resid <- paste0(tf, '-resid.qdata')
-        tf_sonic <- paste0(tf, 'sonic.qdata')
-        tf_ht <- paste0(tf, 'ht.qdata')
-        tf_licor <- paste0(tf, 'licor.qdata')
+        tf_sonic <- paste0(tf, '-sonic.qdata')
+        tf_ht <- paste0(tf, '-ht.qdata')
+        tf_licor <- paste0(tf, '-licor.qdata')
         # save cobj exports as qs2 & qdata
         dots <- mget(cobj, envir = current_env)
         if (is.function(mag_dec)) {
@@ -1743,10 +1740,7 @@ process_ec_fluxes <- function(
                         .clusterApplyLB(
                             cl,
                             file.path(sonic_directory, sonic_selected), 
-                            \(x) {
-                                cat('\t')
-                                read_sonic(x)
-                            }
+                            read_sonic
                         )
                     )
                 } else {
@@ -1795,14 +1789,13 @@ process_ec_fluxes <- function(
             # read ht files
             if (length(ht_selected)) {
                 if (run_parallel) {
-                    ht <- rbindlist(.clusterApplyLB(
+                    ht <- rbindlist(
+                        .clusterApplyLB(
                             cl,
                             file.path(ht_directory, ht_selected), 
-                            \(x) {
-                                cat('\t')
-                                read_ht8700(x)
-                            }
-                    ))
+                            read_ht8700
+                        )
+                    )
                 } else {
                     ht <- rbindlist(lapply(
                             file.path(ht_directory, ht_selected), 
@@ -1846,16 +1839,13 @@ process_ec_fluxes <- function(
             if (length(licor_selected)) {
                 # read new licor files
                 if (run_parallel) {
-                    licor <- rbindlist(.clusterApplyLB(
+                    licor <- rbindlist(
+                        .clusterApplyLB(
                             cl,
                             file.path(licor_directory, licor_selected), 
-                            \(x) {
-                                cat('\tFile:', x, '- ')
-                                out <- read_licor(x)
-                                cat('done\n')
-                                out
-                            }
-                    ))
+                            read_licor
+                        )
+                    )
                 } else {
                     licor <- rbindlist(lapply(
                             file.path(licor_directory, licor_selected), 
@@ -1908,16 +1898,18 @@ process_ec_fluxes <- function(
                 rec_Hz
             ))
         }]
+        rm(t0)
         # sonic including all times
         full_sonic <- data.table(
             Time = .POSIXct(t_basis, tz = 'UTC'), Hz = rec_Hz,
             u = NA_real_, v = NA_real_, w = NA_real_, T = NA_real_,
             sonic = sonic_raw[, sonic[1]]
         )
+        rm(t_basis)
         # fill sonic data
         full_sonic[t_indices[[1]], c('u', 'v', 'w', 'T') := 
             sonic_raw[t_indices[[2]], .SD, .SDcols = c('u', 'v', 'w', 'T')]]
-        rm(sonic_raw)
+        rm(sonic_raw, t_indices)
         for (i in 1:10) gc()
 
         cat('Merging files - ')
@@ -2069,20 +2061,42 @@ process_ec_fluxes <- function(
         ### correct for sonic north deviation
         daily_data[, WD := (WD + d_north[.GRP]) %% 360, by = bin]
 
+        # get relevant environment objects
+        env_obj <- setdiff(ls(envir = current_env), c(
+            'cl', 'ncores', 'run_parallel', 'daily_data', 
+            'current_env', 'rotation_args', 'mag_dec'
+        ))
+        eobj <- mget(env_obj, envir = current_env)
 
         # loop over intervals: call MAIN function
         if (run_parallel) {
             cat('~~~\nprocessing fluxes in parallel...\n')
-            # export current_env & main function
-            parallel::clusterExport(cl, 'current_env', current_env)
+            # save env objects
+            tf_env <- paste0(tf, '-env.qs2')
+            qs2::qs_save(eobj, tf_env)
+            # save daily_data
+            dd <- daily_data[, {
+                tf_sd <- paste0(tf, '-SD-', .BY[[1]], '.qdata')
+                qs2::qd_save(cbind(.SD, bin = .BY[[1]]), tf_sd, 
+                    warn_unsupported_types = FALSE)
+                .(tf_sd)
+            }, by = bin]
             # run main function
-            results <- rbindlist(.clusterApplyLB(
-                    cl, split(daily_data, by = 'bin'),
-                    \(x) .ec_main(x, current_env)),
-                fill = TRUE)
+            out_list <- .clusterApplyLB(cl, dd[, tf_sd], .wrapper_main, 
+                tf_env = tf_env)
+            results <- rbindlist(lapply(out_list, \(x) {
+                # read results
+                out <- qs2::qd_read(x)
+                # delete temporary file
+                unlink(x)
+                # return
+                out
+            }), fill = TRUE)
+            # delete temporary files
+            unlink(tf_env)
         } else {
             cat('~~~\nprocessing fluxes sequentially...')
-            results <- .ec_main(daily_data, current_env)
+            results <- .ec_main(daily_data, eobj)
         }
         # ALL-IN-ONE/RECURSIVE end
     }
@@ -2280,12 +2294,23 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
     rev(cumsum(rev(cospec_model(fx, m, mu, A0, f))))
 }
 
+# main wrapper function for parallel call
+.wrapper_main <- function(tf_sd, tf_env) {
+    # call main function
+    out <- .ec_main(qs2::qd_read(tf_sd), qs2::qs_read(tf_env))
+    # save to qdata
+    qs2::qd_save(out, tf_sd)
+    # return path
+    tf_sd
+}
+
 # EC MAIN function
-.ec_main <- function(dat, env = parent.frame()) {
+.ec_main <- function(dat, env_list) {
     # get variables
-    for (what in ls(env)) {
-        assign(what, get(what, env))
+    for (what in names(env_list)) {
+        assign(what, env_list[[what]])
     }
+    rm(env_list)
     # prepare ogive output
     if (create_dailygraphs || ogives_out) {
         e_ogive <- new.env()

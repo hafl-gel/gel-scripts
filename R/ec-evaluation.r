@@ -1091,7 +1091,7 @@ process_ec_fluxes <- function(
         , as_ibts = TRUE
         , ncores = 1
         , parallel_mem_limit = NULL
-        , parallelism_strategy = c('sequential', 'all-in-one')[1]
+        , processing_strategy = c('sequential', 'all-in-one')[1]
         , minimal_output = FALSE
         , ...
 	){
@@ -1101,14 +1101,14 @@ process_ec_fluxes <- function(
 	script_start <- Sys.time()
 
     # check parallelism startegy
-    parallelism_strategy <- match.arg(parallelism_strategy, 
+    processing_strategy <- match.arg(processing_strategy, 
         choices = c('sequential', 'all-in-one', 'recursive'))
 
     # get current environment
     current_env <- environment()
 
     # if/else RECURSIVE
-    if (parallelism_strategy != 'recursive') {
+    if (processing_strategy != 'recursive') {
 
         # check input
         if (!missing(create_graphs) && create_graphs) {
@@ -1560,12 +1560,12 @@ process_ec_fluxes <- function(
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # check all-in-one vs. sequential
-    if (length(start_time) > 1 && parallelism_strategy == 'sequential') {
+    if (length(start_time) > 1 && processing_strategy == 'sequential') {
         # SEQUENTIAL
         # get current objects as string
         #   -> strip off objects which need changes
         cobj <- setdiff(ls(envir = current_env), 
-            c('start_time', 'end_time', 'parallelism_strategy', 'dates_utc', 
+            c('start_time', 'end_time', 'processing_strategy', 'dates_utc', 
                 'dates_formatted', 'as_ibts', 'current_env', 'mag_dec',
                 'ncores', 'run_parallel', 'cl', 
                 'sonic_directory', 'ht_directory', 'licor_directory'))
@@ -1692,7 +1692,7 @@ process_ec_fluxes <- function(
                         start_time = start_time[ind],
                         end_time = end_time[ind],
                         as_ibts = FALSE,
-                        parallelism_strategy = 'recursive',
+                        processing_strategy = 'recursive',
                         tf_cobj = tf_cobj,
                         tf_sonic = tf_sonic,
                         tf_ht = tf_ht,
@@ -2093,7 +2093,7 @@ process_ec_fluxes <- function(
     } else {
         # fix ogives out
         if (create_dailygraphs || ogives_out) {
-            if (parallelism_strategy == 'sequential') {
+            if (processing_strategy == 'sequential') {
                 # get ogives etc.
                 Covars_Out <- unlist(lapply(out_list, attr, 'covars'), 
                     recursive = FALSE)
@@ -2116,7 +2116,7 @@ process_ec_fluxes <- function(
                         ogv_dyn = Ogive_dyn_Out
                     )
                 }
-            } else if (parallelism_strategy == 'all-in-one' && create_dailygraphs) {
+            } else if (processing_strategy == 'all-in-one' && create_dailygraphs) {
                 # get ogives etc. for plotting
                 Covars_Out <- attr(results, 'covars')
                 Cospec_fix_Out <- attr(results, 'cospec_fix')
@@ -2126,7 +2126,7 @@ process_ec_fluxes <- function(
             }
         }
         # create daily graphs
-        if (parallelism_strategy != 'recursive' && create_dailygraphs) {
+        if (processing_strategy != 'recursive' && create_dailygraphs) {
             if (avg_period != '30mins') {
                 stop('daily figures not yet implemented for avg_period != "30mins"')
             }
@@ -2252,12 +2252,12 @@ process_ec_fluxes <- function(
             ]
         }
         # convert to ibts
-        if (parallelism_strategy != 'recursive' && as_ibts) {
+        if (processing_strategy != 'recursive' && as_ibts) {
             results <- as.ibts(results)
         }
     }
 
-    if (parallelism_strategy != 'recursive') {
+    if (processing_strategy != 'recursive') {
         cat("\n************************************************************\n") 
         cat("operation finished @", format(Sys.time(), "%d.%m.%Y %H:%M:%S"), 
             "time elapsed: ", sprintf('%1.1f', 
@@ -3111,7 +3111,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
         start_time = resid_list$start_time[ind],
         end_time = resid_list$end_time[ind],
         as_ibts = FALSE,
-        parallelism_strategy = 'recursive',
+        processing_strategy = 'recursive',
         tf_cobj = tf_cobj,
         tf_sonic = tf_sonic,
         tf_ht = tf_ht,

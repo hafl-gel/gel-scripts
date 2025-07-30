@@ -1,12 +1,6 @@
-This repository contains a collection of R scripts from the BFH/HAFL group GEL.
+This repository contains a collection of R functions from the BFH/HAFL group GEL,
+which has been transformed into a package called 'gel' ([-> get latest release](https://github.com/hafl-gel/gel-scripts/releases/latest)).
 
-The easiest way to source individual scripts is with the aid of the package `devtools`.
-E.g. to source the script to evaluate turbulence statistics from the GILL Windmaster sonic anemometer run:
-
-```r
-# script <- 'sonic-turbulence.r'
-# raw_file <- paste0('https://rawgithubusercontent.com/ChHaeni/gel-scripts/main/', script)
-# devtools::source_url(raw_file)
-devtools::source_url('https://rawgithubusercontent.com/ChHaeni/gel-scripts/main/sonic-turbulence.r')
-```
+NOTE:
+The required zlib.h is provided by zlib1g-dev (debian)
 

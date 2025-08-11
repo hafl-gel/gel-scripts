@@ -1708,8 +1708,10 @@ process_ec_fluxes <- function(
         unlink(tf_licor)
         # rbind output list
         results <- rbindlist(out_list, fill = TRUE)
-        rm(out_list)
-        for (i in 1:10) gc()
+        if (!(create_dailygraphs || ogives_out)) {
+            rm(out_list)
+            for (i in 1:10) gc()
+        }
         # SEQUENTIAL END
     } else {
         # ALL-IN-ONE/RECURSIVE

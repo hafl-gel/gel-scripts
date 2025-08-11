@@ -1670,9 +1670,11 @@ process_ec_fluxes <- function(
                     return(out_list_paths)
                 }
                 # read file
-                out_list[[i]] <- qs2::qd_read(out_list_paths[[i]])
-                # delete file
-                unlink(out_list_paths[[i]])
+                if (!is.null(out_list_paths[[i]])) {
+                    out_list[[i]] <- qs2::qd_read(out_list_paths[[i]])
+                    # delete file
+                    unlink(out_list_paths[[i]])
+                }
             }
         } else {
             # loop over dates
@@ -3127,6 +3129,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 # parallel helper
 .pef_wrapper <- function(ind, tf_cobj, tf_resid, tf_sonic, tf_ht,
     tf_licor) {
+    if (length(ind) == 0) {
+        return(NULL)
+    }
     resid_list <- qs2::qd_read(tf_resid)
     utc_dates <- unique(c(resid_list$st_dates[ind], 
             resid_list$et_dates[ind]))

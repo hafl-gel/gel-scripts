@@ -3156,7 +3156,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
         return(out)
     }
     # get path
-    tf_out <- sub('resid', paste(ind, collapse = '-'), tf_resid)
+    tf_out <- sub('resid', digest::digest(ind), tf_resid)
     # save file
     qs2::qd_save(out, tf_out, warn_unsupported_types = FALSE)
     # return path

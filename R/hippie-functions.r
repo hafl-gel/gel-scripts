@@ -2,16 +2,16 @@
 read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC', 
     flatten = FALSE) {
     if (length(file) > 1) {
-        if (all(file.exists(file))) {
-            cat('Fix providing multiple files!\n')
-            browser()
+        if (all(!grepl(',|;', file))) {
+            return(lapply(file, read_hippie, as_ibts = as_ibts, tz_data = tz_data, 
+                    tz_out = tz_out, flatten = flatten))
         } else {
             dat_raw <- file
         }
     } else {
         dat_raw <- readLines(file)
     }
-    hdr_lines <- grep('^Date', dat_raw)
+    hdr_lines <- grep('^(Date|SDcard)', dat_raw)
 
     if (length(hdr_lines) > 1 || hdr_lines != 1) {
         # -> instrument restarts

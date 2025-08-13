@@ -169,6 +169,10 @@ export(plot_cal)
 export(obj2string)
 export(string2obj)
 export(getSpecSet)
+# ~~~ parallel
+export(wait_free_mem)
+export(convert_to_bytes)
+export(check_free_mem)
 # S3methods
 S3method(print, rawdat)
 S3method(plot, rawdat)

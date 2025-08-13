@@ -247,3 +247,93 @@
 .getClusterOption <- getFromNamespace('getClusterOption', 'parallel')
 .recvResult <- getFromNamespace('recvResult', 'parallel')
 .workerCommand <- getFromNamespace('workerCommand', 'parallel')
+
+
+# function to wait for sufficient memory (Linux only)
+# meminfo: kB is hardcoded -> https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/fs/proc/meminfo.c?id=39a8804455fb23f09157341d3ba7db6d7ae6ee76
+wait_free_mem <- function(limit = 0.1, panic_hrs = 24) {
+    if (!is.numeric(limit)) {
+        limit <- convert_to_bytes(limit)
+        limit <- limit / attr(check_free_mem(), 'total_bytes')
+    }
+    if (limit <= 0 || limit > 1) {
+        stop('memory limit must be defined in the range of (0, 1] x total memory!')
+    }
+    t0 <- Sys.time()
+    while (limit < check_free_mem()) {
+        if (as.numeric(Sys.time() - t0, units = 'hours') > panic_hrs) {
+            stop('Not enough free memory for more than ', panic_hrs, ' hours.')
+        }
+        Sys.sleep(1)
+    }
+}
+# convert to bytes from string
+convert_to_bytes <- function(x) {
+    # x <- c('1.5mb', '200 GB', '1.15 Kb', '2k', 'gb', '2x', '2.gb', '4x')
+    # x <- c('1.5mb', '200 GB', '1.15 Kb', '20GiB')
+    # valid units (in lower case)
+    unit_conversion <- c(
+        'b' = 1,
+        'kb' = 1e3,
+        'kib' = 1024,
+        'mb' = 1e6,
+        'mib' = 1024 ^ 2,
+        'gb' = 1e9,
+        'gib' = 1024 ^ 3,
+        'tb' = 1e12,
+        'tib' = 1024 ^ 4
+    )
+    # convert to lower case
+    x_l <- tolower(x)
+    # split input into number and unit
+    x_split <- strsplit(x_l, split = '(?<=[0-9.])\\s*(?=[^0-9.].*$)', perl = TRUE)
+    # convert to data.frame
+    x_df <- as.data.frame(do.call(rbind, x_split))
+    # convert to numeric
+    suppressWarnings(x_df[[1]] <- as.numeric(x_df[[1]]))
+    # check invalid
+    i_invalid <- !(x_df[[2]] %in% names(unit_conversion) & is.finite(x_df[[1]]))
+    if (any(i_invalid)) {
+        stop('Input(s): ', paste(paste0('"', x[i_invalid], '"'), collapse = ', '),
+            ' is/are not a valid input!')
+    }
+    # convert to bytes
+    x_df[[1]] * unit_conversion[[x_df[[2]]]]
+}
+# get memory info
+check_free_mem <- function() {
+    if (Sys.info()['sysname'] == 'Windows') {
+        # no clue what units this outputs (and I don't really care...)
+        x <- system('powershell -command "Get-CIMInstance Win32_OperatingSystem | Select *memory*', intern = TRUE)
+        # check above command on non-english OS
+        x <- x[x != '']
+        x <- scan(text = x, what = list(character(), character(), numeric()))
+        # get total & free
+        nms <- x[[1]]
+        vls <- x[[3]]
+        free <- vls[nms == 'FreePhysicalMemory']
+        total <- vls[nms == 'TotalVisibleMemorySize']
+        # check units -> RAM should be somewher in the GB (1e9 bytes) range
+        l10 <- log10(total)
+        # convert to bytes
+        free_bytes <- free * 1e3 ^ (3 - floor(l10 / 3))
+        total_bytes <- total * 1e3 ^ (3 - floor(l10 / 3))
+        structure(
+            free / total,
+            total_bytes = total_bytes,
+            free_bytes = free_bytes
+        )
+    } else {
+        x <- scan('/proc/meminfo', nmax = 3L, sep = '',
+            what = list(character(), numeric(), character())) 
+        # x[[2]] / 1024 # convert to MiB (apparently kB should be KiB if we check `top` - contradicts htop, though)
+        # Total: 1, Free: 2
+        structure(
+            x[[2]][2] / x[[2]][1], 
+            total_bytes = x[[2]][1] * 1024,
+            free_bytes = x[[2]][2] * 1024
+        )
+    }
+}
+
+

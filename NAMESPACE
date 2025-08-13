@@ -173,6 +173,8 @@ export(getSpecSet)
 export(wait_free_mem)
 export(convert_to_bytes)
 export(check_free_mem)
+export(.makePSOCKcluster)
+export(.clusterApplyLB)
 # S3methods
 S3method(print, rawdat)
 S3method(plot, rawdat)

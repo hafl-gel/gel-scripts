@@ -260,7 +260,7 @@ wait_free_mem <- function(limit = 0.1, panic_hrs = 24) {
         stop('memory limit must be defined in the range of (0, 1] x total memory!')
     }
     t0 <- Sys.time()
-    while (limit < check_free_mem()) {
+    while (limit >= check_free_mem()) {
         if (as.numeric(Sys.time() - t0, units = 'hours') > panic_hrs) {
             stop('Not enough free memory for more than ', panic_hrs, ' hours.')
         }
@@ -307,7 +307,8 @@ check_free_mem <- function() {
         x <- system('powershell -command "Get-CIMInstance Win32_OperatingSystem | Select *memory*', intern = TRUE)
         # check above command on non-english OS
         x <- x[x != '']
-        x <- scan(text = x, what = list(character(), character(), numeric()))
+        x <- scan(text = x, what = list(character(), character(), numeric()),
+            quiet = TRUE)
         # get total & free
         nms <- x[[1]]
         vls <- x[[3]]
@@ -324,7 +325,7 @@ check_free_mem <- function() {
             free_bytes = free_bytes
         )
     } else {
-        x <- scan('/proc/meminfo', nmax = 3L, sep = '',
+        x <- scan('/proc/meminfo', nmax = 3L, sep = '', quiet = TRUE,
             what = list(character(), numeric(), character())) 
         # x[[2]] / 1024 # convert to MiB (apparently kB should be KiB if we check `top` - contradicts htop, though)
         # Total: 1, Free: 2

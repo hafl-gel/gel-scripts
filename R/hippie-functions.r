@@ -13,6 +13,30 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
     }
     hdr_lines <- grep('^(Date|SDcard)', dat_raw)
 
+    # detect restarts in node-red file
+    if (grepl('^SDcard_present', dat_raw[hdr_lines[1]])) {
+        cycles <- suppressWarnings(
+            as.integer(sub('^([^;]+;){4}(\\d).*', '\\2', dat_raw))
+        )
+        # get restarts
+        i_restart <- which(diff(cycles) < 0) + 1
+        hdr_txt <- dat_raw[hdr_lines[1]]
+        # fix restarts
+        for (i in rev(i_restart)) {
+            # update header lines
+            hdr_lines <- c(
+                hdr_lines,
+                i_restart + seq_along(i_restart) - 1
+            )
+            # update raw data
+            dat_raw <- c(
+                dat_raw[1:(i - 1)],
+                hdr_txt,
+                dat_raw[i:length(dat_raw)]
+            )
+        }
+    }
+
     if (length(hdr_lines) > 1 || hdr_lines != 1) {
         # -> instrument restarts
         # break into several results
@@ -26,7 +50,9 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
         return(out)
     }
 
-    hdr <- unlist(read.table(text = dat_raw[1], nrows = 1, sep = ';'))
+    # get header
+    hdr <- unlist(read.table(text = dat_raw[hdr_lines[1]], nrows = 1, sep = ';'))
+    # get data without header
     dat <- na.omit(fread(text = dat_raw[-hdr_lines], header = FALSE, fill = TRUE))
 
     setnames(dat, sub('\\s+.*$', '', hdr))

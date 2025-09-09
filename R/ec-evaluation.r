@@ -621,13 +621,25 @@ damp_hac5 <- function(ogive, freq, freq.limits, ogive_ref){
 }
 
 # calculate wind statistics and MOST parameters
-wind_statistics <- function(wind,z_canopy,z_sonic){
+wind_statistics <- function(wind, z_canopy, z_sonic, 
+    ustar_method = c('neg_sqrt', 'double_sqrt', 'fallback')[1]) {
+    ustar_method <- match.arg(ustar_method, 
+        c('neg_sqrt', 'double_sqrt', 'fallback'))
 	Cov_sonic <- cov(list2DF(wind[1:4]), use = 'na.or.complete')
 	Var_sonic <- diag(Cov_sonic)
 	names(Var_sonic) <- c('var_u', 'var_v', 'var_w', 'var_T')
 	Cov_sonic <- Cov_sonic[cbind(c("uprot","uprot","uprot","vprot","vprot","wprot"),c("vprot","wprot","Tdet","wprot","Tdet","Tdet"))]
 	names(Cov_sonic) <- c('cov_uv', 'cov_uw', 'cov_uT', 'cov_vw', 'cov_vT', 'cov_wT')
-	suppressWarnings(Ustar <- c(sqrt(-Cov_sonic["cov_uw"]),use.names = FALSE))
+    if (ustar_method %in% c('neg_sqrt', 'fallback')) {
+        suppressWarnings(Ustar <- c(sqrt(-Cov_sonic["cov_uw"]),use.names = FALSE))
+    }
+    if (
+        ustar_method == 'double_sqrt' || 
+        (ustar_method == 'fallback' && is.na(Ustar))
+    ) {
+        Ustar <- c(sqrt(sqrt(Cov_sonic['cov_uw'] ^ 2 + Cov_sonic['cov_vw'] ^ 2)),
+            use.names = FALSE)
+    }
 	T_K <- mean(wind$Tmdet + wind$Tdet, na.rm = TRUE)
 	U <- mean(wind$umrot + wind$uprot, na.rm = TRUE)
 	L <- c(-Ustar ^ 3 * T_K / (0.4 * 9.80620 * Cov_sonic["cov_wT"]), use.names = FALSE)
@@ -1071,6 +1083,7 @@ process_ec_fluxes <- function(
         , co2ss_threshold = 0
         , na_alarm_code = c(1:3, 5:8, 11, 13)
         , thresh_period = 0.75
+        , ustar_method = c('neg_sqrt', 'double_sqrt', 'fallback')[1]
 		, create_graphs = TRUE
 		, create_dailygraphs = TRUE
 		, graphs_directory = NULL
@@ -2338,8 +2351,10 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
         SD <- copy(.SD)
 
         # check if any column contains finite data
-        if (.N >= n_threshold && 
-            SD[1, any(sapply(.SD, \(x) x > -3)), .SDcols = paste0(hl_vars, '_flag')]) {
+        if (
+            .N >= n_threshold && 
+            SD[1, any(sapply(.SD, \(x) x > -3)), .SDcols = paste0(hl_vars, '_flag')]
+        ) {
 
             # check NA values in scalars
             scalars <- input_scalars
@@ -2353,7 +2368,10 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             dyn_lag <- input_dyn_lag
             damping_reference <- input_damping_reference
             damp_region <- input_damp_region
-            if (!is.null(flux_variables) && SD[, anyNA(.SD), .SDcols = flux_variables]) {
+            if (
+                !is.null(flux_variables) && 
+                SD[, anyNA(.SD), .SDcols = flux_variables]
+            ) {
                 # loop over flux_variables & check
                 for (fv in unique(c(flux_variables, 'u', 'v', 'w', 'T'))) {
                     # fv <- flux_variables[1]
@@ -2425,7 +2443,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
             # calculate some turbulence parameters and collect some wind parameters
             # -------------------------------------------------------------------------- 
-            wind_stats <- wind_statistics(wind, z_canopy[[1]], z_ec[[1]])
+            wind_stats <- wind_statistics(wind, z_canopy[[1]], z_ec[[1]], 
+                ustar_method = ustar_method)
 
             # switch to list with different lengths
             # only for scalar fluxes!

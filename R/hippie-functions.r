@@ -18,16 +18,32 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
         cycles <- suppressWarnings(
             as.integer(sub('^([^;]+;){4}(\\d).*', '\\2', dat_raw))
         )
+        # get header text
+        hdr_txt <- dat_raw[hdr_lines[1]]
         # get restarts
         i_restart <- which(diff(cycles) < 0) + 1
-        hdr_txt <- dat_raw[hdr_lines[1]]
+        # fix missing data -> restarts
+        remain <- suppressWarnings(
+            as.integer(sub('.+;', '', dat_raw))
+        )
+        r_check <- which(c(diff(remain) > 0, FALSE))
+        r_fix <- r_check[which(remain[r_check] > 30)]
+        if (length(r_fix)) {
+            i_restart <- sort(unique(c(i_restart, r_fix)))
+        }
+        # update header lines
+        hdr_lines <- c(
+            hdr_lines,
+            i_restart + seq_along(i_restart) - 1
+        )
+        # fix consecutive headers
+        i_remove <- which(c(FALSE, diff(hdr_lines) == 1))
+        if (length(i_remove)) {
+            i_restart <- i_restart[!(i_restart %in% hdr_lines[i_remove])]
+            hdr_lines <- hdr_lines[-i_remove]
+        }
         # fix restarts
         for (i in rev(i_restart)) {
-            # update header lines
-            hdr_lines <- c(
-                hdr_lines,
-                i_restart + seq_along(i_restart) - 1
-            )
             # update raw data
             dat_raw <- c(
                 dat_raw[1:(i - 1)],

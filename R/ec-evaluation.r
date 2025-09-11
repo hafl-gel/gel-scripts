@@ -323,13 +323,14 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
             } else if (sub('_\\d+$', '', method) %in% names(filter_list)) {
                 win <- round(as.numeric(sub(".*_", "", method)) * Hz_ts)
                 if (win >= n) {
-                    return(
-                        list(
-                            coefficients = c(intercept = NA, slope = NA)
-                            , fitted = fitted
-                            , residuals = y - fitted
-                        )
-                    )
+                    stop('filtering window ist larger than available data')
+                    # return(
+                    #     list(
+                    #         coefficients = c(intercept = NA, slope = NA)
+                    #         , fitted = fitted
+                    #         , residuals = y - fitted
+                    #     )
+                    # )
                 }
                 filter_name <- sub('_\\d+$', '', method)
                 # lowpass filter
@@ -620,13 +621,25 @@ damp_hac5 <- function(ogive, freq, freq.limits, ogive_ref){
 }
 
 # calculate wind statistics and MOST parameters
-wind_statistics <- function(wind,z_canopy,z_sonic){
+wind_statistics <- function(wind, z_canopy, z_sonic, 
+    ustar_method = c('neg_sqrt', 'double_sqrt', 'fallback')[1]) {
+    ustar_method <- match.arg(ustar_method, 
+        c('neg_sqrt', 'double_sqrt', 'fallback'))
 	Cov_sonic <- cov(list2DF(wind[1:4]), use = 'na.or.complete')
 	Var_sonic <- diag(Cov_sonic)
 	names(Var_sonic) <- c('var_u', 'var_v', 'var_w', 'var_T')
 	Cov_sonic <- Cov_sonic[cbind(c("uprot","uprot","uprot","vprot","vprot","wprot"),c("vprot","wprot","Tdet","wprot","Tdet","Tdet"))]
 	names(Cov_sonic) <- c('cov_uv', 'cov_uw', 'cov_uT', 'cov_vw', 'cov_vT', 'cov_wT')
-	suppressWarnings(Ustar <- c(sqrt(-Cov_sonic["cov_uw"]),use.names = FALSE))
+    if (ustar_method %in% c('neg_sqrt', 'fallback')) {
+        suppressWarnings(Ustar <- c(sqrt(-Cov_sonic["cov_uw"]),use.names = FALSE))
+    }
+    if (
+        ustar_method == 'double_sqrt' || 
+        (ustar_method == 'fallback' && is.na(Ustar))
+    ) {
+        Ustar <- c(sqrt(sqrt(Cov_sonic['cov_uw'] ^ 2 + Cov_sonic['cov_vw'] ^ 2)),
+            use.names = FALSE)
+    }
 	T_K <- mean(wind$Tmdet + wind$Tdet, na.rm = TRUE)
 	U <- mean(wind$umrot + wind$uprot, na.rm = TRUE)
 	L <- c(-Ustar ^ 3 * T_K / (0.4 * 9.80620 * Cov_sonic["cov_wT"]), use.names = FALSE)
@@ -1070,6 +1083,7 @@ process_ec_fluxes <- function(
         , co2ss_threshold = 0
         , na_alarm_code = c(1:3, 5:8, 11, 13)
         , thresh_period = 0.75
+        , ustar_method = c('neg_sqrt', 'double_sqrt', 'fallback')[1]
 		, create_graphs = TRUE
 		, create_dailygraphs = TRUE
 		, graphs_directory = NULL
@@ -1670,9 +1684,11 @@ process_ec_fluxes <- function(
                     return(out_list_paths)
                 }
                 # read file
-                out_list[[i]] <- qs2::qd_read(out_list_paths[[i]])
-                # delete file
-                unlink(out_list_paths[[i]])
+                if (!is.null(out_list_paths[[i]])) {
+                    out_list[[i]] <- qs2::qd_read(out_list_paths[[i]])
+                    # delete file
+                    unlink(out_list_paths[[i]])
+                }
             }
         } else {
             # loop over dates
@@ -1706,8 +1722,10 @@ process_ec_fluxes <- function(
         unlink(tf_licor)
         # rbind output list
         results <- rbindlist(out_list, fill = TRUE)
-        rm(out_list)
-        for (i in 1:10) gc()
+        if (!(create_dailygraphs || ogives_out)) {
+            rm(out_list)
+            for (i in 1:10) gc()
+        }
         # SEQUENTIAL END
     } else {
         # ALL-IN-ONE/RECURSIVE
@@ -2333,8 +2351,10 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
         SD <- copy(.SD)
 
         # check if any column contains finite data
-        if (.N >= n_threshold && 
-            SD[1, any(sapply(.SD, \(x) x > -3)), .SDcols = paste0(hl_vars, '_flag')]) {
+        if (
+            .N >= n_threshold && 
+            SD[1, any(sapply(.SD, \(x) x > -3)), .SDcols = paste0(hl_vars, '_flag')]
+        ) {
 
             # check NA values in scalars
             scalars <- input_scalars
@@ -2348,7 +2368,10 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             dyn_lag <- input_dyn_lag
             damping_reference <- input_damping_reference
             damp_region <- input_damp_region
-            if (!is.null(flux_variables) && SD[, anyNA(.SD), .SDcols = flux_variables]) {
+            if (
+                !is.null(flux_variables) && 
+                SD[, anyNA(.SD), .SDcols = flux_variables]
+            ) {
                 # loop over flux_variables & check
                 for (fv in unique(c(flux_variables, 'u', 'v', 'w', 'T'))) {
                     # fv <- flux_variables[1]
@@ -2420,7 +2443,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
             # calculate some turbulence parameters and collect some wind parameters
             # -------------------------------------------------------------------------- 
-            wind_stats <- wind_statistics(wind, z_canopy[[1]], z_ec[[1]])
+            wind_stats <- wind_statistics(wind, z_canopy[[1]], z_ec[[1]], 
+                ustar_method = ustar_method)
 
             # switch to list with different lengths
             # only for scalar fluxes!
@@ -3127,6 +3151,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 # parallel helper
 .pef_wrapper <- function(ind, tf_cobj, tf_resid, tf_sonic, tf_ht,
     tf_licor) {
+    if (length(ind) == 0) {
+        return(NULL)
+    }
     resid_list <- qs2::qd_read(tf_resid)
     utc_dates <- unique(c(resid_list$st_dates[ind], 
             resid_list$et_dates[ind]))
@@ -3149,7 +3176,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
         return(out)
     }
     # get path
-    tf_out <- sub('resid', paste(ind, collapse = '-'), tf_resid)
+    tf_out <- sub('resid', digest::digest(ind), tf_resid)
     # save file
     qs2::qd_save(out, tf_out, warn_unsupported_types = FALSE)
     # return path

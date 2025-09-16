@@ -1552,12 +1552,8 @@ process_ec_fluxes <- function(
             dots[[what]] <- NULL
         }
         rm(dots)
-        if (is.call(mag_dec)) {
-            tmp <- function(x) {}
-            body(tmp) <- mag_dec
-            mag_dec <- tmp
-            rm(tmp)
-        }
+        mag_dec <- function(x) {}
+        body(mag_dec) <- parse(text = mag_dec_body)
         # read sonic_directory
         sonic_directory <- qs2::qd_read(tf_sonic)
         ht_directory <- qs2::qd_read(tf_ht)
@@ -1593,13 +1589,11 @@ process_ec_fluxes <- function(
         tf_licor <- paste0(tf, '-licor.qdata')
         # save cobj exports as qs2 & qdata
         dots <- mget(cobj, envir = current_env)
-        if (is.function(mag_dec)) {
-            # mag_dec <- NULL
-            mag_dec <- body(mag_dec)
-        }
+        # fix saving mag_dec function
+        mag_dec_body <- deparse1(body(mag_dec))
         #   -> fix parallel settings & mag_dec
         # set ncores to 1 & run_parallel to FALSE
-        dots <- c(dots, list(mag_dec = mag_dec, ncores = 1, run_parallel = FALSE))
+        dots <- c(dots, list(mag_dec_body = mag_dec_body, ncores = 1, run_parallel = FALSE))
         qs2::qs_save(dots, tf_cobj, compress_level = -7)
         rm(dots)
         qs2::qd_save(sonic_directory, tf_sonic, warn_unsupported_types = FALSE, 

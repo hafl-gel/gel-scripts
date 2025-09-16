@@ -3190,7 +3190,7 @@ wpl_correction <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'),
     }
     out <- copy(ec_dat)
     dynfix <- ifelse(dynamic_lag, 'dyn_', 'fix_')
-    cat('using', ifelse(dynamic_lag, 'dynamic', 'fixed'), 'lag fluxes\n')
+    cat('wpl flux correction using', ifelse(dynamic_lag, 'dynamic', 'fixed'), 'lag fluxes\n')
     # get pressure in Pa
     f_press <- switch(pressure
         , li_press_amb = 1e3
@@ -3249,6 +3249,7 @@ wpl_correction <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'),
                 dkappa_t_at_pe / coef_a + xv_avg * (coef_b - 1)
             .(coef_a, coef_b, coef_c)
         }]
+        # ug/m3 -> g/m3
         f_nh3 <- 1e-6
         # density
         out[, rho_nh3 := avg_nh3_ugm3 * f_nh3]
@@ -3268,10 +3269,19 @@ wpl_correction <- function(ec_dat, fluxes = c('nh3_ugm3', 'co2_mmolm3'),
         out[, flux_nh3_wpl_factor := flux_nh3_gm2s / flux_nh3_raw]
         # convert back to ug/m3
         out[, flux_wpl_nh3 := flux_nh3_gm2s / f_nh3]
+        # correct nh3_ugm3 (McDermitt et al. 2011, eq. 2)
+        cat('correcting nh3 concentration due to h2o\n')
+        out[, paste0(c('avg_nh3_ugm3', 'sd_nh3_ugm3'), '_raw') := 
+            .(avg_nh3_ugm3, sd_nh3_ugm3)]
+        out[, c('avg_nh3_ugm3', 'sd_nh3_ugm3') := .(
+            avg_nh3_ugm3 * kappa_pe / kappa_p,
+            sd_nh3_ugm3 * kappa_pe / kappa_p
+        )]
     }
     # get co2 density/flux in g/m3
     if (co2_mmolm3 <- 'co2_mmolm3' %in% fluxes) {
         M_co2 <- 44.01
+        # mmol/m3 -> g/m3
         f_co2 <- M_co2 * 1e-3
         # density
         out[, rho_co2 := avg_co2_mmolm3 * f_co2]

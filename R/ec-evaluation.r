@@ -987,6 +987,7 @@ process_turbulence <- function(
     sonic_directory
     , z_sonic = NULL
     , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', T = 'blockAVG')
+    , ustar_method = c('neg_sqrt', 'double_sqrt', 'fallback')[1]
     , na_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE)
     , limits_lower = c(u = -30, v = -30, w = -10, T = 243)
     , limits_upper = c(u = 30, v = 30, w = 10, T = 333)
@@ -1014,6 +1015,7 @@ process_turbulence <- function(
         , covariances = covariances
         , create_graphs = create_graphs
         , ogive_out = ogive_out
+        , ustar_method = ustar_method
         , ...
     )
 }

@@ -171,7 +171,7 @@ read_ws700 <- function(folder, from = NULL, to = NULL,
     files <- unique(files)
     # check file names
     bnames <- basename(files)
-    has_new_format <- grepl('^py_fnf_0\\d_ws700', bnames)
+    has_new_format <- any(grepl('^py_fnf_0\\d_ws700', bnames))
     if (!has_new_format && any(is_invalid <- !grepl('^ws700-[AB]_\\d{8}$', bnames))) {
         stop('file name ', paste(files[is_invalid], collapse = ', '), ' is not a valid ws700 file name')
     }

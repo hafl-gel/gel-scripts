@@ -513,7 +513,7 @@ coord_transf <- function(x, crs_to,
             crs_from = crs_from, crs_to = crs_to)
 	} else if (inherits(x, "Sensors") && ncol(x) >= 7) {
         append <- FALSE
-		out <- convert(x)
+		out <- bLSmodelR::convert(x)
         out[, c('x-Coord (m)', 'y-Coord (m)')] <- .coord_transf(
             x[, 'x-Coord (m)'], x[, 'y-Coord (m)'], 
             crs_from = crs_from, crs_to = crs_to)
@@ -638,7 +638,7 @@ wgs_to_map <- function(MyMap, lon, lat = NULL, zoom,
 		out[, 2:3] <- cbind(dummy$newX, dummy$newY)
 		return(out)
 	} else if (inherits(lon, "Sensors") && ncol(lon) >= 7) {
-		out <- convert(lon)
+		out <- bLSmodelR::convert(lon)
 		dummy <- LatLon2XY.centered(MyMap, lon[, "y-Coord (m)"], lon[, "x-Coord (m)"], zoom)
 		out[, c("x-Coord (m)", "y-Coord (m)")] <- cbind(dummy$newX, dummy$newY)
 		return(out)
@@ -688,7 +688,7 @@ map_to_wgs <- function(MyMap, x, y = NULL, zoom,
 	} 
     # Sensors?
     if (inherits(x, "Sensors") && ncol(x) >= 7) {
-		out <- convert(x)
+		out <- bLSmodelR::convert(x)
 		dummy <- XY2LatLon(MyMap, x[, "y-Coord (m)"], x[, "x-Coord (m)"], zoom)
 		out[, c("x-Coord (m)", "y-Coord (m)")] <- cbind(dummy$newX, dummy$newY)
 		return(out)

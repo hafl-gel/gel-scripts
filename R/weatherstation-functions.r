@@ -25,6 +25,9 @@ ws_read <- function(file_name, Ex = c('E0', 'E2', 'E4')) {
     } else {
         raw_lines[ind]
     }
+    if (length(text_in) == 0) {
+        return(NULL)
+    }
     # check old/new format
     if (is_new <- grepl('py_fnf', file_name)) {
         # fix comma
@@ -98,8 +101,12 @@ ws_1minute <- function(file_names, tz_ws700 = 'Etc/GMT-1') {
     rbindlist(
         lapply(file_names[ind], function(file_name) {
             dat <- ws_read(file_name, Ex = c('E0', 'E2'))
-            merge(ws_e0(dat, tz_ws700 = tz_ws700), 
-                ws_e2(dat, tz_ws700 = tz_ws700), all = TRUE, by = 'Time')
+            if (is.null(dat)) {
+                dat
+            } else {
+                merge(ws_e0(dat, tz_ws700 = tz_ws700), 
+                    ws_e2(dat, tz_ws700 = tz_ws700), all = TRUE, by = 'Time')
+            }
         })
     )
 }
@@ -138,8 +145,12 @@ ws_10minute <- function(file_names, tz_ws700 = 'Etc/GMT-1') {
     }
     rbindlist(lapply(file_names[ind], function(file_name) {
         dat <- ws_read(file_name, Ex = 'E4')
-        ws_e4(dat, tz_ws700 = tz_ws700)
-            }))
+        if (is.null(dat)) {
+            dat
+        } else {
+            ws_e4(dat, tz_ws700 = tz_ws700)
+        }
+    }))
 }
 
 # add function read data from / to
@@ -159,13 +170,19 @@ read_ws700 <- function(folder, from = NULL, to = NULL,
     # get files in folder
     if (any(is_folder)) {
         # fix ws_label
-        if (!is.null(ws_label)) {
+        if (is.null(ws_label)) {
+            if (length(files)) {
+            } else {
+                ws_label <- sub('.*ws700(-(.))?(?:_.*)?', '\\2', folder, perl = TRUE)
+            }
+        } else {
             ws_label <- toupper(ws_label)
             if (!(ws_label %in% c('A', 'B'))) {
                 stop('argument "ws_label" must be either "A" or "B"')
             }
         }
-        files <- c(files, dir(folder[is_folder], pattern = paste0('ws700-', ws_label), full.names = TRUE))
+        if (length(ws_label)) ws_label <- paste0('-', ws_label)
+        files <- c(files, dir(folder[is_folder], pattern = paste0('ws700', ws_label), full.names = TRUE))
     }
     # remove duplicates
     files <- unique(files)

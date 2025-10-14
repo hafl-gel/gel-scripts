@@ -90,14 +90,16 @@ read_frequi <- function(path_data, from = NULL, to = NULL, time_zone = 'UTC',
     }]
     # select from/to range
     fan_data <- fan_data[st >= from & et <= to]
+    # get coefficients
+    fan_coefs <- gel::fan_coefficients[[as.character(fan_dia)]]
     # add speed (m/s) & air flow (m3/s)
     fan_data[, c('speed_m_s', 'flow_m3_s', 'extrapol') := {
-        speed <- Hz * gel::fan_coefficients[2] + gel::fan_coefficients[1]
+        speed <- Hz * fan_coefs[2] + fan_coefs[1]
         speed[Hz == 0] <- 0
         list(
             speed,
             speed * pi * (fan_dia / 200) ^ 2,
-            Hz > 0 & (Hz < attr(gel::fan_coefficients, 'limits')[1] | Hz > attr(gel::fan_coefficients, 'limits')[2])
+            Hz > 0 & (Hz < attr(fan_coefs, 'limits')[1] | Hz > attr(fan_coefs, 'limits')[2])
         )
     }]
     # set flow values below critical V to NA

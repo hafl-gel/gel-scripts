@@ -985,7 +985,13 @@ fix_defaults <- function(x, vars) {
 ## convenience wrapper for turbulence only
 process_turbulence <- function(
     sonic_directory
+    , start_time = NULL
+    , end_time = NULL
     , z_sonic = NULL
+    , dev_north = NULL
+    , declination = NULL
+    , z_canopy = NULL
+	, avg_period = '30mins'
     , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', T = 'blockAVG')
     , ustar_method = c('neg_sqrt', 'double_sqrt', 'fallback')[1]
     , na_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE)
@@ -1005,7 +1011,13 @@ process_turbulence <- function(
     }
     process_ec_fluxes(
         sonic_directory = sonic_directory
+        , start_time = start_time
+        , end_time = end_time
         , z_ec = z_sonic
+        , dev_north = dev_north
+        , declination = declination
+        , z_canopy = z_canopy
+		, avg_period = avg_period
         , detrending = detrending
         , na_limits = na_limits
         , limits_lower = limits_lower

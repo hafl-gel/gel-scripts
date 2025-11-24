@@ -1368,14 +1368,6 @@ evalOffline <- function(
     # create a 'lighter' highpass filter
     winFUN <- getOption('md.filter.function.list')[[DOAS.win$filter.type]]
     DOAS.win$filt <- winFUN(DOAS.win$filter.strength,...)
-    # new double filter
-    highpass.filter2 <- function(dat, filt) {
-        C_cfilter <- getFromNamespace('C_cfilter', 'stats')
-        dat - (
-            .Call(C_cfilter, dat, filt, 2L, FALSE) +
-                rev(.Call(C_cfilter, rev(dat), filt, 2L, FALSE))
-            ) / 2
-    }
 
 
     ### ******************************************************************************
@@ -1397,30 +1389,7 @@ evalOffline <- function(
         xreg <- Cal.dc$Xreg[DOAS.win$pixel_dc, ]
 
         # export functions & objects
-        hpf2 <- compiler::cmpfun(highpass.filter2)
         diff_specs <- DiffSpec$diffspec
-        # FIXME: fix parallel comp, move functions outside, remove process_fit, change fitparallel
-        fit_parallel <- function(index, doas_win, path_length) {
-            # xreg & diff_specs need to be exported
-            lapply(index, function(i) {
-                # check if light
-                if (isTRUE(median(diff_specs[[i]], na.rm = TRUE) > -5)) {
-                    # highpass filter and fit curve to calibration
-                    fitcurve(
-                        hpf2(diff_specs[[i]], doas_win$filt), 
-                        doas_win$pixel_dc, xreg, doas_win$tau.shift, path_length)
-                } else {
-                    # return NAs if too few light
-                    as.list(c(
-                            rep(NA_real_, 6),
-                            NA_integer_
-                            ))
-                }
-            })
-        }
-        parallel::clusterExport(cl, 
-            list('hpf2', 'fitcurve','fit_parallel', 'diff_specs', 'xreg'), 
-            envir = environment())
 
         # parallel calculation
         cat("Starting calculation.\nThis might take a while...\n\n")
@@ -1428,8 +1397,9 @@ evalOffline <- function(
         j_frac <- ceiling(length(diff_specs) / n_chunks)
         lcl <- ceiling(j_frac / length(cl))
         p_index <- parallel::splitIndices(length(DiffSpec$diffspec), length(cl) * lcl)
-        out <- .clusterApplyLB(cl, p_index,
-            fit_parallel, doas_win = DOAS.win, path_length = path.length)
+        ds_list <- lapply(p_index, \(i) diff_specs[i])
+        out <- .clusterApplyLB(cl, ds_list, fit_parallel, doas_win = DOAS.win, 
+            path_length = path.length, xreg = xreg, robust = use.robust)
 
         # unlist list of lists
         out <- unlist(out, recursive = FALSE)
@@ -1532,6 +1502,42 @@ evalOffline <- function(
             ,class = c("DOASeval", 'data.table', "data.frame")
         )
     }
+}
+
+# helper
+# new double filter
+highpass.filter2 <- function(dat, filt) {
+    C_cfilter <- getFromNamespace('C_cfilter', 'stats')
+    dat - (
+        .Call(C_cfilter, dat, filt, 2L, FALSE) +
+            rev(.Call(C_cfilter, rev(dat), filt, 2L, FALSE))
+        ) / 2
+}
+
+# fit wrapper for parallel
+fit_parallel <- function(ds_list, doas_win, path_length, xreg, robust) {
+    # get fitting function:
+    if (robust) {
+        fitcurve <- fit.curves.rob
+    } else {
+        fitcurve <- fit.curves
+    }
+    # loop over diff specs
+    lapply(ds_list, function(diff_spec) {
+        # check if light
+        if (isTRUE(median(diff_spec, na.rm = TRUE) > -5)) {
+            # highpass filter and fit curve to calibration
+            fitcurve(
+                highpass.filter2(diff_spec, doas_win$filt), 
+                doas_win$pixel_dc, xreg, doas_win$tau.shift, path_length)
+        } else {
+            # return NAs if too few light
+            as.list(c(
+                    rep(NA_real_, 6),
+                    NA_integer_
+                    ))
+        }
+    })
 }
 
 # add resid method

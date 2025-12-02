@@ -10,7 +10,6 @@ export(merge_data)
 # remove these?
 export(write_hashed)
 export(read_hashed)
-export(ht_merged_daily)
 # ~~~ licor
 export(read_licor)
 # ~~~ miro

@@ -13,6 +13,8 @@ export(read_hashed)
 export(ht_merged_daily)
 # ~~~ licor
 export(read_licor)
+# ~~~ miro
+export(read_miro)
 # ~~~ ec-evaluation
 export(process_ec_fluxes)
 export(rotate_twoaxis)

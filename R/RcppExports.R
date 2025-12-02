@@ -41,6 +41,14 @@ cont_within_range <- function(xIn, bIn, dxIn, refLengthIn) {
     .Call(`_gel_cont_within_range`, xIn, bIn, dxIn, refLengthIn)
 }
 
+miro_read_loggerbox_cpp <- function(filename) {
+    .Call(`_gel_miro_read_loggerbox_cpp`, filename)
+}
+
+miro_read_loggerbox_cpp_gzip <- function(filename) {
+    .Call(`_gel_miro_read_loggerbox_cpp_gzip`, filename)
+}
+
 nakai_correction_2012 <- function(uIn, vIn, wIn) {
     .Call(`_gel_nakai_correction_2012`, uIn, vIn, wIn)
 }

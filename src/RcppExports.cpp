@@ -136,6 +136,28 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// miro_read_loggerbox_cpp
+Rcpp::List miro_read_loggerbox_cpp(String filename);
+RcppExport SEXP _gel_miro_read_loggerbox_cpp(SEXP filenameSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< String >::type filename(filenameSEXP);
+    rcpp_result_gen = Rcpp::wrap(miro_read_loggerbox_cpp(filename));
+    return rcpp_result_gen;
+END_RCPP
+}
+// miro_read_loggerbox_cpp_gzip
+Rcpp::List miro_read_loggerbox_cpp_gzip(Rcpp::String filename);
+RcppExport SEXP _gel_miro_read_loggerbox_cpp_gzip(SEXP filenameSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::String >::type filename(filenameSEXP);
+    rcpp_result_gen = Rcpp::wrap(miro_read_loggerbox_cpp_gzip(filename));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nakai_correction_2012
 Rcpp::List nakai_correction_2012(std::vector<double>& uIn, std::vector<double>& vIn, std::vector<double>& wIn);
 RcppExport SEXP _gel_nakai_correction_2012(SEXP uInSEXP, SEXP vInSEXP, SEXP wInSEXP) {
@@ -183,6 +205,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_gel_licor_read_cpp_gzip", (DL_FUNC) &_gel_licor_read_cpp_gzip, 1},
     {"_gel_calc_penalty", (DL_FUNC) &_gel_calc_penalty, 5},
     {"_gel_cont_within_range", (DL_FUNC) &_gel_cont_within_range, 4},
+    {"_gel_miro_read_loggerbox_cpp", (DL_FUNC) &_gel_miro_read_loggerbox_cpp, 1},
+    {"_gel_miro_read_loggerbox_cpp_gzip", (DL_FUNC) &_gel_miro_read_loggerbox_cpp_gzip, 1},
     {"_gel_nakai_correction_2012", (DL_FUNC) &_gel_nakai_correction_2012, 3},
     {"_gel_hs_read_cpp", (DL_FUNC) &_gel_hs_read_cpp, 1},
     {"_gel_hs_read_cpp_gzip", (DL_FUNC) &_gel_hs_read_cpp_gzip, 1},

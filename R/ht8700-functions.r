@@ -69,7 +69,8 @@ read_ht8700 <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
             return(read_ht8700_old(file_path, tz = 'Etc/GMT-1'))
         } else if (!grepl('^(py_)?fnf_0\\d_ht8700', bn)) {
             # wrong file name
-            stop('data filename not valid')
+            cat('skip (filename not valid)\n')
+            warning('data filename not valid -> skipping file "', bn, '"')
         }
         ### read File
         if (grepl('[.]gz$', bn)) {

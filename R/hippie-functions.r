@@ -13,6 +13,14 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
     }
     hdr_lines <- grep('^(Date|SDcard)', dat_raw)
 
+    # fix any consecutive lines
+    if (any(dhl <- diff(hdr_lines) == 1)) {
+        dhli <-c(dhl, FALSE)
+        # exclude these lines
+        dat_raw <- dat_raw[-hdr_lines[dhli]]
+        hdr_lines <- grep('^(Date|SDcard)', dat_raw)
+    }
+
     # detect restarts in node-red file
     if (grepl('^SDcard_present', dat_raw[hdr_lines[1]])) {
         cycles <- suppressWarnings(
@@ -60,6 +68,23 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
             read_hippie(dat_raw[from:to], as_ibts = as_ibts)
         }, from = hdr_lines, to = c(hdr_lines[-1] - 1, length(dat_raw)),
         SIMPLIFY = FALSE)
+        # check times
+        if (any(is_na <- sapply(out, \(x) x[, is.na(st[1])]))) {
+            # get time interval
+            if (any(!is_na)) {
+                dT <- out[[which(!is_na)]][, 
+                    as.numeric(et[1] - st[1], units = 'secs')]
+            } else {
+                dT <- 30
+            }
+            # fix times
+            out <- lapply(seq_along(out), \(i) {
+                if (is_na[i]) {
+                    out[[i]][, st := et - dT]
+                }
+                out[[i]]
+            })
+        }
         if (flatten) {
             out <- do.call(rbind, out)
         }

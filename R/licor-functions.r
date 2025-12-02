@@ -45,7 +45,7 @@ read_licor <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
         # get file name
         bn <- basename(file_path)
         # check file name
-        if (grepl('[.]qdata$', bn)) {
+        if (grepl('[.](qdata|qd)$', bn)) {
             return(alloc.col(qs2::qd_read(file_path)))
         } else if (grepl('[.]qs$', bn)) {
             if (!requireNamespace('qs')) {

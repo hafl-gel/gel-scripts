@@ -118,18 +118,3 @@ read_miro <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
 }
 
 
-# add sonic data to miro data
-add_sonic <- function(x, path) {
-    # get from/to from ht-data
-    tr <- x[, range(Time)]
-    ft <- as.integer(format(tr, format = '%Y%m%d'))
-    # get sonic file paths
-    files <- dir(path, pattern = 'sonic')
-    int_files <- as.integer(sub('.*_(\\d{8})_\\d{6}([.]gz)?$', '\\1', files))
-    ind_files <- int_files >= ft[1] & int_files <= ft[2]
-    # read sonic data
-    dat <- rbindlist(lapply(file.path(path, files[ind_files]), read_windmaster_ascii))
-    # merge data
-    merge_data(x, dat)
-}
-

@@ -16,12 +16,21 @@ read_sonic <- function(file_path, from = NULL, to = NULL, tz = 'UTC',
         if (length(files) == 0L) {
             stop('directory is empty!')
         }
-        # check dates in filenames
+        # check dates in filenames (new loggerbox)
         suppressWarnings(
             file_dates <- as.integer(
                 sub('.*(20[2-9]\\d)_?(\\d{2})_?(\\d{2}).*', '\\1\\2\\3', files)
             )
         )
+        # old loggerbox?
+        if (all(is.na(file_dates))) {
+            # check dates in filenames (old loggerbox)
+            suppressWarnings(
+                file_dates <- as.integer(
+                    sub('.*(20[2-9]\\d)_?(\\d{2})_?(\\d{2}).*', '\\1\\2\\3', files)
+                )
+            )
+        }
         # check from & to
         read_me <- rep(TRUE, length(file_dates))
         if (length(from) > 0) {
@@ -34,8 +43,8 @@ read_sonic <- function(file_path, from = NULL, to = NULL, tz = 'UTC',
                         format(floor_date(to, unit = 'days'), '%Y%m%d')
                         )
         }
-        # if no dates => read
-        read_me <- read_me | is.na(read_me)
+        # if no dates => drop
+        read_me <- which(read_me)
         # loop over files
         if (any(read_me)) {
             out <- lapply(file.path(file_path, files[read_me]), read_sonic,
@@ -43,7 +52,7 @@ read_sonic <- function(file_path, from = NULL, to = NULL, tz = 'UTC',
             # return sorted
             rbindlist(out)[order(Time)]
         } else {
-            stop('No files available within provided time range!')
+            stop('No valid files available within provided time range!')
         }
     } else {
         bn <- basename(file_path)
@@ -60,8 +69,13 @@ read_sonic <- function(file_path, from = NULL, to = NULL, tz = 'UTC',
             out <- readRDS(file_path)
         } else if (grepl("^(py_)?fnf_01_", bn)) {
             out <- read_hs_ascii(file_path)
-        } else {
+        } else if (grepl('^data_sonic-._\\d{8}_\\d{6}', bn)) {
             out <- read_windmaster_ascii(file_path)
+        } else {
+            # wrong file name
+            cat('skip (filename not valid)\n')
+            warning('data filename not valid -> skipping file "', bn, '"')
+            return(NULL)
         }
         # correct for Gill bug
         if (isTRUE(attr(out, 'GillBug'))) {

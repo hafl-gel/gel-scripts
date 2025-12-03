@@ -37,8 +37,8 @@ read_ht8700 <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
                         format(floor_date(to, unit = 'days'), '%Y%m%d')
                         )
         }
-        # if no dates => read
-        read_me <- read_me | is.na(read_me)
+        # if no dates => drop
+        read_me <- which(read_me)
         # loop over files
         if (any(read_me)) {
             out <- lapply(file.path(file_path, files[read_me]), read_ht8700,
@@ -46,7 +46,7 @@ read_ht8700 <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
             # return sorted
             rbindlist(out)[order(Time)]
         } else {
-            stop('No files available within provided time range!')
+            stop('No valid files available within provided time range!')
         }
     } else {
         # be verbose
@@ -71,6 +71,7 @@ read_ht8700 <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
             # wrong file name
             cat('skip (filename not valid)\n')
             warning('data filename not valid -> skipping file "', bn, '"')
+            return(NULL)
         }
         ### read File
         if (grepl('[.]gz$', bn)) {

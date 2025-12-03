@@ -28,8 +28,8 @@ read_licor <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
                         format(floor_date(to, unit = 'days'), '%Y%m%d')
                         )
         }
-        # if no dates => read
-        read_me <- read_me | is.na(read_me)
+        # if no dates => drop
+        read_me <- which(read_me)
         # loop over files
         if (any(read_me)) {
             out <- lapply(file.path(file_path, files[read_me]), read_licor,
@@ -37,7 +37,7 @@ read_licor <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
             # return sorted
             rbindlist(out)[order(Time)]
         } else {
-            stop('No files available within provided time range!')
+            stop('No valid files available within provided time range!')
         }
     } else {
         # be verbose
@@ -55,6 +55,11 @@ read_licor <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
             return(alloc.col(qs::qread(file_path)))
         } else if (grepl('[.]rds$', bn)) {
             return(readRDS(file_path))
+        } else if (!grepl('^(py_)?fnf_0\\d_licor_', bn)) {
+            # wrong file name
+            cat('skip (filename not valid)\n')
+            warning('data filename not valid -> skipping file "', bn, '"')
+            return(NULL)
         }
         if (grepl('[.]gz$', bn)) {
             raw_list <- licor_read_cpp_gzip(normalizePath(file_path))

@@ -3349,22 +3349,41 @@ get_kappa <- function(tval, pval) {
 
 #' Merge Sonic and Other Instrument Data Based on Time
 #'
-#' This function merges sonic and HT8700 data based on time. The output contains the same times as the `basis` input. Values from `draw` will be repeated or dropped to match `basis` times. Licor data is optional and must be provided by `draw_licor`.
+#' This function merges sonic and HT8700 data based on time. The output contains the same times as the `basis` input. Values from `draw` will be repeated or dropped to match `basis` times. Licor data is optional and must be provided by `licor`.
 #'
-#' @param basis_sonic A data.table containing the sonic data to be used as the basis for merging.
-#' @param draw_ht A data.table containing the HT8700 data to be merged. Default is NULL.
-#' @param draw_licor A data.table containing the Licor data to be merged. Default is NULL.
+#' @param sonic A data.table containing the sonic data to be used as the basis for merging.
+#' @param ht A data.table containing the HT8700 data to be merged. Default is NULL.
+#' @param licor A data.table containing the Licor data to be merged. Default is NULL.
+#' @param miro A data.table containing the Licor data to be merged. Default is NULL.
 #' @return A data.table containing the merged data with the same times as `basis`.
 #'
-# merge sonic & ht8700 data based on time
+# merge sonic & other instrument data based on time
 #   -> output contains the same times as 'basis'
 #   -> values from 'draw' will be repeated or dropped to match 'basis' times
-#   -> licor data is optional and must be provided by 'draw_licor'
-merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
+# merge_data <- function(sonic, ht = NULL, licor = NULL, miro = NULL, 
+#     basis = 'sonic') {
+merge_data <- function(basis, ..., ec_subset = TRUE) {
+    # initialize all
+    miro <- licor <- ht <- snc <- NULL
+    # capture dots
+    for (i in seq_len(...length())) {
+        switch(names(...elt(i))[3]
+            , 'u' = snc <- ...elt(i)
+            , 'nh3_ppb' = ht <- ...elt(i)
+            , 'CO2D' = licor <- ...elt(i)
+            , 'ch4_wet' = miro <- ...elt(i)
+        )
+    }
     # prepare output
-    n_out <- nrow(basis_sonic)
-    out <- cbind(
-        basis_sonic,
+    n_out <- nrow(basis)
+    out <- data.table(
+        Time = basis[, Time],
+        Hz = rep(NA_real_, n_out),
+        u = rep(NA_real_, n_out),
+        v = rep(NA_real_, n_out),
+        w = rep(NA_real_, n_out),
+        T = rep(NA_real_, n_out),
+        sonic = rep(NA_character_, n_out),
         nh3_ppb = rep(NA_real_, n_out),
         nh3_ugm3 = rep(NA_real_, n_out), 
         ht_temp_amb = rep(NA_real_, n_out), 
@@ -3376,72 +3395,130 @@ merge_data <- function(basis_sonic, draw_ht = NULL, draw_licor = NULL) {
         co2_mmolm3 = rep(NA_real_, n_out),
         li_temp_amb = rep(NA_real_, n_out),
         li_press_amb = rep(NA_real_, n_out),
-        li_co2ss = rep(NA_real_, n_out)
+        li_co2ss = rep(NA_real_, n_out),
+        h2o_molfrac = rep(NA_real_, n_out),
+        ch4_molfrac = rep(NA_real_, n_out),
+        n2o_molfrac = rep(NA_real_, n_out)
     )
     if (n_out == 0) {
         return(out)
     }
-    # fill ht
-    ht_vars <- names(out)[8:14]
-    ht_orig <- c('nh3_ppb', 'nh3_ugm3', 'temp_amb', 'press_amb', 'oss', 'peak_pos', 
-        'alarm_code')
-    if (!is.null(draw_ht) && nrow(draw_ht) > 0) {
-        # check alarm codes
-        if (!('alarm_code' %in% names(draw_ht))) {
-            draw_ht[, alarm_code := get_alarms(.SD)]
-        }
+    # fill sonic
+    sonic_vars <- names(out)[2:7]
+    sonic_orig <- sonic_vars
+    if (!is.null(snc) && nrow(snc) > 0) {
         # times
-        t_basis <- basis_sonic[, as.numeric(Time)]
-        t_draw <- draw_ht[, as.numeric(Time)]
+        t_basis <- basis[, as.numeric(Time)]
+        t_draw <- snc[, as.numeric(Time)]
         t0 <- t_basis[1]
         # ~ 1/Hz
         d_t <- median(diff(t_basis))
         # get matching indices
         indices <- match_times(t_basis - t0, t_draw - t0, d_t)
         # fill values
-        out[indices[[1]], (ht_vars) := draw_ht[indices[[2]], ht_orig, with = FALSE]]
+        out[indices[[1]], (sonic_vars) := snc[indices[[2]], sonic_orig,
+            with = FALSE]]
+    } else {
+        # check if all columns ok
+        if (all(sonic_vars %in% names(basis))) {
+            # re-add sonic data
+            add <- basis[, sonic_vars, with = FALSE]
+            out[, (sonic_vars) := copy(add)]
+        } else {
+            # warn about missing sonic data
+            warning('no sonic data provided!')
+        }
+    }
+    # fill ht
+    ht_vars <- names(out)[8:14]
+    ht_orig <- c('nh3_ppb', 'nh3_ugm3', 'temp_amb', 'press_amb', 'oss', 'peak_pos', 
+        'alarm_code')
+    if (!is.null(ht) && nrow(ht) > 0) {
+        # check alarm codes
+        if (!('alarm_code' %in% names(ht))) {
+            ht <- copy(ht)
+            ht[, alarm_code := get_alarms(.SD)]
+        }
+        # times
+        t_basis <- basis[, as.numeric(Time)]
+        t_draw <- ht[, as.numeric(Time)]
+        t0 <- t_basis[1]
+        # ~ 1/Hz
+        d_t <- median(diff(t_basis))
+        # get matching indices
+        indices <- match_times(t_basis - t0, t_draw - t0, d_t)
+        # fill values
+        out[indices[[1]], (ht_vars) := ht[indices[[2]], ht_orig, with = FALSE]]
     } else {
         # check if original names
-        if ('oss' %in% names(basis_sonic)) {
+        if ('oss' %in% names(basis)) {
             # check alarm codes
-            if (!('alarm_code' %in% names(basis_sonic))) {
-                basis_sonic[, alarm_code := get_alarms(.SD)]
+            if (!('alarm_code' %in% names(basis))) {
+                basis <- copy(basis)
+                basis[, alarm_code := get_alarms(.SD)]
             }
             # re-add ht data
-            add <- basis_sonic[, ht_orig, with = FALSE]
+            add <- basis[, ht_orig, with = FALSE]
             setnames(add, ht_orig, ht_vars)
             out[, (ht_vars) := copy(add)]
-        } else if ('ht_oss' %in% names(basis_sonic)) {
+        } else if ('ht_oss' %in% names(basis)) {
             # re-add ht data
-            add <- basis_sonic[, ht_vars, with = FALSE]
+            add <- basis[, ht_vars, with = FALSE]
             out[, (ht_vars) := copy(add)]
         }
     }
     # fill licor
     licor_vars <- names(out)[15:19]
     licor_orig <- c('H2OD', 'CO2D', 'Temp', 'Pres', 'CO2SS')
-    if (!is.null(draw_licor) && nrow(draw_licor) > 0) {
-        t_basis <- basis_sonic[, as.numeric(Time)]
-        t_licor <- draw_licor[, as.numeric(Time)]
+    if (!is.null(licor) && nrow(licor) > 0) {
+        t_basis <- basis[, as.numeric(Time)]
+        t_licor <- licor[, as.numeric(Time)]
         t0 <- t_basis[1]
         # ~ 1/Hz
         d_t <- median(diff(t_basis))
         # get matching indices
         indices <- match_times(t_basis - t0, t_licor - t0, d_t)
         # fill values
-        out[indices[[1]], (licor_vars) := draw_licor[indices[[2]], licor_orig, 
+        out[indices[[1]], (licor_vars) := licor[indices[[2]], licor_orig, 
                 with = FALSE]]
     } else {
         # check if original names
-        if ('CO2D' %in% names(basis_sonic)) {
+        if ('CO2D' %in% names(basis)) {
             # re-add licor data
-            add <- basis_sonic[, licor_orig, with = FALSE]
+            add <- basis[, licor_orig, with = FALSE]
             setnames(add, licor_orig, licor_vars)
             out[, (licor_vars) := copy(add)]
-        } else if ('co2_mmolm3' %in% names(basis_sonic)) {
+        } else if ('co2_mmolm3' %in% names(basis)) {
             # re-add licor data
-            add <- basis_sonic[, licor_vars, with = FALSE]
+            add <- basis[, licor_vars, with = FALSE]
             out[, (licor_vars) := copy(add)]
+        }
+    }
+    # fill miro
+    miro_vars <- names(out)[20:22]
+    miro_orig <- c('h2o', 'ch4_dry', 'n2o_dry')
+    if (!is.null(miro) && nrow(miro) > 0) {
+        t_basis <- basis[, as.numeric(Time)]
+        t_miro <- miro[, as.numeric(Time)]
+        t0 <- t_basis[1]
+        # ~ 1/Hz
+        d_t <- median(diff(t_basis))
+        # get matching indices
+        indices <- match_times(t_basis - t0, t_miro - t0, d_t)
+        # fill values
+        out[indices[[1]], (miro_vars) := miro[indices[[2]], miro_orig, 
+                with = FALSE]]
+    } else {
+        # check if original names
+        if ('ch4_dry' %in% names(basis)) {
+            # re-add miro data
+            add <- basis[, miro_orig, with = FALSE]
+            setnames(add, miro_orig, miro_vars)
+            out[, (miro_vars) := copy(add)]
+        } else if ('ch4_molfrac' %in% names(basis)) {
+            # re-add miro data
+            add <- basis[, miro_vars, with = FALSE]
+            out[, (miro_vars) := copy(add)]
         }
     }
     # return

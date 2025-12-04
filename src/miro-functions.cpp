@@ -53,7 +53,7 @@ Rcpp::List miro_read_loggerbox_cpp(String filename) {
             s.clear();
         } else if (c == '\n') {
         // check for newline -> newline
-            // add s to current line vector
+            // assign last field
             line[field] = s;
             // check field counter
             if (field == n_fields) {
@@ -149,6 +149,8 @@ Rcpp::List miro_read_loggerbox_cpp_gzip(Rcpp::String filename) {
     while (gzread(input, &c, 1) > 0) {
         if (c == '\n') {
         // check for newline -> newline
+            // assign last field
+            line[field] = s;
             // check field counter
             if (field == n_fields) {
                 // line ok

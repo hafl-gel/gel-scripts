@@ -29,8 +29,14 @@ Rcpp::List miro_read_loggerbox_cpp(String filename) {
     NumericVector col5(max_lines);
     NumericVector col6(max_lines);
     NumericVector col7(max_lines);
+    NumericVector col8(max_lines);
+    NumericVector col9(max_lines);
+    NumericVector col10(max_lines);
+    NumericVector col11(max_lines);
+    NumericVector col12(max_lines);
     int cline = 0;
-    int n_fields = 7 - 1;
+    int n_fields_old = 7 - 1;
+    int n_fields = 12 - 1;
     int field = 0;
     std::vector<std::string> line(n_fields + 1);
     // loop over lines
@@ -51,6 +57,21 @@ Rcpp::List miro_read_loggerbox_cpp(String filename) {
             line[field] = s;
             // check field counter
             if (field == n_fields) {
+                // line ok
+                // assign to vectors
+                col1_time[cline] = line[0];
+                col2_time[cline] = line[1];
+                col3[cline] = std::stod(line[2]);
+                col4[cline] = std::stod(line[3]);
+                col5[cline] = std::stod(line[4]);
+                col6[cline] = std::stod(line[5]);
+                col7[cline] = std::stod(line[6]);
+                col8[cline] = std::stod(line[7]);
+                col9[cline] = std::stod(line[8]);
+                col10[cline] = std::stod(line[9]);
+                col11[cline] = std::stod(line[10]);
+                col12[cline] = std::stod(line[11]);
+            } else if (field == n_fields_old) {
                 // line ok
                 // assign to vectors
                 col1_time[cline] = line[0];
@@ -85,7 +106,12 @@ Rcpp::List miro_read_loggerbox_cpp(String filename) {
         _["ch4_wet"] = col4,
         _["ch4_dry"] = col5,
         _["n2o_wet"] = col6,
-        _["n2o_dry"] = col7
+        _["n2o_dry"] = col7,
+        _["ld_cold_plate"] = col8,
+        _["outside_t"] = col9,
+        _["optics_t"] = col10,
+        _["p_cell"] = col11,
+        _["p_valve_pwm"] = col12
     );
 }
 
@@ -107,8 +133,14 @@ Rcpp::List miro_read_loggerbox_cpp_gzip(Rcpp::String filename) {
     NumericVector col5(max_lines);
     NumericVector col6(max_lines);
     NumericVector col7(max_lines);
+    NumericVector col8(max_lines);
+    NumericVector col9(max_lines);
+    NumericVector col10(max_lines);
+    NumericVector col11(max_lines);
+    NumericVector col12(max_lines);
     int cline = 0;
-    int n_fields = 7 - 1;
+    int n_fields_old = 7 - 1;
+    int n_fields = 12 - 1;
     int field = 0;
     std::vector<std::string> line(n_fields + 1);
     // loop over lines
@@ -119,8 +151,21 @@ Rcpp::List miro_read_loggerbox_cpp_gzip(Rcpp::String filename) {
         // check for newline -> newline
             // check field counter
             if (field == n_fields) {
-                // add s to current line vector
-                line[field] = s;
+                // line ok
+                // assign to vectors
+                col1_time[cline] = line[0];
+                col2_time[cline] = line[1];
+                col3[cline] = std::stod(line[2]);
+                col4[cline] = std::stod(line[3]);
+                col5[cline] = std::stod(line[4]);
+                col6[cline] = std::stod(line[5]);
+                col7[cline] = std::stod(line[6]);
+                col8[cline] = std::stod(line[7]);
+                col9[cline] = std::stod(line[8]);
+                col10[cline] = std::stod(line[9]);
+                col11[cline] = std::stod(line[10]);
+                col12[cline] = std::stod(line[11]);
+            } else if (field == n_fields_old) {
                 // line ok
                 // assign to vectors
                 col1_time[cline] = line[0];
@@ -166,7 +211,12 @@ Rcpp::List miro_read_loggerbox_cpp_gzip(Rcpp::String filename) {
         _["ch4_wet"] = col4,
         _["ch4_dry"] = col5,
         _["n2o_wet"] = col6,
-        _["n2o_dry"] = col7
+        _["n2o_dry"] = col7,
+        _["ld_cold_plate"] = col8,
+        _["outside_t"] = col9,
+        _["optics_t"] = col10,
+        _["p_cell"] = col11,
+        _["p_valve_pwm"] = col12
     );
 }
 

@@ -22,18 +22,18 @@ Rcpp::List miro_read_loggerbox_cpp(String filename) {
     }
     int max_lines = 870000;
     // create output
-    CharacterVector col1_time(max_lines);
-    CharacterVector col2_time(max_lines);
-    NumericVector col3(max_lines);
-    NumericVector col4(max_lines);
-    NumericVector col5(max_lines);
-    NumericVector col6(max_lines);
-    NumericVector col7(max_lines);
-    NumericVector col8(max_lines);
-    NumericVector col9(max_lines);
-    NumericVector col10(max_lines);
-    NumericVector col11(max_lines);
-    NumericVector col12(max_lines);
+    CharacterVector col1_time(max_lines, NA_STRING);
+    CharacterVector col2_time(max_lines, NA_STRING);
+    NumericVector col3(max_lines, NA_REAL);
+    NumericVector col4(max_lines, NA_REAL);
+    NumericVector col5(max_lines, NA_REAL);
+    NumericVector col6(max_lines, NA_REAL);
+    NumericVector col7(max_lines, NA_REAL);
+    NumericVector col8(max_lines, NA_REAL);
+    NumericVector col9(max_lines, NA_REAL);
+    NumericVector col10(max_lines, NA_REAL);
+    NumericVector col11(max_lines, NA_REAL);
+    NumericVector col12(max_lines, NA_REAL);
     int cline = 0;
     int n_fields_old = 7 - 1;
     int n_fields = 12 - 1;
@@ -126,18 +126,18 @@ Rcpp::List miro_read_loggerbox_cpp_gzip(Rcpp::String filename) {
     }
     int max_lines = 870000;
     // create output
-    CharacterVector col1_time(max_lines);
-    CharacterVector col2_time(max_lines);
-    NumericVector col3(max_lines);
-    NumericVector col4(max_lines);
-    NumericVector col5(max_lines);
-    NumericVector col6(max_lines);
-    NumericVector col7(max_lines);
-    NumericVector col8(max_lines);
-    NumericVector col9(max_lines);
-    NumericVector col10(max_lines);
-    NumericVector col11(max_lines);
-    NumericVector col12(max_lines);
+    CharacterVector col1_time(max_lines, NA_STRING);
+    CharacterVector col2_time(max_lines, NA_STRING);
+    NumericVector col3(max_lines, NA_REAL);
+    NumericVector col4(max_lines, NA_REAL);
+    NumericVector col5(max_lines, NA_REAL);
+    NumericVector col6(max_lines, NA_REAL);
+    NumericVector col7(max_lines, NA_REAL);
+    NumericVector col8(max_lines, NA_REAL);
+    NumericVector col9(max_lines, NA_REAL);
+    NumericVector col10(max_lines, NA_REAL);
+    NumericVector col11(max_lines, NA_REAL);
+    NumericVector col12(max_lines, NA_REAL);
     int cline = 0;
     int n_fields_old = 7 - 1;
     int n_fields = 12 - 1;

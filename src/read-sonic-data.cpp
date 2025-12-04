@@ -15,12 +15,14 @@ Rcpp::List hs_read_cpp(String filename) {
         Rcout << "Could not read file: " << filename.get_cstring() << "\n";
         return R_NilValue;
     }
+    // define maximum expected lines
+    int max_lines = 9e5;
     // create output
-    CharacterVector col1_time(9e5);
-    NumericVector col4_u(9e5);
-    NumericVector col5_v(9e5);
-    NumericVector col6_w(9e5);
-    NumericVector col7_T(9e5);
+    CharacterVector col1_time(max_lines, NA_STRING);
+    NumericVector col4_u(max_lines, NA_REAL);
+    NumericVector col5_v(max_lines, NA_REAL);
+    NumericVector col6_w(max_lines, NA_REAL);
+    NumericVector col7_T(max_lines, NA_REAL);
     int cline = 0;
     int n_fields = 10 - 1;
     int field = 0;
@@ -86,12 +88,14 @@ Rcpp::List hs_read_cpp_gzip(Rcpp::String filename) {
         Rcpp::Rcout << "Could not read file: " << filename.get_cstring() << "\n";
         return R_NilValue;
     }
+    // define maximum expected lines
+    int max_lines = 9e5;
     // create output
-    Rcpp::CharacterVector col1_time(9e5);
-    Rcpp::NumericVector col4_u(9e5);
-    Rcpp::NumericVector col5_v(9e5);
-    Rcpp::NumericVector col6_w(9e5);
-    Rcpp::NumericVector col7_T(9e5);
+    CharacterVector col1_time(max_lines, NA_STRING);
+    NumericVector col4_u(max_lines, NA_REAL);
+    NumericVector col5_v(max_lines, NA_REAL);
+    NumericVector col6_w(max_lines, NA_REAL);
+    NumericVector col7_T(max_lines, NA_REAL);
     int cline = 0;
     int n_fields = 10 - 1;
     int field = 0;

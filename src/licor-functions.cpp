@@ -17,18 +17,18 @@ Rcpp::List licor_read_cpp(String filename) {
     }
     // create output
     int max_lines = 870000;
-    std::vector<std::string> col1_time(max_lines);
-    std::vector<int> col4_DiagVal(max_lines);
-    std::vector<double> col6_CO2D(max_lines);
-    std::vector<double> col7_H2OD(max_lines);
-    std::vector<double> col8_Temp(max_lines);
-    std::vector<double> col9_Pres(max_lines);
-    std::vector<double> col10_Cooler(max_lines);
-    std::vector<double> col11_SFVin(max_lines);
-    std::vector<double> col12_H2OMF(max_lines);
-    std::vector<double> col13_DewPt(max_lines);
-    std::vector<double> col14_CO2SS(max_lines);
-    std::vector<int> col15_CO2AWO(max_lines);
+    CharacterVector col1_time(max_lines, NA_STRING);
+    IntegerVector col4_DiagVal(max_lines, NA_INTEGER);
+    NumericVector col6_CO2D(max_lines, NA_REAL);
+    NumericVector col7_H2OD(max_lines, NA_REAL);
+    NumericVector col8_Temp(max_lines, NA_REAL);
+    NumericVector col9_Pres(max_lines, NA_REAL);
+    NumericVector col10_Cooler(max_lines, NA_REAL);
+    NumericVector col11_SFVin(max_lines, NA_REAL);
+    NumericVector col12_H2OMF(max_lines, NA_REAL);
+    NumericVector col13_DewPt(max_lines, NA_REAL);
+    NumericVector col14_CO2SS(max_lines, NA_REAL);
+    IntegerVector col15_CO2AWO(max_lines, NA_INTEGER);
     int cline = 0;
     int n_fields = 17 - 1;
     int field = 0;
@@ -125,18 +125,18 @@ Rcpp::List licor_read_cpp_gzip(Rcpp::String filename) {
     }
     // create output
     int max_lines = 870000;
-    std::vector<std::string> col1_time(max_lines);
-    std::vector<int> col4_DiagVal(max_lines);
-    std::vector<double> col6_CO2D(max_lines);
-    std::vector<double> col7_H2OD(max_lines);
-    std::vector<double> col8_Temp(max_lines);
-    std::vector<double> col9_Pres(max_lines);
-    std::vector<double> col10_Cooler(max_lines);
-    std::vector<double> col11_SFVin(max_lines);
-    std::vector<double> col12_H2OMF(max_lines);
-    std::vector<double> col13_DewPt(max_lines);
-    std::vector<double> col14_CO2SS(max_lines);
-    std::vector<int> col15_CO2AWO(max_lines);
+    CharacterVector col1_time(max_lines, NA_STRING);
+    IntegerVector col4_DiagVal(max_lines, NA_INTEGER);
+    NumericVector col6_CO2D(max_lines, NA_REAL);
+    NumericVector col7_H2OD(max_lines, NA_REAL);
+    NumericVector col8_Temp(max_lines, NA_REAL);
+    NumericVector col9_Pres(max_lines, NA_REAL);
+    NumericVector col10_Cooler(max_lines, NA_REAL);
+    NumericVector col11_SFVin(max_lines, NA_REAL);
+    NumericVector col12_H2OMF(max_lines, NA_REAL);
+    NumericVector col13_DewPt(max_lines, NA_REAL);
+    NumericVector col14_CO2SS(max_lines, NA_REAL);
+    IntegerVector col15_CO2AWO(max_lines, NA_INTEGER);
     int cline = 0;
     int n_fields = 17 - 1;
     int field = 0;

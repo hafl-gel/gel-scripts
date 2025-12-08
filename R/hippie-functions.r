@@ -113,9 +113,11 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
     dat[, c('st', 'et', 'Date_Time') := {
         Time <- with_tz(fast_strptime(Date_Time, format = '%Y%m%dT%H%M%SZ', lt = FALSE, 
                 tz = tz_data), tz_out)
-        dT <- median(diff(Time), na.rm = TRUE)
+        dT <- diff(Time)
+        mdT <- median(dT, na.rm = TRUE)
+        dT[is.na(dT) | dT > mdT * 1.5] <- mdT
         list(
-            Time - dT,
+            Time - c(mdT, dT),
             Time,
             NULL
             )

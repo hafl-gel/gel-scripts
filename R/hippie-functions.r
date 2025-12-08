@@ -103,6 +103,7 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
     setnames(dat, sub('\\s+.*$', '', hdr))
 
     # remove erroneous valve positions other than 1 to 8
+    dat[, ':='(Valve_Is = as.character(Valve_Is), Cycle_Set = as.character(Cycle_Set))] 
     dat <- dat[Valve_Is %chin% as.character(1:8)]
 
     # TODO: 

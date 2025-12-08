@@ -102,6 +102,9 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
 
     setnames(dat, sub('\\s+.*$', '', hdr))
 
+    # remove erroneous valve positions other than 1 to 8
+    dat <- dat[Valve_Is %chin% as.character(1:8)]
+
     # TODO: 
     #   - switch HIPPIE to UTC+1
     #   - capture: 

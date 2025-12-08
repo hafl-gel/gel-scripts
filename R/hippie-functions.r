@@ -65,7 +65,7 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
         # -> instrument restarts
         # break into several results
         out <- mapply(\(from, to) {
-            read_hippie(dat_raw[from:to], as_ibts = as_ibts)
+            read_hippie(dat_raw[from:to], as_ibts = FALSE)
         }, from = hdr_lines, to = c(hdr_lines[-1] - 1, length(dat_raw)),
         SIMPLIFY = FALSE)
         # check times
@@ -84,6 +84,10 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
                 }
                 out[[i]]
             })
+        }
+        # fix ibts output
+        if (as_ibts) {
+            out <- lapply(out, as.ibts)
         }
         if (flatten) {
             out <- do.call(rbind, out)

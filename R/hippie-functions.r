@@ -116,7 +116,8 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
                 tz = tz_data), tz_out)
         dT <- diff(Time)
         mdT <- median(dT, na.rm = TRUE)
-        dT[is.na(dT) | dT > mdT * 1.5] <- mdT
+        # fix lora gaps
+        dT[is.na(dT) | dT > mdT * 3] <- mdT * 3
         list(
             Time - c(mdT, dT),
             Time,
@@ -136,7 +137,12 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
         )
     }]
 
-    # get averages
+    # get averages (capture groups without time gap)
+    dat[, group := {
+        # check time gap > 1 second
+        tg <- as.numeric(st[-1] - et[-.N], units = 'secs') > 1
+        c(0, cumsum(tg))
+    }]
     dat_avg <- dat[, .(
         st = st[1],
         et = et[.N],
@@ -152,8 +158,8 @@ read_hippie <- function(file, as_ibts = TRUE, tz_data = 'UTC', tz_out = 'UTC',
         t_outside = mean(Tair) + 273.14,
         p_outside = mean(Air_pressure),
         sn = as.character(Serial[1])
-        ), by = .(position = Valve_Is, cycle = Cycle_Set)
-    ]
+        ), by = .(position = Valve_Is, cycle = Cycle_Set, group)
+    ][, group := NULL]
 
     # reorder columns
     setcolorder(dat_avg, c('st', 'et', 'sn', 'cycle', 'position'))

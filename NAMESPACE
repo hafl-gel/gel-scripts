@@ -32,6 +32,7 @@ export(read_s31)
 export(read_tc01)
 export(read_ltc2)
 export(read_tc_sensors)
+export(read_dds75)
 # ~~~ idaweb
 export(read_ida)
 export(plot_ida)

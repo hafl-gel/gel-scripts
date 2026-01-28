@@ -1345,7 +1345,12 @@ process_ec_fluxes <- function(
         damping_reference <- fix_defaults(damping_reference, covariances[scalar_covariances])
         damping_lower <- fix_defaults(damping_lower, covariances[scalar_covariances])
         damping_upper <- fix_defaults(damping_upper, covariances[scalar_covariances])
-        # subint_detrending <- fix_defaults(subint_detrending, variables)
+        # sub intervals
+        if (!(is.numeric(subint_n) && (subint_n %% 1 == 0) && subint_n >= 3 &&
+            subint_n <= 10)) {
+            stop('argument "subint_n" must be an integer number between 3 and 10')
+        }
+        subint_detrending <- fix_defaults(subint_detrending, variables)
         ts_vars <- variables
         if (!ht_null) {
             # add ht8700 quality parameters (oss) to plotting
@@ -2854,102 +2859,92 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             # sub-intervals:
             # -----------------------------------------------------------------------
             if (subintervals) {
-
-                browser()
-
+                # be verbose
+                cat('  --> Processing', subint_n, 'sub-intervals\n')
                 # copy original .SD for sub-interval processing
                 SDsub <- copy(.SD)
+                # split into sub-intervals
+                t0 <- Time[1]
+                breaks <- seq(t0, t0 + avg_secs, length.out = subint_n + 1)
+                SDsub[, subint := cut(Time, breaks, labels = seq_len(subint_n))]
+                # prepare output
+                sub_wind_stats <- vector(mode = 'list', length = subint_n)
                 # detrending sonic data
-                cat("~~~\ndeterending sonic data...\n")
-                wind <- detrend_sonic_data(SDsub, detrending, rec_Hz)
-
-                # calculate some turbulence parameters and collect some wind parameters
-                # -------------------------------------------------------------------------- 
-                wind_stats <- wind_statistics(wind, z_canopy[[1]], z_ec[[1]], 
-                    ustar_method = ustar_method)
+                cat("(subint) -> deterending sonic data...\n")
+                for (si in seq_len(subint_n)) {
+                    # copy SDsub
+                    sds <- SDsub[subint == si]
+                    # detrend
+                    sub_wind <- detrend_sonic_data(sds, subint_detrending, rec_Hz)
+                    # turbulence
+                    sub_wind_stats[[si]] <- wind_statistics(sub_wind, z_canopy[[1]], 
+                        z_ec[[1]], ustar_method = ustar_method)
+                    # reassign
+                    SDsub[subint == si, c('u', 'v', 'w', 'T') := sds[, .(u, v, w, T)]]
+                }
                 # detrending scalars
                 if (length(scalars)) {
-                    scalar_list <- SDsub[, I(lapply(.SD, na.omit)), 
-                        .SDcols = scalars]
-                    # detrend scalars
-                    # -------------------------------------------------------------- 
-                    cat("~~~\ndetrending scalars...\n")
-                    detrended_scalars <- mapply(trend, y = scalar_list, method = 
-                        detrending[scalars], MoreArgs = list(Hz_ts = rec_Hz), 
-                        SIMPLIFY = FALSE
-                    )
-                    # assign to SDsub
-                    SDsub[, (scalars) := lapply(names(detrended_scalars), \(nms) {
-                        if (!is.null(isna <- na.action(scalar_list[[nms]]))) {
-                            out <- rep(NA_real_, .N)
-                            x <- detrended_scalars[[nms]]$residuals
-                            out[-isna] <- x
-                            out
-                        } else {
-                            detrended_scalars[[nms]]$residuals
-                        }
-                        })]
+                    # be verbose
+                    cat("(subint) -> detrending scalars...\n")
+                    SDsub[, (scalars) := {
+                        # get values
+                        scalar_list <- lapply(.SD, na.omit)
+                        # detrend
+                        subdetrended_scalars <- mapply(trend, y = scalar_list, 
+                            method = subint_detrending[scalars], 
+                            MoreArgs = list(Hz_ts = rec_Hz), SIMPLIFY = FALSE
+                        )
+                        # fix NA
+                        lapply(names(subdetrended_scalars), \(nms) {
+                            if (!is.null(isna <- na.action(scalar_list[[nms]]))) {
+                                out <- rep(NA_real_, .N)
+                                x <- subdetrended_scalars[[nms]]$residuals
+                                out[-isna] <- x
+                                out
+                            } else {
+                                subdetrended_scalars[[nms]]$residuals
+                            }
+                        })
+                    }, by = subint, .SDcols = scalars]
                 }
                 # check flux
                 if (has_flux) {
-                    # calculate covariances with fix lag time:
-                    # ------------------------------------------------------------------ 
-                    cat("\t- covariances\n")
-                    Covars <- get_covariance(SD, covariances_variables, covariances,
-                        n_period)
-
-                    # find maximum in dynamic lag time range:
-                    # ------------------------------------------------------------------ 
-                    cat("\t- dyn lag\n")
-                    dyn_lag_max <- sapply(covariances, function(i, x, lag) {
-                        find_dynlag(x[[i]], lag[, i])
-                    }, x = Covars, lag = dyn_lag)
-
-                    # covariance function's standard deviation and mean values left and right of fix lag
-                    # ----------------------------------------------------------------
-                    # RE_RMSE (Eq. 9 in Langford et al. 2015)
-                    # -> ranges lo/hi (-/+180 to -/+150 secs? => define range as argument)
-                    m <- ifelse(n_period %% 2, (n_period + 1) / 2, n_period / 2 + 1)
-                    lo_range <- m - rev(gamma_time_window) * 60 * rec_Hz
-                    hi_range <- m + gamma_time_window * 60 * rec_Hz
-                    # -> sd_cov_low
-                    sd_cov_lo <- sapply(Covars, \(x) sd(x[lo_range]))
-                    # -> avg_cov_low
-                    avg_cov_lo <- sapply(Covars, \(x) mean(x[lo_range]))
-                    # -> sd_cov_hi
-                    sd_cov_hi <- sapply(Covars, \(x) sd(x[hi_range]))
-                    # -> avg_cov_hi
-                    avg_cov_hi <- sapply(Covars, \(x) mean(x[hi_range]))
-                    re_rmse <- sqrt(0.5 * (sd_cov_lo ^ 2 + avg_cov_lo ^ 2 +
-                            sd_cov_hi ^ 2 + avg_cov_hi ^ 2))
-
-                    # cospectra for fixed & dynamic lags
-                    # ------------------------------------------------------------------
-                    cat("\t- co-spectra\n")
-                    # fix lag
-                    Cospec_fix <- get_cospectra(SD, Covars, covariances_variables, 
-                        covariances, fix_lag[covariances], n_period)
-                    # dyn lag
-                    Cospec_dyn <- get_cospectra(SD, Covars, covariances_variables, 
-                        covariances, dyn_lag_max[2, covariances], n_period)
-
-                    # ogives for fixed & dynamic lags 
-                    # ------------------------------------------------------------------
-                    Ogive_fix <- lapply(Cospec_fix, function(x) {
-                        rev(cumsum(rev(x)))
-                    })
-                    names(Ogive_fix) <- covariances
-                    Ogive_dyn <- lapply(Cospec_dyn, function(x) {
-                        rev(cumsum(rev(x)))
-                    })
-                    names(Ogive_dyn) <- covariances
-                    ### some output and namings
-                    fix_lag_out <- fix_lag
-                    dyn_lag_out <- dyn_lag_max["tau", ]
-                    flux_fix_lag <- sapply(Ogive_fix, "[", 1)
-                    flux_dyn_lag <- sapply(Ogive_dyn, "[", 1)
+                    # be verbose
+                    cat("(subint) -> process fluxes...\n")
+                    # prepare output
+                    sub_flux_fix_lag <- vector(mode = 'list', length = subint_n)
+                    sub_flux_dyn_lag <- vector(mode = 'list', length = subint_n)
+                    # loop over sub-intervals
+                    for(si in seq_len(subint_n)) {
+                        # calculate covariances with fix lag time:
+                        sub_Covars <- get_covariance(SDsub[subint == si], 
+                            covariances_variables, covariances, n_period)
+                        # cospectra for fixed & dynamic lags
+                        # fix lag
+                        sub_Cospec_fix <- get_cospectra(SDsub[subint == si], 
+                            sub_Covars, covariances_variables, covariances, 
+                            fix_lag[covariances], n_period)
+                        # dyn lag
+                        sub_Cospec_dyn <- get_cospectra(SDsub[subint == si], 
+                            sub_Covars, covariances_variables, covariances, 
+                            dyn_lag_max[2, covariances], n_period)
+                        ### some output and namings
+                        sub_flux_fix_lag[[si]] <- sapply(sub_Cospec_fix, sum)
+                        sub_flux_dyn_lag[[si]] <- sapply(sub_Cospec_dyn, sum)
+                    }
                 }
-            }
+                # process output
+                subint <- data.table(
+                    do.call(rbind, sub_wind_stats),
+                    do.call(rbind, sub_flux_fix_lag),
+                    do.call(rbind, sub_flux_dyn_lag)
+                )
+
+                hier bin ich! todo -> subset sub_wind_stats & capture empty flux list
+
+                browser()
+
+            } # END subintervals
 
             # write results:
             # -----------------------------------------------------------------------

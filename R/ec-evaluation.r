@@ -3140,10 +3140,10 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                             sub_Covars, covariances_variables, covariances, 
                             dyn_lag_max[2, covariances], n_period)
                         sub_flux_fix_lag[[si]] <- sapply(sub_Cospec_fix, sum)
-                        names(sub_flux_fix_lag[[si]]) <- paste0('fix_lag_', 
+                        names(sub_flux_fix_lag[[si]]) <- paste0('flux_fix_', 
                             names(sub_Cospec_fix))
                         sub_flux_dyn_lag[[si]] <- sapply(sub_Cospec_dyn, sum)
-                        names(sub_flux_dyn_lag[[si]]) <- paste0('dyn_lag_', 
+                        names(sub_flux_dyn_lag[[si]]) <- paste0('flux_dyn_', 
                             names(sub_Cospec_dyn))
                     }
                 }

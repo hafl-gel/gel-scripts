@@ -3374,6 +3374,64 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
     tf_out
 }
 
+## quality criteria (instationarity) post-processing ----------------------------------------
+
+# function to classify fluxes by Foken & Wichura 1996 criterion based on Foken et al., 2004 classification
+# an altered, more robust classification scheme is provided as well
+foken_wichura <- function(x, altered = FALSE, subint_pattern = '.*_avg_(flux_dyn|cov)_.*') {
+    # get names
+    xnms <- names(x)
+    # check if subintervals exist
+    vars <- grep(subint_pattern, xnms, value = TRUE)
+    if (length(vars) > 0) {
+        # convert to data.table
+        if (is_ibts <- is.ibts(x)) {
+            x <- as.data.table(x)
+        }
+        # get functions & table
+        # Foken et al., 2004 (Handbook of Micromet.)
+        breaks <- c(0, 15, 30, 50, 75, 100, 250, 500, 1000, Inf) / 100
+        if (altered) {
+            # robust version of Foken & Wichura 1996
+            fun <- function(sub, all) abs((sub - all) / (sub + all))
+            # adapted table
+            breaks <- breaks / (2 + breaks)
+            breaks[length(breaks)] <- Inf
+        } else {
+            # Foken & Wichura 1996
+            fun <- function(sub, all) abs((sub - all) / all)
+        }
+        # get variable "reference"
+        vref <- sub('.*_avg_', '', vars)
+        # check
+        if (!all(vr <- vref %in% xnms)) {
+            stop('Cannot find refrence columns of: ', 
+                paste0(vars[!vr], collapse = ', '))
+        }
+        # loop over variables
+        for (i in seq_along(vars)) {
+            vr <- vref[i]
+            vs <- vars[i]
+            vp <- sub(vr, '', vs)
+            vd <- sub('_avg_', '_dev_', vp)
+            vc <- sub('_avg_', '_fwclass_', vp)
+            # add deviation
+            x[, paste0(vd, vr) := fun(s, r), env = list(s = vs, r = vr)]
+            # add criterion
+            x[, paste0(vc, vr) := findInterval(dev, breaks), env = 
+                list(dev = paste0(vd, vr))]
+        }
+        # convert back to ibts
+        if (is_ibts) {
+            x <- as.ibts(x)
+        }
+    } else {
+        stop('no column names match argument "subint_pattern"')
+    }
+    # return
+    x
+}
+
 ## wpl post-processing ----------------------------------------
 
 # wpl function

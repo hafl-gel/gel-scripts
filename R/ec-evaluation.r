@@ -1233,6 +1233,7 @@ process_ec_fluxes <- function(
             wxnh3_ugm3 = 'ug/m2/s', wxh2o_mmolm3 = 'mmol/m2/s', wxco2_mmolm3 = 'mmol/m2/s')
         , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred', 
             wxnh3_ugm3 = 'indianred', wxh2o_mmolm3 = '#8FC1E6', wxco2_mmolm3 = 'seagreen4')
+        , model_colors = c(cospec = '#F02E42', ogive = '#9A33DA')
 		, ogives_out = FALSE
         , as_ibts = TRUE
         , ncores = 1
@@ -1381,6 +1382,13 @@ process_ec_fluxes <- function(
         plotting_var_units <- fix_defaults(plotting_var_units, ts_vars)[names(plot_timeseries)]
         plotting_covar_units <- fix_defaults(plotting_covar_units, covariances)
         plotting_covar_colors <- fix_defaults(plotting_covar_colors, covariances)
+        model_color_names <- names(formals(process_ec_fluxes)$model_colors)
+        if (is.null(names(model_colors)) && 
+            length(model_colors) == length(model_color_names)) {
+            names(model_colors) <- model_color_names
+        } else {
+            model_colors <- fix_defaults(model_colors, model_color_names)
+        }
 
         lim_range <- rbind(lower = limits_lower, upper = limits_upper)
         damp_region <- mapply(c, damping_lower, damping_upper, SIMPLIFY = FALSE)
@@ -2377,7 +2385,7 @@ process_ec_fluxes <- function(
                             plot_cospec_ogive(Ogive_fix_Out[[i]][[flux]], 
                                 Cospec_fix_Out[[i]][[flux]], freq,
                                 ylab = flux, col = plotting_covar_colors[flux], 
-                                model_cols = c('#F02E42', '#9A33DA'),
+                                model_cols = model_colors,
                                 model_par = Cospec_fix_Out[[i]]$model_coef[, flux]
                             )
                             om <- Ogive_fix_Out[[i]][[flux]][1]

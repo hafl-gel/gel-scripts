@@ -620,6 +620,33 @@ damp_hac5 <- function(ogive, freq, freq.limits, ogive_ref){
 	list(dampf_pbreg=ogive[1]/(ogive[1] - cfs2[1]),dampf_deming=ogive[1]/(ogive[1] - cfs[1]),freq.limits=freq.limits,ogive=ogive,ogive_ref_pbreg=pred_ogv_pbreg,ogive_ref_deming=pred_ogv_deming)	
 }
 
+# helper function for ec_main
+detrend_sonic_data <- function(x, detr, rhz) {
+    wind <- x[, {
+        ud <- trend(urot, detr["u"], rhz)
+        vd <- trend(vrot, detr["v"], rhz)
+        wd <- trend(wrot, detr["w"], rhz)
+        Td <- trend(T, detr["T"], rhz)
+        I(list(
+            uprot = ud$residuals
+            , vprot = vd$residuals
+            , wprot = wd$residuals
+            , Tdet = Td$residuals
+            , umrot = ud$fitted
+            , vmrot = vd$fitted
+            , wmrot = wd$fitted
+            , Tmdet = Td$fitted
+        ))
+    }]
+    # keep T for plotting
+    x[, Trot := T]
+    # replace detrended variables
+    x[, c("u", "v", "w", "T") := 
+        wind[c("uprot", "vprot", "wprot", "Tdet")]]
+    # return wind
+    wind
+}
+
 # calculate wind statistics and MOST parameters
 wind_statistics <- function(wind, z_canopy, z_sonic, 
     ustar_method = c('neg_sqrt', 'double_sqrt', 'fallback')[1]) {
@@ -705,6 +732,85 @@ Rb_nh3 <- function(ustar, Tc, Zo, p_hPA = 960) {
     }
     1.45 * (Zo * ustar / kin.visc(Tc, p_hPA)) ^ 0.24 * 
         (kin.visc(Tc, p_hPA) / Diff.Ammon(Tc, p_hPA)) ^ 0.8 / ustar
+}
+
+# ec_main helpers
+get_covariance <- function(dt, cvars, cvars_name, nperiod) {
+    cov_out <- dt[, I(lapply(cvars, function(i) {
+        # TODO -> get ffts here and add to output
+        # get x
+        x <- get(i[1])
+        # get y
+        y <- get(i[2])
+        # get NA values
+        isfinite <- is.finite(x) & is.finite(y)
+        # get N
+        N <- sum(isfinite)
+        # get ffts
+        xfft <- fft(x[isfinite] / N)
+        yfft <- fft(y[isfinite] / N)
+        # get Re
+        re <- Re(fft(Conj(yfft) * xfft, inverse = TRUE))
+        # subset
+        if (N %% 2) {
+            out <- re[c(((N + 1) / 2 + 1):N, 1:((N + 1) / 2))] * N / (N - 1)
+        } else {
+            out <- re[c((N / 2 + 1):N, 1:(N / 2))] * N / (N - 1)
+        }
+        # get missing
+        n_missing <- nperiod - N
+        if (sign(n_missing) >= 0) {
+            if (n_missing %% 2) {
+                n1 <- rep(NA_real_, (n_missing + 1) / 2)
+                n2 <- rep(NA_real_, (n_missing - 1) / 2)
+            } else {
+                n1 <- n2 <- rep(NA_real_, n_missing / 2)
+            }
+            out <- c(n1, out, n2)
+        } else {
+            if (-n_missing %% 2) {
+                ind <- ((1 - n_missing) / 2 + 1):(N - (-n_missing - 1) / 2)
+            } else {
+                ind <- (1 - n_missing / 2):(N + n_missing / 2)
+            }
+            out <- out[ind]
+        }
+        # attach ffts
+        structure(out, ffts = list(x = xfft, y = yfft), 
+            isfinite = isfinite)
+    }))]
+    # add names
+    names(cov_out) <- cvars_name
+    cov_out
+}
+get_cospectra <- function(dt, cvrs, cvars, cvars_name, lag_tau, nperiod) {
+    out <- mapply(function(var, lag) {
+            # get covar
+            covars <- cvrs[[paste(var, collapse = 'x')]]
+            # get ffts
+            xfft <- attr(covars, 'ffts')$x
+            # get length
+            N <- length(xfft)
+            # get y
+            if (lag != 0) {
+                y <- dt[attr(covars, 'isfinite'), get(var[2])]
+                yfft <- fft(data.table::shift(y, lag, type = 'cyclic')) / N
+            } else {
+                yfft <- attr(covars, 'ffts')$y
+            }
+            # get cospec
+            re <- Re(Conj(yfft) * xfft)[seq(N / 2) + 1] * N / (N - 1) * 2
+            # get missing
+            n_missing <- nperiod / 2 - length(re)
+            if (sign(n_missing) >= 0) {
+                c(re, rep(0, n_missing))
+            } else {
+                re[seq_len(nperiod / 2)]
+            }
+        }, var = cvars, lag = lag_tau, SIMPLIFY = FALSE)
+    # add names
+    names(out) <- cvars_name
+    out
 }
 
 
@@ -1090,9 +1196,9 @@ process_ec_fluxes <- function(
         , low_cont_sec = 20
         , high_cont_sec = 2
         , cont_pts = 5
-        # , subintervals = TRUE
-        # , subint_n = 5
-        # , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
+        , subintervals = TRUE
+        , subint_n = 5
+        , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
         , oss_threshold = 0
         , co2ss_threshold = 0
         , na_alarm_code = c(1:3, 5:8, 11, 13)
@@ -2426,31 +2532,12 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             }
 
             # calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
-            # -------------------------------------------------------------------------- 
+            # ---------------------------------------------------------------------- 
             cat("~~~\ndeterending sonic data...\n")
-            wind <- SD[, {
-                ud <- trend(urot, detrending["u"], rec_Hz)
-                vd <- trend(vrot, detrending["v"], rec_Hz)
-                wd <- trend(wrot, detrending["w"], rec_Hz)
-                Td <- trend(T, detrending["T"], rec_Hz)
-                I(list(
-                    uprot = ud$residuals
-                    , vprot = vd$residuals
-                    , wprot = wd$residuals
-                    , Tdet = Td$residuals
-                    , umrot = ud$fitted
-                    , vmrot = vd$fitted
-                    , wmrot = wd$fitted
-                    , Tmdet = Td$fitted
-                ))
-            }]
-            # keep T for plotting
-            SD[, Trot := T]
-            # replace detrended variables
-            SD[, c("u", "v", "w", "T") := wind[c("uprot", "vprot", "wprot", "Tdet")]]
+            wind <- detrend_sonic_data(SD, detrending, rec_Hz)
 
             # calculate some turbulence parameters and collect some wind parameters
-            # -------------------------------------------------------------------------- 
+            # ---------------------------------------------------------------------- 
             wind_stats <- wind_statistics(wind, z_canopy[[1]], z_ec[[1]], 
                 ustar_method = ustar_method)
 
@@ -2468,16 +2555,18 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             )
             if (length(scalars)) {
                 scalar_list <- SD[, I(lapply(.SD, na.omit)), .SDcols = scalars]
-            # detrend scalars
-            # -------------------------------------------------------------------------- 
+                # detrend scalars
+                # ------------------------------------------------------------------ 
                 cat("~~~\ndetrending scalars...\n")
                 detrended_scalars <- mapply(trend, y = scalar_list, method = 
-                    detrending[scalars], MoreArgs = list(Hz_ts = rec_Hz), SIMPLIFY = FALSE)
-            # calculate scalar averages and sd:
-            # -------------------------------------------------------------------------- 
+                    detrending[scalars], MoreArgs = list(Hz_ts = rec_Hz), 
+                    SIMPLIFY = FALSE
+                )
+                # calculate scalar averages and sd:
+                # ------------------------------------------------------------------ 
                 scalar_means[scalars] <- sapply(scalar_list, mean)
                 scalar_sd[scalars] <- sapply(scalar_list, sd)
-            # assign to SD
+                # assign to SD
                 SD[, (scalars) := lapply(names(detrended_scalars), \(nms) {
                     if (!is.null(isna <- na.action(scalar_list[[nms]]))) {
                         out <- rep(NA_real_, .N)
@@ -2488,74 +2577,30 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         detrended_scalars[[nms]]$residuals
                     }
                     })]
-            # } else {
-                # cat('No scalars available -> skipping interval!\n')
-                # next
             }
 
             # check if any fluxes can be derived
             if (has_flux <- length(covariances_variables)) {
                 # start of flux relevant data manipulation
-                # -------------------------------------------------------------------------- 
-                # -------------------------------------------------------------------------- 
+                # ------------------------------------------------------------------ 
+                # ------------------------------------------------------------------ 
                 cat("~~~\nstarting flux evaluation...\n")
 
                 # calculate covariances with fix lag time:
-                # -------------------------------------------------------------------------- 
+                # ------------------------------------------------------------------ 
                 cat("\t- covariances\n")
-                Covars <- SD[, I(lapply(covariances_variables, function(i) {
-                    # TODO -> get ffts here and add to output
-                    # get x
-                    x <- get(i[1])
-                    # get y
-                    y <- get(i[2])
-                    # get NA values
-                    isfinite <- is.finite(x) & is.finite(y)
-                    # get N
-                    N <- sum(isfinite)
-                    # get ffts
-                    xfft <- fft(x[isfinite] / N)
-                    yfft <- fft(y[isfinite] / N)
-                    # get Re
-                    re <- Re(fft(Conj(yfft) * xfft, inverse = TRUE))
-                    # subset
-                    if (N %% 2) {
-                        out <- re[c(((N + 1) / 2 + 1):N, 1:((N + 1) / 2))] * N / (N - 1)
-                    } else {
-                        out <- re[c((N / 2 + 1):N, 1:(N / 2))] * N / (N - 1)
-                    }
-                    # get missing
-                    n_missing <- n_period - N
-                    if (sign(n_missing) >= 0) {
-                        if (n_missing %% 2) {
-                            n1 <- rep(NA_real_, (n_missing + 1) / 2)
-                            n2 <- rep(NA_real_, (n_missing - 1) / 2)
-                        } else {
-                            n1 <- n2 <- rep(NA_real_, n_missing / 2)
-                        }
-                        out <- c(n1, out, n2)
-                    } else {
-                        if (-n_missing %% 2) {
-                            ind <- ((1 - n_missing) / 2 + 1):(N - (-n_missing - 1) / 2)
-                        } else {
-                            ind <- (1 - n_missing / 2):(N + n_missing / 2)
-                        }
-                        out <- out[ind]
-                    }
-                    # attach ffts
-                    structure(out, ffts = list(x = xfft, y = yfft), isfinite = isfinite)
-                }))]
-                names(Covars) <- covariances
+                Covars <- get_covariance(SD, covariances_variables, covariances,
+                    n_period)
 
                 # find maximum in dynamic lag time range:
-                # -------------------------------------------------------------------------- 
+                # ------------------------------------------------------------------ 
                 cat("\t- dyn lag\n")
                 dyn_lag_max <- sapply(covariances, function(i, x, lag) {
                     find_dynlag(x[[i]], lag[, i])
                 }, x = Covars, lag = dyn_lag)
 
                 # covariance function's standard deviation and mean values left and right of fix lag
-                # ------------------------------------------------------------------------
+                # ----------------------------------------------------------------
                 # RE_RMSE (Eq. 9 in Langford et al. 2015)
                 # -> ranges lo/hi (-/+180 to -/+150 secs? => define range as argument)
                 m <- ifelse(n_period %% 2, (n_period + 1) / 2, n_period / 2 + 1)
@@ -2573,56 +2618,17 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         sd_cov_hi ^ 2 + avg_cov_hi ^ 2))
 
                 # cospectra for fixed & dynamic lags
-                # ------------------------------------------------------------------------ 			
+                # ------------------------------------------------------------------
                 cat("\t- co-spectra\n")
-                Cospec_fix <- mapply(function(var) {
-                        # get covar
-                        covars <- Covars[[paste(var, collapse = 'x')]]
-                        # get ffts
-                        xfft <- attr(covars, 'ffts')$x
-                        # get length
-                        N <- length(xfft)
-                        # get y
-                        yfft <- attr(covars, 'ffts')$y
-                        # get cospec
-                        re <- Re(Conj(yfft) * xfft)[seq(N / 2) + 1] * N / (N - 1) * 2
-                        # get missing
-                        n_missing <- n_period / 2 - length(re)
-                        if (sign(n_missing) >= 0) {
-                            c(re, rep(0, n_missing))
-                        } else {
-                            re[seq_len(n_period / 2)]
-                        }
-                    }, var = covariances_variables, SIMPLIFY = FALSE)
-                names(Cospec_fix) <- covariances
-                Cospec_dyn <- mapply(function(var, lag) {
-                        # get covar
-                        covars <- Covars[[paste(var, collapse = 'x')]]
-                        # get ffts
-                        xfft <- attr(covars, 'ffts')$x
-                        # get length
-                        N <- length(xfft)
-                        # get y
-                        if (lag != 0) {
-                            y <- SD[attr(covars, 'isfinite'), get(var[2])]
-                            yfft <- fft(data.table::shift(y, lag, type = 'cyclic')) / N
-                        } else {
-                            yfft <- attr(covars, 'ffts')$y
-                        }
-                        # get cospec
-                        re <- Re(Conj(yfft) * xfft)[seq(N / 2) + 1] * N / (N - 1) * 2
-                        # get missing
-                        n_missing <- n_period / 2 - length(re)
-                        if (sign(n_missing) >= 0) {
-                            c(re, rep(0, n_missing))
-                        } else {
-                            re[seq_len(n_period / 2)]
-                        }
-                    }, var = covariances_variables, lag = dyn_lag_max[2, ], SIMPLIFY = FALSE)
-                names(Cospec_dyn) <- covariances
+                # fix lag
+                Cospec_fix <- get_cospectra(SD, Covars, covariances_variables, 
+                    covariances, fix_lag[covariances], n_period)
+                # dyn lag
+                Cospec_dyn <- get_cospectra(SD, Covars, covariances_variables, 
+                    covariances, dyn_lag_max[2, covariances], n_period)
 
                 # ogives for fixed & dynamic lags 
-                # ------------------------------------------------------------------------ 
+                # ------------------------------------------------------------------
                 Ogive_fix <- lapply(Cospec_fix, function(x) {
                     rev(cumsum(rev(x)))
                 })
@@ -2762,7 +2768,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 }
 
                 # empirical damping estimation, dyn and fix should have best reference (dyn/fix)...
-                # ------------------------------------------------------------------------
+                # ------------------------------------------------------------------
                 if (any(scalar_covariances)) {
                     cat("\t- damping\n")
                     damping_reference_fix <- damping_reference
@@ -2844,6 +2850,106 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     )
                 }
             }, simplify = FALSE))
+
+            # sub-intervals:
+            # -----------------------------------------------------------------------
+            if (subintervals) {
+
+                browser()
+
+                # copy original .SD for sub-interval processing
+                SDsub <- copy(.SD)
+                # detrending sonic data
+                cat("~~~\ndeterending sonic data...\n")
+                wind <- detrend_sonic_data(SDsub, detrending, rec_Hz)
+
+                # calculate some turbulence parameters and collect some wind parameters
+                # -------------------------------------------------------------------------- 
+                wind_stats <- wind_statistics(wind, z_canopy[[1]], z_ec[[1]], 
+                    ustar_method = ustar_method)
+                # detrending scalars
+                if (length(scalars)) {
+                    scalar_list <- SDsub[, I(lapply(.SD, na.omit)), 
+                        .SDcols = scalars]
+                    # detrend scalars
+                    # -------------------------------------------------------------- 
+                    cat("~~~\ndetrending scalars...\n")
+                    detrended_scalars <- mapply(trend, y = scalar_list, method = 
+                        detrending[scalars], MoreArgs = list(Hz_ts = rec_Hz), 
+                        SIMPLIFY = FALSE
+                    )
+                    # assign to SDsub
+                    SDsub[, (scalars) := lapply(names(detrended_scalars), \(nms) {
+                        if (!is.null(isna <- na.action(scalar_list[[nms]]))) {
+                            out <- rep(NA_real_, .N)
+                            x <- detrended_scalars[[nms]]$residuals
+                            out[-isna] <- x
+                            out
+                        } else {
+                            detrended_scalars[[nms]]$residuals
+                        }
+                        })]
+                }
+                # check flux
+                if (has_flux) {
+                    # calculate covariances with fix lag time:
+                    # ------------------------------------------------------------------ 
+                    cat("\t- covariances\n")
+                    Covars <- get_covariance(SD, covariances_variables, covariances,
+                        n_period)
+
+                    # find maximum in dynamic lag time range:
+                    # ------------------------------------------------------------------ 
+                    cat("\t- dyn lag\n")
+                    dyn_lag_max <- sapply(covariances, function(i, x, lag) {
+                        find_dynlag(x[[i]], lag[, i])
+                    }, x = Covars, lag = dyn_lag)
+
+                    # covariance function's standard deviation and mean values left and right of fix lag
+                    # ----------------------------------------------------------------
+                    # RE_RMSE (Eq. 9 in Langford et al. 2015)
+                    # -> ranges lo/hi (-/+180 to -/+150 secs? => define range as argument)
+                    m <- ifelse(n_period %% 2, (n_period + 1) / 2, n_period / 2 + 1)
+                    lo_range <- m - rev(gamma_time_window) * 60 * rec_Hz
+                    hi_range <- m + gamma_time_window * 60 * rec_Hz
+                    # -> sd_cov_low
+                    sd_cov_lo <- sapply(Covars, \(x) sd(x[lo_range]))
+                    # -> avg_cov_low
+                    avg_cov_lo <- sapply(Covars, \(x) mean(x[lo_range]))
+                    # -> sd_cov_hi
+                    sd_cov_hi <- sapply(Covars, \(x) sd(x[hi_range]))
+                    # -> avg_cov_hi
+                    avg_cov_hi <- sapply(Covars, \(x) mean(x[hi_range]))
+                    re_rmse <- sqrt(0.5 * (sd_cov_lo ^ 2 + avg_cov_lo ^ 2 +
+                            sd_cov_hi ^ 2 + avg_cov_hi ^ 2))
+
+                    # cospectra for fixed & dynamic lags
+                    # ------------------------------------------------------------------
+                    cat("\t- co-spectra\n")
+                    # fix lag
+                    Cospec_fix <- get_cospectra(SD, Covars, covariances_variables, 
+                        covariances, fix_lag[covariances], n_period)
+                    # dyn lag
+                    Cospec_dyn <- get_cospectra(SD, Covars, covariances_variables, 
+                        covariances, dyn_lag_max[2, covariances], n_period)
+
+                    # ogives for fixed & dynamic lags 
+                    # ------------------------------------------------------------------
+                    Ogive_fix <- lapply(Cospec_fix, function(x) {
+                        rev(cumsum(rev(x)))
+                    })
+                    names(Ogive_fix) <- covariances
+                    Ogive_dyn <- lapply(Cospec_dyn, function(x) {
+                        rev(cumsum(rev(x)))
+                    })
+                    names(Ogive_dyn) <- covariances
+                    ### some output and namings
+                    fix_lag_out <- fix_lag
+                    dyn_lag_out <- dyn_lag_max["tau", ]
+                    flux_fix_lag <- sapply(Ogive_fix, "[", 1)
+                    flux_dyn_lag <- sapply(Ogive_dyn, "[", 1)
+                }
+            }
 
             # write results:
             # -----------------------------------------------------------------------

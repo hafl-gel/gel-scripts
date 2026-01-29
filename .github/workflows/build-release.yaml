@@ -44,7 +44,7 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck, devtools, rgeos=?ignore, maptools=?ignore, sp=?ignore, RgoogleMaps=?ignore, geosphere=?ignore
+          extra-packages: any::rcmdcheck, devtools, qs=?ignore, oce=?ignore, openxlsx=?ignore, sf=?ignore, robustbase=?ignore
           needs: check
 
       - name: Build R package

@@ -4,19 +4,29 @@ read_s31 <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = FALSE) {
     # process from/to
     if (missing(from)) {
         from_psx <- from_int <- 1
+    } else if (is.POSIXt(from)) {
+        # convert to POSIXct
+        from_psx <- as.POSIXct(from)
+        # convert to integer dates
+        from_int <- as.integer(format(lubridate::with_tz(from_psx, 'UTC'), '%Y%m%d'))
     } else {
         # convert to POSIXct
         from_psx <- parse_date_time3(from, tz = tz)
         # convert to integer dates
-        from_int <- as.integer(format(from_psx, '%Y%m%d'))
+        from_int <- as.integer(format(lubridate::with_tz(from_psx, 'UTC'), '%Y%m%d'))
     }
     if (missing(to)) {
         to_psx <- to_int <- Inf
+    } else if (is.POSIXt(to)) {
+        # convert to POSIXct
+        to_psx <- as.POSIXct(to)
+        # convert to integer dates
+        to_int <- as.integer(format(lubridate::with_tz(to_psx, 'UTC'), '%Y%m%d'))
     } else {
         # convert to POSIXct
         to_psx <- parse_date_time3(to, tz = tz)
         # convert to integer dates
-        to_int <- as.integer(format(to_psx, '%Y%m%d'))
+        to_int <- as.integer(format(lubridate::with_tz(to_psx, 'UTC'), '%Y%m%d'))
     }
     # check path
     if (grepl('dragino-s31-\\d{2}/?$', path_data)) {
@@ -97,19 +107,29 @@ read_tc_sensors <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = F
     # process from/to
     if (missing(from)) {
         from_psx <- from_int <- 1
+    } else if (is.POSIXt(from)) {
+        # convert to POSIXct
+        from_psx <- as.POSIXct(from)
+        # convert to integer dates
+        from_int <- as.integer(format(lubridate::with_tz(from_psx, 'UTC'), '%Y%m%d'))
     } else {
         # convert to POSIXct
         from_psx <- parse_date_time3(from, tz = tz)
         # convert to integer dates
-        from_int <- as.integer(format(from_psx, '%Y%m%d'))
+        from_int <- as.integer(format(lubridate::with_tz(from_psx, 'UTC'), '%Y%m%d'))
     }
     if (missing(to)) {
         to_psx <- to_int <- Inf
+    } else if (is.POSIXt(to)) {
+        # convert to POSIXct
+        to_psx <- as.POSIXct(to)
+        # convert to integer dates
+        to_int <- as.integer(format(lubridate::with_tz(to_psx, 'UTC'), '%Y%m%d'))
     } else {
         # convert to POSIXct
         to_psx <- parse_date_time3(to, tz = tz)
         # convert to integer dates
-        to_int <- as.integer(format(to_psx, '%Y%m%d'))
+        to_int <- as.integer(format(lubridate::with_tz(to_psx, 'UTC'), '%Y%m%d'))
     }
     # check path
     if (grepl(paste0('dragino-', type, '-\\d{2}/?$'), path_data)) {
@@ -177,19 +197,29 @@ read_dds75 <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = FALSE)
     # process from/to
     if (missing(from)) {
         from_psx <- from_int <- 1
+    } else if (is.POSIXt(from)) {
+        # convert to POSIXct
+        from_psx <- as.POSIXct(from)
+        # convert to integer dates
+        from_int <- as.integer(format(lubridate::with_tz(from_psx, 'UTC'), '%Y%m%d'))
     } else {
         # convert to POSIXct
         from_psx <- parse_date_time3(from, tz = tz)
         # convert to integer dates
-        from_int <- as.integer(format(from_psx, '%Y%m%d'))
+        from_int <- as.integer(format(lubridate::with_tz(from_psx, 'UTC'), '%Y%m%d'))
     }
     if (missing(to)) {
         to_psx <- to_int <- Inf
+    } else if (is.POSIXt(to)) {
+        # convert to POSIXct
+        to_psx <- as.POSIXct(to)
+        # convert to integer dates
+        to_int <- as.integer(format(lubridate::with_tz(to_psx, 'UTC'), '%Y%m%d'))
     } else {
         # convert to POSIXct
         to_psx <- parse_date_time3(to, tz = tz)
         # convert to integer dates
-        to_int <- as.integer(format(to_psx, '%Y%m%d'))
+        to_int <- as.integer(format(lubridate::with_tz(to_psx, 'UTC'), '%Y%m%d'))
     }
     # check path
     if (grepl('dragino-dds75-\\d{2}/?$', path_data)) {

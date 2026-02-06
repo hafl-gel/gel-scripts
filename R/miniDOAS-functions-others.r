@@ -50,7 +50,7 @@ linearity.func <- function(x, cfs) {
 # timerange=DOASinfo$timerange
 # timezone=""
 # ncores=ncores
-write_daily <- function(files, obj, path) {
+write_daily <- function(files, obj, path, compress_level = 10) {
     # open connection
     con <- gzfile(paste0(path, '.bin'), 'wb')
     on.exit({
@@ -62,7 +62,7 @@ write_daily <- function(files, obj, path) {
     # write files
     writeBin(files, con, endian = 'big')
     # serialize object
-    ser <- qs::qserialize(obj, preset = 'high')
+    ser <- qs2::qd_serialize(obj, compress_level = compress_level)
     # write length of ser
     writeBin(length(ser), con, endian = 'big')
     # write list
@@ -84,7 +84,7 @@ read_daily <- function(path, files = FALSE) {
         # read length of serialized data
         N2 <- readBin(con, 'int', 1L, endian = 'big')
         # read serialized data and unserialize
-        out <- qs::qdeserialize(readBin(con, 'raw', N2, endian = 'big'))
+        out <- qs2::qd_deserialize(readBin(con, 'raw', N2, endian = 'big'))
     }
     # close connection
     close(con)
@@ -95,7 +95,7 @@ read_daily <- function(path, files = FALSE) {
 
 process_dailyfiles <- function(folders, path_data, doas_info, RawData, 
     path_dailyfiles = path_data) {
-    require(qs)
+    require(qs2)
     # loop over folders
     lapply(folders, function(i) {
         cat(paste0("..processing daily file ", i, ".bin\n"))
@@ -226,7 +226,7 @@ readDOASdata <- function(DOASinfo, dataDir, rawdataOnly = FALSE, skip.check.dail
             on.exit(parallel::stopCluster(cl))
         }
         parallel::clusterCall(cl, library, package = 'lubridate', character.only = TRUE)
-        parallel::clusterCall(cl, library, package = 'qs', character.only = TRUE)
+        parallel::clusterCall(cl, library, package = 'qs2', character.only = TRUE)
         # get progress bar if blsmodelr is available
         cluster_apply_lb <- .clusterApplyLB
     }
@@ -831,7 +831,7 @@ getSpecSet <- function(
         if (file.exists(spec.dir)) {
             spec.dir <- switch(
                 sub('.*[.]([a-z]+)$', '\\1', spec.dir)
-                , qs = qs::qread(spec.dir)
+                , qd = qs2::qd_read(spec.dir)
                 , rds = readRDS(spec.dir)
                 , stop('unknown calref file format: *.',
                     sub('.*[.]([a-z]+)$', '\\1', spec.dir))
@@ -1252,11 +1252,11 @@ evalOffline <- function(
         if (is.character(CalRefSpecs)) {
             CalRefSpec <- switch(
                 sub('.*[.]([a-z]+)$', '\\1', CalRefSpecs)
-                , qs = {
-                    if (!require(qs)) {
-                        stop("package 'qs' needs to be installed")
+                , qd = {
+                    if (!require(qs2)) {
+                        stop("package 'qs2' needs to be installed")
                     }
-                    qs::qread(CalRefSpecs)
+                    qs2::qd_read(CalRefSpecs)
                 }
             )
         }

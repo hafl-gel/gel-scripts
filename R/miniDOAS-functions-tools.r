@@ -330,14 +330,14 @@ points.single_spec <- function(x, ...) {
 }
 
 # helper functions to process calibration data
-save_calref <- function(x, qs_preset = c('high', 'archive')[2], path_rsaves = 'rsaves') {
+save_calref <- function(x, path_rsaves = 'rsaves', ...) {
     # derive name
     tr <- as.POSIXct(range(lapply(x, function(y) get_timerange(y[['dc']]))), origin = '1970-01-01', tz = 'Etc/GMT-1')
     name <- paste0('miniDOAS-ref_cal_spec-',
         paste(format(tr[1], '%y%m%d'), paste(format(tr, '%H%M'), collapse = '_'), sep = '-')
-        , '-', attr(x[['nh3']][['dc']], 'meas')$DOASinfo$DOASmodel, '.qs')
+        , '-', attr(x[['nh3']][['dc']], 'meas')$DOASinfo$DOASmodel, '.qd')
     # name <- deparse(substitute(x))
-    qsave(x, file.path(path_rsaves, name), preset = qs_preset[1])
+    qd_save(x, file.path(path_rsaves, name), ...)
 }
 create_calref <- function(spec_set) {
     out <- list()
@@ -1133,7 +1133,7 @@ read_cal <- function(file, spec = NULL, tz = 'Etc/GMT-1', Serial = NULL, is_dark
 }
 
 convert_calref <- function(obj, ref.spec = NULL, dark.spec = NULL) {
-    if (is.character(obj)) obj <- qread(obj)
+    if (is.character(obj)) obj <- qd_read(obj)
     if (!inherits(obj, 'calref')) stop('conversion only from "calref" object to spec set')
     if (is.null(dark.spec)) {
         dark.spec <- .conv_calref(obj, 'nh3', dark = TRUE)

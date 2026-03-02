@@ -2216,6 +2216,35 @@ process_ec_fluxes <- function(
             }, c.system = coord.system)
             , by = bin]
 
+        # rotate subintervals here
+        if (subintervals) {
+            cat("  (subint)  -> rotating data...\n")
+            # add subint bins
+            daily_data[, subint := {
+                # split into sub-intervals
+                breaks <- seq(Time[1], Time[1] + avg_secs, 
+                    length.out = subint_n + 1)
+                # cut
+                cut(Time, breaks, 
+                    labels = paste(.BY[[1]], seq_len(subint_n), sep = '-'))
+            }, by = bin]
+            # rotate
+            daily_data[, paste0('subint_', 
+                c("WD", "phi", "urot", "vrot", "wrot")) := 
+                rotate_twoaxis(u, v, w,
+                    phi = if (rotation_method[1] %in% "two axis") {
+                        # two-axis rotation
+                        rotation_args$phi 
+                    } else if (is.na(alpha[1])) {
+                        # planar fit failed
+                        NULL 
+                    } else {
+                        # planar fit successful
+                        0
+                    }, c.system = coord.system
+                ), by = subint]
+        }
+
         ### correct for sonic north deviation
         daily_data[, WD := (WD + d_north[.GRP]) %% 360, by = bin]
 
@@ -3051,41 +3080,27 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         ' mins)\n'))
                 # copy original .SD for sub-interval processing
                 SDsub <- copy(.SD)
-                # split into sub-intervals
-                t0 <- Time[1]
-                breaks <- seq(t0, t0 + avg_secs, length.out = subint_n + 1)
-                SDsub[, subint := cut(Time, breaks, labels = seq_len(subint_n))]
-                ## coordinate rotation
-                cat("  (subint)  -> rotating data...\n")
-                # apply two-axis rotation 
-                # (if planar fit has not been applied successfully)
-                SDsub[, c("WD", "phi", "urot", "vrot", "wrot") := rotate_twoaxis(
-                    u, v, w,
-                    phi = if (rotation_method[1] %in% "two axis") {
-                        # two-axis rotation (given already rotated wind)
-                        phi[1]
-                    } else if (is.na(alpha[1])) {
-                        # planar fit failed
-                        NULL 
-                    } else {
-                        # planar fit successful
-                        0
-                    }, c.system = coord.system)
-                    , by = subint]
+                # rename urot, vrot, wrot from prior subint coord rotation
+                SDsub[, c('urot', 'vrot', 'wrot') := .(
+                    subint_urot, subint_vrot, subint_wrot)]
                 # prepare output
                 sub_wind_stats <- vector(mode = 'list', length = subint_n)
                 # detrending sonic data
                 cat("  (subint)  -> deterending sonic data...\n")
-                for (si in seq_len(subint_n)) {
+                for (si in SDsub[, unique(subint)]) {
+                    # si = SDsub[, unique(subint)[1]]
                     # copy SDsub
                     sds <- SDsub[subint == si]
                     # detrend
-                    sub_wind <- detrend_sonic_data(sds, subint_detrending, rec_Hz)
+                    sub_wind <- detrend_sonic_data(sds, subint_detrending,
+                        rec_Hz)
                     # turbulence
-                    sub_wind_stats[[si]] <- wind_statistics(sub_wind, z_canopy[[1]], 
-                        z_ec[[1]], ustar_method = ustar_method)
+                    sub_wind_stats[[si]] <- wind_statistics(sub_wind, 
+                        z_canopy[[1]], z_ec[[1]], 
+                        ustar_method = ustar_method)
                     # reassign
-                    SDsub[subint == si, c('u', 'v', 'w', 'T') := sds[, .(u, v, w, T)]]
+                    SDsub[subint == si, c('u', 'v', 'w', 'T') := 
+                        sds[, .(u, v, w, T)]]
                 }
                 # detrending scalars
                 if (length(scalars)) {
@@ -3120,7 +3135,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     sub_flux_fix_lag <- vector(mode = 'list', length = subint_n)
                     sub_flux_dyn_lag <- vector(mode = 'list', length = subint_n)
                     # loop over sub-intervals
-                    for(si in seq_len(subint_n)) {
+                    for(si in SDsub[, unique(subint)]) {
                         # calculate covariances with fix lag time:
                         sub_Covars <- get_covariance(SDsub[subint == si], 
                             covariances_variables, covariances, n_period)

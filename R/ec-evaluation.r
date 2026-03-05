@@ -2086,6 +2086,7 @@ process_ec_fluxes <- function(
             )
         }
 
+        browser()
         # define bins & subset again & just make sure sonic has no missing data
         daily_data[, bin := getIntervals(Time, start_time, end_time)]
 
@@ -2584,6 +2585,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     }
                 }
             }
+
+            browser()
 
             # calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
             # ---------------------------------------------------------------------- 

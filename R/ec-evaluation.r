@@ -2643,8 +2643,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 # calculate covariances with fix lag time:
                 # ------------------------------------------------------------------ 
                 cat("\t- covariances\n")
-                Covars <- get_covariance(SD, covariances_variables, covariances,
-                    n_period)
+                Covars <- get_covariance(SD, covariances_variables, 
+                    covariances, n_period)
 
                 # find maximum in dynamic lag time range:
                 # ------------------------------------------------------------------ 
@@ -2657,7 +2657,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 # ----------------------------------------------------------------
                 # RE_RMSE (Eq. 9 in Langford et al. 2015)
                 # -> ranges lo/hi (-/+180 to -/+150 secs? => define range as argument)
-                m <- ifelse(n_period %% 2, (n_period + 1) / 2, n_period / 2 + 1)
+                m <- ifelse(n_period %% 2, (n_period + 1) / 2, 
+                    n_period / 2 + 1)
                 lo_range <- m - rev(gamma_time_window) * 60 * rec_Hz
                 hi_range <- m + gamma_time_window * 60 * rec_Hz
                 # -> sd_cov_low

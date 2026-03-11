@@ -2653,6 +2653,21 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     find_dynlag(x[[i]], lag[, i])
                 }, x = Covars, lag = dyn_lag)
 
+                # # find dynlag using pre-whitening
+                # xx <- sapply(c('urot', 'T', 'nh3_ugm3', 
+                #         'h2o_mmolm3', 'co2_mmolm3'), 
+                #     \(v) {
+                #         x11()
+                #         out <- tlag_detection(SD[, sclr, 
+                #             env = list(sclr = v)], 
+                #             SD[, wrot], mfreq = 10, Rboot = 100, 
+                #             plot.it = TRUE
+                #         )
+                #         title(v, outer = TRUE, line = -1)
+                #         out
+                #     }
+                # )
+
                 # covariance function's standard deviation and mean values left and right of fix lag
                 # ----------------------------------------------------------------
                 # RE_RMSE (Eq. 9 in Langford et al. 2015)
@@ -3796,4 +3811,247 @@ merge_data <- function(basis, ..., ec_subset = TRUE) {
 #     # merge data
 #     merge_data(x, dat)
 # }
+
+## pre-whitening dyn lag ----------------------------------------
+
+# x11()
+# xx <- tlag_detection(SD[, nh3_ugm3], SD[, wrot], 
+#     mfreq = 10, Rboot = 100, plot.it = TRUE)
+# x11()
+# xx <- tlag_detection(SD[, nh3_ugm3], SD[, wrot], 
+#     lws = -2, uws = 2,
+#     mfreq = 10, Rboot = 100, plot.it = TRUE)
+
+
+
+tlag_detection <- function (scalar_var, w_var, mfreq = 10, wdt = 5, model = "ar", 
+    LAG.MAX = 10, lws = -LAG.MAX, uws = LAG.MAX, Rboot = 100, 
+    plot.it = FALSE, boot_parallel = 'snow', boot_ncpus = getOption('boot.ncpus', 1L), 
+    boot_cl = NULL
+) 
+{
+
+    require(zoo)
+    require(egcm)
+    require(boot)
+
+    # replace NA values
+    set <- na.omit(cbind(zoo::na.approx(scalar_var, na.rm = FALSE), 
+            zoo::na.approx(w_var, na.rm = FALSE)))
+
+    # convert & fix LAG.MAX, lws & uws
+    lws <- max(-LAG.MAX, lws) * mfreq
+    uws <- min(LAG.MAX, uws) * mfreq
+    LAG.MAX <- LAG.MAX * mfreq
+
+    # define lag window 
+    lag_win <- LAG.MAX + (lws + 1):(uws + 1)
+
+    # Unit root test based upon Breitung's variance ratio -> stationary ts???
+    if (egcm::bvr.test(set[, 1])$p.val < 0.01 && egcm::bvr.test(set[, 2])$p.val < 0.01) {
+        x <- set[, 1]
+        y <- set[, 2]
+    } else {
+        x <- diff(set[, 1])
+        y <- diff(set[, 2])
+    }
+
+    if (model == "ar") {
+        o.max <- floor(10 ^ 2 * log10(nrow(set)))
+        ar.resx <- ar(x, aic = TRUE, order.max = o.max)
+        ar.resy <- ar(y, aic = TRUE, order.max = o.max)
+        x1 <- stats::filter(x, filter = c(1, -ar.resx$ar), method = "convolution", 
+            sides = 1)
+        y1 <- stats::filter(y, filter = c(1, -ar.resx$ar), method = "convolution", 
+            sides = 1)
+        x2 <- stats::filter(x, filter = c(1, -ar.resy$ar), method = "convolution", 
+            sides = 1)
+        y2 <- stats::filter(y, filter = c(1, -ar.resy$ar), method = "convolution",
+            sides = 1)
+    }
+
+
+    if (model == "arima") {
+        filter.mod <- function(x, model) {
+            x <- x - mean(x, na.rm = TRUE)
+            if (length(model$Delta) >= 1) 
+                x <- stats::filter(x, filter = c(1, -model$Delta), 
+                    method = "convolution", sides = 1)
+            if (length(model$theta) >= 1 && any(model$theta != 0)) 
+                x <- stats::filter(na.omit(x), filter = -model$theta,
+                    method = "recursive", sides = 1)
+            if (length(model$phi) >= 1 && any(model$phi != 0)) 
+                x <- stats::filter(x, filter = c(1, -model$phi), 
+                    method = "convolution", sides = 1)
+            x
+        }
+        mod1 <- forecast::auto.arima(x, d = 0)
+        mod2 <- forecast::auto.arima(y, d = 0)
+        x1 <- filter.mod(x, model = mod1$model)
+        y1 <- filter.mod(y, model = mod1$model)
+        x2 <- filter.mod(x, model = mod2$model)
+        y2 <- filter.mod(y, model = mod2$model)
+    }
+
+
+    ## Maximum Covariance Procedure    
+    ccf_mc <- ccf(x = as.vector(egcm::detrend(set[, 1])), 
+        y = as.vector(egcm::detrend(set[, 2])), lag.max = LAG.MAX, plot = FALSE, 
+        type = "covariance", na.action = na.pass
+    )$acf
+
+    # get time lag + window
+    tl_mcw <- which.max(
+        abs(ccf_mc)[lag_win]
+    ) + LAG.MAX + lws
+
+    # get covariance at time lag
+    cov_mcw <- ccf_mc[tl_mcw]
+
+    ## PreWhitening - Standard procedure
+    ccf_pw <- ccf(x1, y1, na.action = na.pass, plot = FALSE, lag.max = LAG.MAX)$acf
+
+    # get time lag + window
+    tl_pw <- which.max(
+        abs(ccf_pw)[lag_win]
+    ) + LAG.MAX + lws
+
+    # get covariance at time lag
+    cor_pw <- ccf_pw[tl_pw]
+    cov_pw <- ccf_mc[tl_pw]
+
+
+    ## PreWhitening + BOOTSTRAPPING + Smoothing
+    boot_fun <- function(x, y) {
+        boot::tsboot(cbind(x, y), function(x) ccf(x[, 1], x[, 2], na.action = na.pass, 
+            plot = FALSE, lag.max = LAG.MAX)$acf, R = Rboot, sim = 'fixed', 
+            l = LAG.MAX * 2, parallel = boot_parallel, ncpus = boot_ncpus, cl = boot_cl)
+    }
+
+    bootccf_cs <- boot_fun(x1, y1)
+    ccf_cs <- colMeans(bootccf_cs$t, na.rm = TRUE)
+    ccfs_cs <- zoo::na.locf(
+        zoo::na.locf(
+            zoo::rollapply(ccf_cs, width = wdt, FUN = "mean", fill = NA), 
+            na.rm = FALSE
+        ), fromLast = TRUE
+    )
+    ccfs_csb <- apply(bootccf_cs$t, MARGIN = 1, function(x) {
+        which.max(
+            abs(zoo::na.locf(
+            zoo::na.locf(zoo::rollapply(x, width = wdt, FUN = "mean", fill = NA), 
+            na.rm = FALSE), fromLast = TRUE))
+        ) #+ LAG.MAX + lws
+    })
+    hdis_cs <- HDInterval::hdi(ccfs_csb, credMass = .95);
+
+    bootccf_sc <- boot_fun(x2, y2)
+    ccf_sc <- colMeans(bootccf_sc$t, na.rm = TRUE)
+    ccfs_sc <- zoo::na.locf(
+        zoo::na.locf(
+            zoo::rollapply(ccf_sc, width = wdt, FUN = "mean", fill = NA), 
+            na.rm = FALSE
+        ), fromLast = TRUE
+    )
+    ccfs_scb <- apply(bootccf_sc$t, MARGIN = 1, function(x) {
+        which.max(
+            abs(zoo::na.locf(
+            zoo::na.locf(zoo::rollapply(x, width = wdt, FUN = "mean", fill = NA), 
+            na.rm = FALSE), fromLast = TRUE))
+        ) #+ LAG.MAX + lws
+    })
+    hdis_sc <- HDInterval::hdi(ccfs_scb, credMass = .95);
+
+    # ??
+    maps <- round(
+        c(
+            bayestestR::map_estimate(abs(ccfs_csb + rnorm(length(ccfs_csb), 0, 0.0001)))$MAP_Estimate,
+            bayestestR::map_estimate(abs(ccfs_scb + rnorm(length(ccfs_scb), 0, 0.0001)))$MAP_Estimate
+        ), 0
+    )
+
+    corr_est_s <- c(ccfs_cs[maps[1]], ccfs_sc[maps[2]])
+    corr_ind <- which.max(abs(corr_est_s))
+    corr_max <- corr_est_s[corr_ind]
+    peak_ref <- maps[corr_ind]
+    switch(corr_ind
+        , hdis <- as.vector(hdis_cs)
+        , hdis <- as.vector(hdis_sc)
+    )
+    # get boot time lag cov
+    cov_pwb <- ccf_mc[peak_ref]
+
+    ## PLOT
+    if (plot.it) {
+
+        par(mfrow = c(3, 1), mar = c(5, 4, 2, 1), oma = c(1, 1, 5, 0.5), las = 0, 
+            cex.axis = 1.3, cex.lab = 1.3)
+        plot((-LAG.MAX:LAG.MAX), ccf_mc, ylab = "cross-cov (c,w)", xlab = "Lag (sec)", 
+            type = "h", col = "grey68",  xlim = c(lws, uws),
+            ylim = c(min(ccf_mc * 1.05, 0), max(ccf_mc * 1.05, 0)), xaxt = "n")
+        axis(side = 1, at = seq(lws, uws, length.out = 6), 
+            labels = seq(lws, uws, length.out = 6) / mfreq)  
+        polygon(x = c(hdis[1]: hdis[2], hdis[2]: hdis[1]) - LAG.MAX - 1, 
+            y = c(ccf_mc[hdis[1]: hdis[2]], rep(0, hdis[2] - hdis[1] + 1)), 
+            col = "lightblue", border = "lightblue")
+        # boot time lag cov
+        segments(x0 = peak_ref - LAG.MAX - 1, y0 = 0, y1 = cov_pwb, col = 2, 
+            lwd = 2)
+        # max cov
+        segments(x0 = tl_mcw - LAG.MAX - 1, y0 = 0, y1 = cov_mcw, col = 1, 
+            lwd = 1)
+        lines((-LAG.MAX:LAG.MAX), ccf_mc, col = 1, lwd = 2)
+        mtext(side = 3, line = .5, adj = 0, 
+            paste0("Peak at ", (tl_mcw - LAG.MAX - 1) / mfreq, " sec"), cex = 1.1) 
+        mtext(side = 3, line = .5, adj = 1, "a", cex = 1.5, font = 2) 
+        box(lwd = 1.5)
+        mtext(side = 3, line = 3, cex = 1.25, col = 2,
+            paste0("Time lag at: ", (peak_ref - LAG.MAX - 1) / mfreq, " sec"))
+
+        plot((-LAG.MAX:LAG.MAX), ccf_cs, ylab = "pwb cross-cor (c,w)", 
+            xlab = "Lag (sec)", type = "h", col = "grey68", xlim = c(lws, uws),
+            ylim = c(min(ccf_cs, -4 / sqrt(length(x))), max(ccf_cs, 4 / sqrt(length(x)))), 
+            xaxt = "n")    
+        lines((-LAG.MAX:LAG.MAX), ccfs_cs, col = 1, lwd = 2)
+        axis(side = 1, at = seq(lws, uws, length.out = 6), 
+            labels = seq(lws, uws, length.out = 6) / mfreq)  
+        abline(h = c(-3.291, 3.291) / sqrt(length(x) * 13), col = 4, lty = 2, lwd = 2)
+        points(x = maps[1] - LAG.MAX - 1, y = min(ccf_cs, -4 / sqrt(length(x))), 
+            pch = 24, col = 1, cex = 1.25, bg = "red")
+        mtext(side = 3, line = 1, adj = 1, "c", cex = 1.5, font = 2) 
+        mtext(side = 3, line = .5, adj = 0, 
+            paste0("Peak at ", (maps[1] - LAG.MAX - 1) / mfreq , " sec"), cex = 1.1) 
+        box(lwd = 1.5)
+
+        plot((-LAG.MAX:LAG.MAX), ccf_sc, ylab = "pwb cross-cor (w,c)", 
+            xlab = "Lag (sec)", type = "h", col = "grey68", xlim = c(lws, uws),
+            ylim = c(min(ccf_sc, -4 / sqrt(length(x))), max(ccf_sc, 4 / sqrt(length(x)))), 
+            xaxt = "n")    
+        lines((-LAG.MAX:LAG.MAX), ccfs_sc, col = 1, lwd = 2)
+        axis(side = 1, at = seq(lws, uws, length.out = 6), 
+            labels = seq(lws, uws, length.out = 6) / mfreq)  
+        abline(h = c(-3.291, 3.291) / sqrt(length(x) * 13), col = 4, lty = 2, lwd = 2)
+        points(x = maps[2] - LAG.MAX - 1, y = min(ccf_sc, -4 / sqrt(length(x))), 
+            pch = 24, col = 1, cex = 1.25, bg = "red")
+        mtext(side = 3, line = 1, adj = 1, "e", cex = 1.5, font = 2) 
+        mtext(side = 3, line = .5, adj = 0, 
+            paste0("Peak at ", (maps[2] - LAG.MAX - 1) / mfreq , " sec"), cex = 1.1) 
+        box(lwd = 1.5)
+
+    }
+
+    list(
+        "tl_mc" = tl_mcw - LAG.MAX - 1, 
+        "tl_pw" = tl_pw - LAG.MAX - 1, 
+        "tl_pwb" = peak_ref - LAG.MAX - 1, 
+        "tl_pwb_lci"= hdis[1] - LAG.MAX - 1, 
+        "tl_pwb_uci"= hdis[2] - LAG.MAX - 1, 
+        "cor_pw" = cor_pw, 
+        "cor_pwb" = corr_max, 
+        "cov_mc" = cov_mcw, 
+        "cov_pw" = cov_pw, 
+        "cov_pwb" = cov_pwb  
+    )
+
+}
 

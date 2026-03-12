@@ -2690,16 +2690,18 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     , 'raw-cov' = dlag_max
                     , 'simple-pw' = {
                         out <- sapply(tlag_pw, '[[', 'tl_pw')
-                        out <- rbind(out,
-                            dlag_max[1, ] - dlag_max[2, ] + out
+                        out <- rbind(
+                            dlag_max[1, ] - dlag_max[2, ] + out,
+                            out
                         )
                         rownames(out) <- rownames(dlag_max)
                         out
                     }
                     , 'boot-pw' = {
                         out <- sapply(tlag_pw, '[[', 'tl_pwb')
-                        out <- rbind(out,
-                            dlag_max[1, ] - dlag_max[2, ] + out
+                        out <- rbind(
+                            dlag_max[1, ] - dlag_max[2, ] + out,
+                            out
                         )
                         rownames(out) <- rownames(dlag_max)
                         out

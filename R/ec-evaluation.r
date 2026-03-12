@@ -2680,6 +2680,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         }, simplify = FALSE
                     )
                     names(tlag_pw) <- covariances
+                    # prepare output
+                    pw_out <- unlist(tlag_pw)
+                    names(pw_out) <- paste0('dyn_lag_pw_', names(pw_out))
                 }
 
                 # which dyn lag approach should be taken?
@@ -2702,8 +2705,6 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         out
                     }
                 )
-
-                # TODO: provide as output
 
                 # covariance function's standard deviation and mean values left and right of fix lag
                 # ----------------------------------------------------------------
@@ -3119,10 +3120,23 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                                     )
                                 )
                             }
+                            , if (lag_dyn_calc_pw) {
+                                # print all lag times again
+                                c(
+                                    # raw-cov
+                                    setNames(
+                                        dlag_max['tau', ],
+                                        paste0('dyn_lag_raw-cov_', 
+                                            colnames(dlag_max))
+                                    ),
+                                    # pre-whitening
+                                    pw_out
+                                )
+                            }
                         ))
                     }
                     ))
-            )				
+            )
 
             # sub-intervals:
             # -----------------------------------------------------------------------

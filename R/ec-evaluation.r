@@ -2692,7 +2692,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                                 plot.it = create_graphs,
                                 plot.dir = path_folder,
                                 plot.name = paste0(plotname, '-', pv, '.jpg'),
-                                original_smooth = lag_dyn_orig_smooth
+                                original_smooth = lag_dyn_orig_smooth,
+                                dyn_lag_ext = dlag_max['tau', pv]
                             )
                         }, simplify = FALSE
                     )
@@ -3889,7 +3890,8 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
     model = "ar", LAG.MAX = 10, lws = -LAG.MAX, uws = LAG.MAX, 
     Rboot = 100, plot.it = FALSE, boot_parallel = 'snow', 
     boot_ncpus = getOption('boot.ncpus', 1L), boot_cl = NULL,
-    plot.dir = NULL, plot.name = NULL, original_smooth = FALSE
+    plot.dir = NULL, plot.name = NULL, original_smooth = FALSE,
+    dyn_lag_ext = NULL
 ) 
 {
 
@@ -4148,12 +4150,21 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
             lines((-LAG.MAX:LAG.MAX), ccf_mc, col = 1, lwd = 2)
             mtext(side = 3, line = .5, adj = 0, 
                 paste0("Peak at ", (tl_mcw - LAG.MAX - 1) / mfreq, " sec"), cex = 1.1) 
-            mtext(side = 3, line = .5, adj = 1, "a", cex = 1.5, font = 2) 
+            # mtext(side = 3, line = .5, adj = 1, "a", cex = 1.5, font = 2) 
             box(lwd = 1.5)
             mtext(side = 3, line = 3, cex = 1.25, col = 2,
                 paste0("Time lag at: ", (peak_ref - LAG.MAX - 1) / mfreq, " sec"))
             # add dyn lag window
             abline(v = c(lws, uws), lwd = 2 , col = 1, lty = 3)
+            if (!is.null(dyn_lag_ext)) {
+                tl_ext <- dyn_lag_ext + LAG.MAX + 1
+                cov_ext <- ccf_mc[tl_mcw]
+                # external dyn lag
+                segments(x0 = dyn_lag_ext, y0 = 0, y1 = cov_ext, 
+                    col = 'dodgerblue3', lwd = 1)
+                mtext(side = 3, line = .5, adj = 1, 
+                    paste0("ext. lag at ", dyn_lag_ext / mfreq, " sec"), cex = 1.1) 
+            }
             # cross-cor 1
             plot((-LAG.MAX:LAG.MAX), ccf_cs, ylab = paste("pwb cross-cor", ylab_paren), 
                 xlab = "Lag (sec)", type = "h", col = "grey68", #xlim = c(lws, uws),
@@ -4165,7 +4176,7 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
             abline(h = c(-3.291, 3.291) / sqrt(length(x) * 13), col = 4, lty = 2, lwd = 2)
             points(x = maps[1] - LAG.MAX - 1, y = min(ccf_cs, -4 / sqrt(length(x))), 
                 pch = 24, col = 1, cex = 1.25, bg = "red")
-            mtext(side = 3, line = 1, adj = 1, "b", cex = 1.5, font = 2) 
+            # mtext(side = 3, line = 1, adj = 1, "b", cex = 1.5, font = 2) 
             mtext(side = 3, line = .5, adj = 0, 
                 paste0("Peak at ", (maps[1] - LAG.MAX - 1) / mfreq , " sec"), cex = 1.1) 
             box(lwd = 1.5)
@@ -4182,7 +4193,7 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
             abline(h = c(-3.291, 3.291) / sqrt(length(x) * 13), col = 4, lty = 2, lwd = 2)
             points(x = maps[2] - LAG.MAX - 1, y = min(ccf_sc, -4 / sqrt(length(x))), 
                 pch = 24, col = 1, cex = 1.25, bg = "red")
-            mtext(side = 3, line = 1, adj = 1, "c", cex = 1.5, font = 2) 
+            # mtext(side = 3, line = 1, adj = 1, "c", cex = 1.5, font = 2) 
             mtext(side = 3, line = .5, adj = 0, 
                 paste0("Peak at ", (maps[2] - LAG.MAX - 1) / mfreq , " sec"), cex = 1.1) 
             box(lwd = 1.5)

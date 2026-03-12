@@ -4040,16 +4040,17 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
         ccfs_csb <- apply(bootccf_cs$t, MARGIN = 1, function(x) {
             which.max(
                 abs(zoo::na.locf(
-                zoo::na.locf(zoo::rollapply(x, width = wdt, FUN = "mean", fill = NA), 
-                na.rm = FALSE), fromLast = TRUE))
-            ) #+ LAG.MAX + lws
+                zoo::na.locf(
+                    zoo::rollapply(x, width = wdt, FUN = "mean", fill = NA), 
+                na.rm = FALSE), fromLast = TRUE)[lag_win])
+            ) + LAG.MAX + lws
         })
         ccfs_scb <- apply(bootccf_sc$t, MARGIN = 1, function(x) {
             which.max(
                 abs(zoo::na.locf(
                 zoo::na.locf(zoo::rollapply(x, width = wdt, FUN = "mean", fill = NA), 
-                na.rm = FALSE), fromLast = TRUE))
-            ) #+ LAG.MAX + lws
+                na.rm = FALSE), fromLast = TRUE)[lag_win])
+            ) + LAG.MAX + lws
         })
     } else {
         my_filt <- function(x, flt = filt) {
@@ -4078,8 +4079,8 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
                 zoo::na.locf(
                     data.table::frollapply(x, n = wdt, FUN = my_filt, 
                     align = 'center', fill = NA),
-                na.rm = FALSE), fromLast = TRUE))
-            ) #+ LAG.MAX + lws
+                na.rm = FALSE), fromLast = TRUE)[lag_win])
+            ) + LAG.MAX + lws
         })
         ccfs_scb <- apply(bootccf_sc$t, MARGIN = 1, function(x) {
             which.max(
@@ -4087,8 +4088,8 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
                 zoo::na.locf(
                     data.table::frollapply(x, n = wdt, FUN = my_filt, 
                     align = 'center', fill = NA),
-                na.rm = FALSE), fromLast = TRUE))
-            ) #+ LAG.MAX + lws
+                na.rm = FALSE), fromLast = TRUE)[lag_win])
+            ) + LAG.MAX + lws
         })
     }
 

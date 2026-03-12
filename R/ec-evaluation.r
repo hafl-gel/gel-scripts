@@ -1192,8 +1192,10 @@ process_ec_fluxes <- function(
 		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, 
             wxh2o_mmolm3 = -0.2, wxco2_mmolm3 = -0.2)
         # dyn lag in seconds around lag_fix
-		, lag_dyn = c(uxw = 0.2, wxT = 0.2, wxnh3_ppb = 1.5, wxnh3_ugm3 = 1.5, 
+		, lag_dyn = c(uxw = 0.5, wxT = 0.5, wxnh3_ppb = 1.5, wxnh3_ugm3 = 1.5, 
             wxh2o_mmolm3 = 1.5, wxco2_mmolm3 = 1.5)
+        # which dyn lag approach should be taken?
+        , lag_dyn_method = c('raw-cov', 'simple-pw', 'boot-pw')
         # re_rmse window
         , gamma_time_window = c(5, 10)
         # damping_reference: either a specific covariance as 'wxT' or best quality ogives
@@ -1355,6 +1357,7 @@ process_ec_fluxes <- function(
         limits_upper <- fix_defaults(limits_upper, variables)
         lag_fix <- fix_defaults(lag_fix, covariances)
         lag_dyn <- fix_defaults(lag_dyn, covariances)
+        lag_dyn_method <- match.arg(lag_dyn_method)
         damping_reference <- fix_defaults(damping_reference, covariances[scalar_covariances])
         damping_lower <- fix_defaults(damping_lower, covariances[scalar_covariances])
         damping_upper <- fix_defaults(damping_upper, covariances[scalar_covariances])
@@ -2649,24 +2652,53 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 # find maximum in dynamic lag time range:
                 # ------------------------------------------------------------------ 
                 cat("\t- dyn lag\n")
-                dyn_lag_max <- sapply(covariances, function(i, x, lag) {
+                dlag_max <- sapply(covariances, function(i, x, lag) {
                     find_dynlag(x[[i]], lag[, i])
                 }, x = Covars, lag = dyn_lag)
 
-                # # find dynlag using pre-whitening
-                # xx <- sapply(c('urot', 'T', 'nh3_ugm3', 
-                #         'h2o_mmolm3', 'co2_mmolm3'), 
-                #     \(v) {
-                #         x11()
-                #         out <- tlag_detection(SD[, sclr, 
-                #             env = list(sclr = v)], 
-                #             SD[, wrot], mfreq = 10, Rboot = 100, 
-                #             plot.it = TRUE
-                #         )
-                #         title(v, outer = TRUE, line = -1)
-                #         out
-                #     }
-                # )
+                # find dynlag using pre-whitening
+                tlag_pw <- sapply(covariances_variables,
+                    \(v) {
+                        pv <- paste(v, collapse = 'x')
+                        lws <- dyn_lag['lower', pv] / Hz[1]
+                        uws <- dyn_lag['upper', pv] / Hz[1]
+                        # x11()
+                        out <- tlag_detection(
+                            SD[, sclr, env = list(sclr = v[[1]])], 
+                            SD[, sclr2, env= list(sclr2 = v[[2]])], 
+                            mfreq = Hz[1], Rboot = 100, 
+                            lws = lws, uws = uws, LAG.MAX = max(abs(lws),
+                                abs(uws)),
+                            # plot.it = TRUE
+                            plot.it = FALSE
+                        )
+                        # title(pv, outer = TRUE, line = -1)
+                        out
+                    }, simplify = FALSE
+                )
+
+                names(tlag_pw) <- covariances
+
+                # which dyn lag approach should be taken?
+                dyn_lag_max <- switch(lag_dyn_method
+                    , 'raw-cov' = dlag_max
+                    , 'simple-pw' = {
+                        out <- sapply(tlag_pw, '[[', 'tl_pw')
+                        out <- rbind(out,
+                            dlag_max[1, ] - dlag_max[2, ] + out
+                        )
+                        rownames(out) <- rownames(dlag_max)
+                        out
+                    }
+                    , 'boot-pw' = {
+                        out <- sapply(tlag_pw, '[[', 'tl_pwb')
+                        out <- rbind(out,
+                            dlag_max[1, ] - dlag_max[2, ] + out
+                        )
+                        rownames(out) <- rownames(dlag_max)
+                        out
+                    }
+                )
 
                 # covariance function's standard deviation and mean values left and right of fix lag
                 # ----------------------------------------------------------------
@@ -3823,7 +3855,7 @@ merge_data <- function(basis, ..., ec_subset = TRUE) {
 #     mfreq = 10, Rboot = 100, plot.it = TRUE)
 
 
-
+# original source: https://github.com/domvit81/RFlux
 tlag_detection <- function (scalar_var, w_var, mfreq = 10, wdt = 5, model = "ar", 
     LAG.MAX = 10, lws = -LAG.MAX, uws = LAG.MAX, Rboot = 100, 
     plot.it = FALSE, boot_parallel = 'snow', boot_ncpus = getOption('boot.ncpus', 1L), 

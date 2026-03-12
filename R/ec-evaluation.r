@@ -1200,6 +1200,7 @@ process_ec_fluxes <- function(
         , lag_dyn_wdt = 5 # as suggested in Vitale
         , lag_dyn_lagmax = 10 # dito
         , lag_dyn_model = c('ar', 'arima')[1]
+        , lag_dyn_orig_smooth = FALSE
         # re_rmse window
         , gamma_time_window = c(5, 10)
         # damping_reference: either a specific covariance as 'wxT' or best quality ogives
@@ -2690,7 +2691,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                                 wdt = lag_dyn_wdt,
                                 plot.it = create_graphs,
                                 plot.dir = path_folder,
-                                plot.name = paste0(plotname, '-', pv, '.jpg')
+                                plot.name = paste0(plotname, '-', pv, '.jpg'),
+                                original_smooth = lag_dyn_orig_smooth
                             )
                         }, simplify = FALSE
                     )
@@ -3887,7 +3889,7 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
     model = "ar", LAG.MAX = 10, lws = -LAG.MAX, uws = LAG.MAX, 
     Rboot = 100, plot.it = FALSE, boot_parallel = 'snow', 
     boot_ncpus = getOption('boot.ncpus', 1L), boot_cl = NULL,
-    plot.dir = NULL, plot.name = NULL
+    plot.dir = NULL, plot.name = NULL, original_smooth = FALSE
 ) 
 {
 
@@ -3918,7 +3920,24 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
     lag_win <- LAG.MAX + (lws + 1):(uws + 1)
 
     # Unit root test based upon Breitung's variance ratio -> stationary ts???
-    if (egcm::bvr.test(set[, 1])$p.val < 0.01 && egcm::bvr.test(set[, 2])$p.val < 0.01) {
+    stat <- egcm::bvr.test(set[, 1])$p.val < 0.01 && egcm::bvr.test(set[, 2])$p.val < 0.01
+    if (is.na(stat)) {
+        # return all NA
+        return(
+            list(
+                "tl_mc" = NA_integer_,
+                "tl_pw" = NA_integer_,
+                "tl_pwb" = NA_integer_,
+                "tl_pwb_lci"= NA_integer_,
+                "tl_pwb_uci"= NA_integer_,
+                "cor_pw" = NA_real_,
+                "cor_pwb" = NA_real_,
+                "cov_mc" = NA_real_, 
+                "cov_pw" = NA_real_, 
+                "cov_pwb" = NA_real_  
+            )
+        )
+    } else if (stat) {
         x <- set[, 1]
         y <- set[, 2]
     } else {
@@ -3998,38 +4017,83 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
             l = LAG.MAX * 2, parallel = boot_parallel, ncpus = boot_ncpus, cl = boot_cl)
     }
 
+    # bootstrap
     bootccf_cs <- boot_fun(x1, y1)
     ccf_cs <- colMeans(bootccf_cs$t, na.rm = TRUE)
-    ccfs_cs <- zoo::na.locf(
-        zoo::na.locf(
-            zoo::rollapply(ccf_cs, width = wdt, FUN = "mean", fill = NA), 
-            na.rm = FALSE
-        ), fromLast = TRUE
-    )
-    ccfs_csb <- apply(bootccf_cs$t, MARGIN = 1, function(x) {
-        which.max(
-            abs(zoo::na.locf(
-            zoo::na.locf(zoo::rollapply(x, width = wdt, FUN = "mean", fill = NA), 
-            na.rm = FALSE), fromLast = TRUE))
-        ) #+ LAG.MAX + lws
-    })
-    hdis_cs <- HDInterval::hdi(ccfs_csb, credMass = .95);
-
     bootccf_sc <- boot_fun(x2, y2)
     ccf_sc <- colMeans(bootccf_sc$t, na.rm = TRUE)
-    ccfs_sc <- zoo::na.locf(
-        zoo::na.locf(
-            zoo::rollapply(ccf_sc, width = wdt, FUN = "mean", fill = NA), 
-            na.rm = FALSE
-        ), fromLast = TRUE
-    )
-    ccfs_scb <- apply(bootccf_sc$t, MARGIN = 1, function(x) {
-        which.max(
-            abs(zoo::na.locf(
-            zoo::na.locf(zoo::rollapply(x, width = wdt, FUN = "mean", fill = NA), 
-            na.rm = FALSE), fromLast = TRUE))
-        ) #+ LAG.MAX + lws
-    })
+
+    # smooth
+    if (original_smooth) {
+        ccfs_cs <- zoo::na.locf(
+            zoo::na.locf(
+                zoo::rollapply(ccf_cs, width = wdt, FUN = "mean", fill = NA), 
+                na.rm = FALSE
+            ), fromLast = TRUE
+        )
+        ccfs_sc <- zoo::na.locf(
+            zoo::na.locf(
+                zoo::rollapply(ccf_sc, width = wdt, FUN = "mean", fill = NA), 
+                na.rm = FALSE
+            ), fromLast = TRUE
+        )
+        ccfs_csb <- apply(bootccf_cs$t, MARGIN = 1, function(x) {
+            which.max(
+                abs(zoo::na.locf(
+                zoo::na.locf(zoo::rollapply(x, width = wdt, FUN = "mean", fill = NA), 
+                na.rm = FALSE), fromLast = TRUE))
+            ) #+ LAG.MAX + lws
+        })
+        ccfs_scb <- apply(bootccf_sc$t, MARGIN = 1, function(x) {
+            which.max(
+                abs(zoo::na.locf(
+                zoo::na.locf(zoo::rollapply(x, width = wdt, FUN = "mean", fill = NA), 
+                na.rm = FALSE), fromLast = TRUE))
+            ) #+ LAG.MAX + lws
+        })
+    } else {
+        my_filt <- function(x, flt = filt) {
+            m <- median(x, na.rm = TRUE)
+            w <- 1 / (1 + abs(x - m) ^ 2)
+            sum(x * w * flt, na.rm = TRUE) / sum(w * flt, na.rm = TRUE)
+        }
+        md_filters <- getOption('md.filter.function.list')
+        filt <- md_filters$BmNuttall(wdt)
+        # 
+        ccfs_cs <- zoo::na.locf(
+            zoo::na.locf(
+                data.table::frollapply(ccf_cs, n = wdt, FUN = my_filt, 
+                    align = 'center', fill = NA), na.rm = FALSE
+            ), fromLast = TRUE
+        )
+        ccfs_sc <- zoo::na.locf(
+            zoo::na.locf(
+                data.table::frollapply(ccf_sc, n = wdt, FUN = my_filt, 
+                    align = 'center', fill = NA), na.rm = FALSE
+            ), fromLast = TRUE
+        )
+        ccfs_csb <- apply(bootccf_cs$t, MARGIN = 1, function(x) {
+            which.max(
+                abs(zoo::na.locf(
+                zoo::na.locf(
+                    data.table::frollapply(x, n = wdt, FUN = my_filt, 
+                    align = 'center', fill = NA),
+                na.rm = FALSE), fromLast = TRUE))
+            ) #+ LAG.MAX + lws
+        })
+        ccfs_scb <- apply(bootccf_sc$t, MARGIN = 1, function(x) {
+            which.max(
+                abs(zoo::na.locf(
+                zoo::na.locf(
+                    data.table::frollapply(x, n = wdt, FUN = my_filt, 
+                    align = 'center', fill = NA),
+                na.rm = FALSE), fromLast = TRUE))
+            ) #+ LAG.MAX + lws
+        })
+    }
+
+    # get ci interval
+    hdis_cs <- HDInterval::hdi(ccfs_csb, credMass = .95);
     hdis_sc <- HDInterval::hdi(ccfs_scb, credMass = .95);
 
     # ??
@@ -4056,6 +4120,7 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
 
         jpeg(filename = file.path(plot.dir, plot.name), width = 700, 
                     height = 700, quality = 100)
+
             n_xax <- 9
             ylab_paren <- sprintf('(%s,%s)', nms[1], nms[2])
             ylab_paren_inv <- sprintf('(%s,%s)', nms[2], nms[1])
@@ -4122,6 +4187,7 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
             box(lwd = 1.5)
             # add dyn lag window
             abline(v = c(lws, uws), lwd = 2 , col = 1, lty = 3)
+
         dev.off()
 
     }

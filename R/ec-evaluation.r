@@ -1197,6 +1197,9 @@ process_ec_fluxes <- function(
         # which dyn lag approach should be taken?
         , lag_dyn_calc_pw = FALSE
         , lag_dyn_method = c('raw-cov', 'simple-pw', 'boot-pw')
+        , lag_dyn_wdt = 5 # as suggested in Vitale
+        , lag_dyn_lagmax = 10 # dito
+        , lag_dyn_model = c('ar', 'arima')[1]
         # re_rmse window
         , gamma_time_window = c(5, 10)
         # damping_reference: either a specific covariance as 'wxT' or best quality ogives
@@ -2660,23 +2663,35 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
                 # find dynlag using pre-whitening
                 if (lag_dyn_calc_pw) {
+                    if (create_graphs) {
+                        if (!dir.exists(path_folder)) {
+                            dir.create(path_folder, recursive = FALSE)
+                        }
+                        # get end of current interval time in UTC
+                        soi_user <- with_tz(interval_start, tz_user)
+                        # eoi_user <- with_tz(end_time[.BY[[1]]], tz_user)
+                        # get date in correct format
+                        date_formatted <- format(soi_user, '%Y%m%d')
+                        time2 <- format(soi_user, format = "%H%M")
+                        plotname <- paste("pwb-timelag", date_formatted, time2, 
+                            sep="-") 
+                    }
                     tlag_pw <- sapply(covariances_variables,
                         \(v) {
                             pv <- paste(v, collapse = 'x')
                             lws <- dyn_lag['lower', pv] / Hz[1]
                             uws <- dyn_lag['upper', pv] / Hz[1]
-                            # x11()
-                            out <- tlag_detection(
-                                SD[, sclr, env = list(sclr = v[[1]])], 
-                                SD[, sclr2, env= list(sclr2 = v[[2]])], 
+                            tlag_detection(
+                                SD[, .SD, .SDcols = v],
                                 mfreq = Hz[1], Rboot = 100, 
-                                lws = lws, uws = uws, LAG.MAX = max(abs(lws),
-                                    abs(uws)),
-                                # plot.it = TRUE
-                                plot.it = FALSE
+                                lws = lws, uws = uws, 
+                                LAG.MAX = lag_dyn_lagmax,
+                                model = lag_dyn_model,
+                                wdt = lag_dyn_wdt,
+                                plot.it = create_graphs,
+                                plot.dir = path_folder,
+                                plot.name = paste0(plotname, '-', pv, '.jpg')
                             )
-                            # title(pv, outer = TRUE, line = -1)
-                            out
                         }, simplify = FALSE
                     )
                     names(tlag_pw) <- covariances
@@ -3867,30 +3882,32 @@ merge_data <- function(basis, ..., ec_subset = TRUE) {
 
 ## pre-whitening dyn lag ----------------------------------------
 
-# x11()
-# xx <- tlag_detection(SD[, nh3_ugm3], SD[, wrot], 
-#     mfreq = 10, Rboot = 100, plot.it = TRUE)
-# x11()
-# xx <- tlag_detection(SD[, nh3_ugm3], SD[, wrot], 
-#     lws = -2, uws = 2,
-#     mfreq = 10, Rboot = 100, plot.it = TRUE)
-
-
 # original source: https://github.com/domvit81/RFlux
-tlag_detection <- function (scalar_var, w_var, mfreq = 10, wdt = 5, model = "ar", 
-    LAG.MAX = 10, lws = -LAG.MAX, uws = LAG.MAX, Rboot = 100, 
-    plot.it = FALSE, boot_parallel = 'snow', boot_ncpus = getOption('boot.ncpus', 1L), 
-    boot_cl = NULL
+tlag_detection <- function (dat, mfreq = 10, wdt = 5, 
+    model = "ar", LAG.MAX = 10, lws = -LAG.MAX, uws = LAG.MAX, 
+    Rboot = 100, plot.it = FALSE, boot_parallel = 'snow', 
+    boot_ncpus = getOption('boot.ncpus', 1L), boot_cl = NULL,
+    plot.dir = NULL, plot.name = NULL
 ) 
 {
 
     require(zoo)
     require(egcm)
     require(boot)
+    require(HDInterval)
+    require(bayestestR)
+
+    # get names
+    nms <- names(dat[, 1:2])
+
 
     # replace NA values
-    set <- na.omit(cbind(zoo::na.approx(scalar_var, na.rm = FALSE), 
-            zoo::na.approx(w_var, na.rm = FALSE)))
+    set <- na.omit(
+        cbind(
+            zoo::na.approx(dat[, v, env = list(v = nms[1])], na.rm = FALSE), 
+            zoo::na.approx(dat[, v, env = list(v = nms[2])] , na.rm = FALSE)
+        )
+    )
 
     # convert & fix LAG.MAX, lws & uws
     lws <- max(-LAG.MAX, lws) * mfreq
@@ -4037,59 +4054,75 @@ tlag_detection <- function (scalar_var, w_var, mfreq = 10, wdt = 5, model = "ar"
     ## PLOT
     if (plot.it) {
 
-        par(mfrow = c(3, 1), mar = c(5, 4, 2, 1), oma = c(1, 1, 5, 0.5), las = 0, 
-            cex.axis = 1.3, cex.lab = 1.3)
-        plot((-LAG.MAX:LAG.MAX), ccf_mc, ylab = "cross-cov (c,w)", xlab = "Lag (sec)", 
-            type = "h", col = "grey68",  xlim = c(lws, uws),
-            ylim = c(min(ccf_mc * 1.05, 0), max(ccf_mc * 1.05, 0)), xaxt = "n")
-        axis(side = 1, at = seq(lws, uws, length.out = 6), 
-            labels = seq(lws, uws, length.out = 6) / mfreq)  
-        polygon(x = c(hdis[1]: hdis[2], hdis[2]: hdis[1]) - LAG.MAX - 1, 
-            y = c(ccf_mc[hdis[1]: hdis[2]], rep(0, hdis[2] - hdis[1] + 1)), 
-            col = "lightblue", border = "lightblue")
-        # boot time lag cov
-        segments(x0 = peak_ref - LAG.MAX - 1, y0 = 0, y1 = cov_pwb, col = 2, 
-            lwd = 2)
-        # max cov
-        segments(x0 = tl_mcw - LAG.MAX - 1, y0 = 0, y1 = cov_mcw, col = 1, 
-            lwd = 1)
-        lines((-LAG.MAX:LAG.MAX), ccf_mc, col = 1, lwd = 2)
-        mtext(side = 3, line = .5, adj = 0, 
-            paste0("Peak at ", (tl_mcw - LAG.MAX - 1) / mfreq, " sec"), cex = 1.1) 
-        mtext(side = 3, line = .5, adj = 1, "a", cex = 1.5, font = 2) 
-        box(lwd = 1.5)
-        mtext(side = 3, line = 3, cex = 1.25, col = 2,
-            paste0("Time lag at: ", (peak_ref - LAG.MAX - 1) / mfreq, " sec"))
-
-        plot((-LAG.MAX:LAG.MAX), ccf_cs, ylab = "pwb cross-cor (c,w)", 
-            xlab = "Lag (sec)", type = "h", col = "grey68", xlim = c(lws, uws),
-            ylim = c(min(ccf_cs, -4 / sqrt(length(x))), max(ccf_cs, 4 / sqrt(length(x)))), 
-            xaxt = "n")    
-        lines((-LAG.MAX:LAG.MAX), ccfs_cs, col = 1, lwd = 2)
-        axis(side = 1, at = seq(lws, uws, length.out = 6), 
-            labels = seq(lws, uws, length.out = 6) / mfreq)  
-        abline(h = c(-3.291, 3.291) / sqrt(length(x) * 13), col = 4, lty = 2, lwd = 2)
-        points(x = maps[1] - LAG.MAX - 1, y = min(ccf_cs, -4 / sqrt(length(x))), 
-            pch = 24, col = 1, cex = 1.25, bg = "red")
-        mtext(side = 3, line = 1, adj = 1, "c", cex = 1.5, font = 2) 
-        mtext(side = 3, line = .5, adj = 0, 
-            paste0("Peak at ", (maps[1] - LAG.MAX - 1) / mfreq , " sec"), cex = 1.1) 
-        box(lwd = 1.5)
-
-        plot((-LAG.MAX:LAG.MAX), ccf_sc, ylab = "pwb cross-cor (w,c)", 
-            xlab = "Lag (sec)", type = "h", col = "grey68", xlim = c(lws, uws),
-            ylim = c(min(ccf_sc, -4 / sqrt(length(x))), max(ccf_sc, 4 / sqrt(length(x)))), 
-            xaxt = "n")    
-        lines((-LAG.MAX:LAG.MAX), ccfs_sc, col = 1, lwd = 2)
-        axis(side = 1, at = seq(lws, uws, length.out = 6), 
-            labels = seq(lws, uws, length.out = 6) / mfreq)  
-        abline(h = c(-3.291, 3.291) / sqrt(length(x) * 13), col = 4, lty = 2, lwd = 2)
-        points(x = maps[2] - LAG.MAX - 1, y = min(ccf_sc, -4 / sqrt(length(x))), 
-            pch = 24, col = 1, cex = 1.25, bg = "red")
-        mtext(side = 3, line = 1, adj = 1, "e", cex = 1.5, font = 2) 
-        mtext(side = 3, line = .5, adj = 0, 
-            paste0("Peak at ", (maps[2] - LAG.MAX - 1) / mfreq , " sec"), cex = 1.1) 
-        box(lwd = 1.5)
+        jpeg(filename = file.path(plot.dir, plot.name), width = 700, 
+                    height = 700, quality = 100)
+            n_xax <- 9
+            ylab_paren <- sprintf('(%s,%s)', nms[1], nms[2])
+            ylab_paren_inv <- sprintf('(%s,%s)', nms[2], nms[1])
+            par(mfrow = c(3, 1), mar = c(5, 4, 2, 1), oma = c(1, 1, 5, 0.5), las = 0, 
+                cex.axis = 1.3, cex.lab = 1.3)
+            # cross-cov
+            plot((-LAG.MAX:LAG.MAX), ccf_mc, ylab = paste("cross-cov", ylab_paren), 
+                xlab = "Lag (sec)", type = "h", col = "grey68",  #xlim = c(lws, uws),
+                ylim = c(min(ccf_mc * 1.05, 0), max(ccf_mc * 1.05, 0)), xaxt = "n")
+            axis(side = 1, at = seq(-LAG.MAX, LAG.MAX, length.out = n_xax), 
+                labels = seq(-LAG.MAX, LAG.MAX, length.out = n_xax) / mfreq)  
+            # axis(side = 1, at = seq(lws, uws, length.out = n_xax), 
+            #     labels = seq(lws, uws, length.out = n_xax) / mfreq)  
+            polygon(x = c(hdis[1]: hdis[2], hdis[2]: hdis[1]) - LAG.MAX - 1, 
+                y = c(ccf_mc[hdis[1]: hdis[2]], rep(0, hdis[2] - hdis[1] + 1)), 
+                col = "lightblue", border = "lightblue")
+            # boot time lag cov
+            segments(x0 = peak_ref - LAG.MAX - 1, y0 = 0, y1 = cov_pwb, col = 2, 
+                lwd = 2)
+            # max cov
+            segments(x0 = tl_mcw - LAG.MAX - 1, y0 = 0, y1 = cov_mcw, col = 1, 
+                lwd = 1)
+            # cov as line
+            lines((-LAG.MAX:LAG.MAX), ccf_mc, col = 1, lwd = 2)
+            mtext(side = 3, line = .5, adj = 0, 
+                paste0("Peak at ", (tl_mcw - LAG.MAX - 1) / mfreq, " sec"), cex = 1.1) 
+            mtext(side = 3, line = .5, adj = 1, "a", cex = 1.5, font = 2) 
+            box(lwd = 1.5)
+            mtext(side = 3, line = 3, cex = 1.25, col = 2,
+                paste0("Time lag at: ", (peak_ref - LAG.MAX - 1) / mfreq, " sec"))
+            # add dyn lag window
+            abline(v = c(lws, uws), lwd = 2 , col = 1, lty = 3)
+            # cross-cor 1
+            plot((-LAG.MAX:LAG.MAX), ccf_cs, ylab = paste("pwb cross-cor", ylab_paren), 
+                xlab = "Lag (sec)", type = "h", col = "grey68", #xlim = c(lws, uws),
+                ylim = c(min(ccf_cs, -4 / sqrt(length(x))), max(ccf_cs, 4 / sqrt(length(x)))), 
+                xaxt = "n")    
+            lines((-LAG.MAX:LAG.MAX), ccfs_cs, col = 1, lwd = 2)
+            axis(side = 1, at = seq(-LAG.MAX, LAG.MAX, length.out = n_xax), 
+                labels = seq(-LAG.MAX, LAG.MAX, length.out = n_xax) / mfreq)  
+            abline(h = c(-3.291, 3.291) / sqrt(length(x) * 13), col = 4, lty = 2, lwd = 2)
+            points(x = maps[1] - LAG.MAX - 1, y = min(ccf_cs, -4 / sqrt(length(x))), 
+                pch = 24, col = 1, cex = 1.25, bg = "red")
+            mtext(side = 3, line = 1, adj = 1, "b", cex = 1.5, font = 2) 
+            mtext(side = 3, line = .5, adj = 0, 
+                paste0("Peak at ", (maps[1] - LAG.MAX - 1) / mfreq , " sec"), cex = 1.1) 
+            box(lwd = 1.5)
+            # add dyn lag window
+            abline(v = c(lws, uws), lwd = 2 , col = 1, lty = 3)
+            # cross-cor 1
+            plot((-LAG.MAX:LAG.MAX), ccf_sc, ylab = paste("pwb cross-cor", ylab_paren_inv), 
+                xlab = "Lag (sec)", type = "h", col = "grey68", #xlim = c(lws, uws),
+                ylim = c(min(ccf_sc, -4 / sqrt(length(x))), max(ccf_sc, 4 / sqrt(length(x)))), 
+                xaxt = "n")    
+            lines((-LAG.MAX:LAG.MAX), ccfs_sc, col = 1, lwd = 2)
+            axis(side = 1, at = seq(-LAG.MAX, LAG.MAX, length.out = n_xax), 
+                labels = seq(-LAG.MAX, LAG.MAX, length.out = n_xax) / mfreq)  
+            abline(h = c(-3.291, 3.291) / sqrt(length(x) * 13), col = 4, lty = 2, lwd = 2)
+            points(x = maps[2] - LAG.MAX - 1, y = min(ccf_sc, -4 / sqrt(length(x))), 
+                pch = 24, col = 1, cex = 1.25, bg = "red")
+            mtext(side = 3, line = 1, adj = 1, "c", cex = 1.5, font = 2) 
+            mtext(side = 3, line = .5, adj = 0, 
+                paste0("Peak at ", (maps[2] - LAG.MAX - 1) / mfreq , " sec"), cex = 1.1) 
+            box(lwd = 1.5)
+            # add dyn lag window
+            abline(v = c(lws, uws), lwd = 2 , col = 1, lty = 3)
+        dev.off()
 
     }
 

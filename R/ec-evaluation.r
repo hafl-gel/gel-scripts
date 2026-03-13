@@ -4090,7 +4090,7 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
 
     ## PLOT
     if (plot.it) {
-
+        
         jpeg(filename = file.path(plot.dir, plot.name), width = 700, 
                     height = 700, quality = 100)
 
@@ -4128,7 +4128,7 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
             abline(v = c(lws, uws), lwd = 2 , col = 1, lty = 3)
             if (!is.null(dyn_lag_ext)) {
                 tl_ext <- dyn_lag_ext + LAG.MAX + 1
-                cov_ext <- ccf_mc[tl_mcw]
+                cov_ext <- ccf_mc[tl_ext]
                 # external dyn lag
                 segments(x0 = dyn_lag_ext, y0 = 0, y1 = cov_ext, 
                     col = 'dodgerblue3', lwd = 1)
@@ -4136,15 +4136,18 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
                     paste0("ext. lag at ", dyn_lag_ext / mfreq, " sec"), cex = 1.1) 
             }
             # cross-cor 1
+            ylim <- c(
+                min(ccf_sc, ccf_cs, -4 / sqrt(length(x))), 
+                max(ccf_sc, ccf_cs, 4 / sqrt(length(x)))
+            )
             plot((-LAG.MAX:LAG.MAX), ccf_cs, ylab = paste("pwb cross-cor", ylab_paren), 
                 xlab = "Lag (sec)", type = "h", col = "grey68", #xlim = c(lws, uws),
-                ylim = c(min(ccf_cs, -4 / sqrt(length(x))), max(ccf_cs, 4 / sqrt(length(x)))), 
-                xaxt = "n")    
+                ylim = ylim, xaxt = "n")    
             lines((-LAG.MAX:LAG.MAX), ccfs_cs, col = 1, lwd = 2)
             axis(side = 1, at = seq(-LAG.MAX, LAG.MAX, length.out = n_xax), 
                 labels = seq(-LAG.MAX, LAG.MAX, length.out = n_xax) / mfreq)  
             abline(h = c(-3.291, 3.291) / sqrt(length(x) * 13), col = 4, lty = 2, lwd = 2)
-            points(x = maps[1] - LAG.MAX - 1, y = min(ccf_cs, -4 / sqrt(length(x))), 
+            points(x = maps[1] - LAG.MAX - 1, y = ylim[1], 
                 pch = 24, col = 1, cex = 1.25, bg = "red")
             # mtext(side = 3, line = 1, adj = 1, "b", cex = 1.5, font = 2) 
             mtext(side = 3, line = .5, adj = 0, 
@@ -4152,16 +4155,15 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
             box(lwd = 1.5)
             # add dyn lag window
             abline(v = c(lws, uws), lwd = 2 , col = 1, lty = 3)
-            # cross-cor 1
+            # cross-cor 2
             plot((-LAG.MAX:LAG.MAX), ccf_sc, ylab = paste("pwb cross-cor", ylab_paren_inv), 
                 xlab = "Lag (sec)", type = "h", col = "grey68", #xlim = c(lws, uws),
-                ylim = c(min(ccf_sc, -4 / sqrt(length(x))), max(ccf_sc, 4 / sqrt(length(x)))), 
-                xaxt = "n")    
+                ylim = ylim, xaxt = "n")    
             lines((-LAG.MAX:LAG.MAX), ccfs_sc, col = 1, lwd = 2)
             axis(side = 1, at = seq(-LAG.MAX, LAG.MAX, length.out = n_xax), 
                 labels = seq(-LAG.MAX, LAG.MAX, length.out = n_xax) / mfreq)  
             abline(h = c(-3.291, 3.291) / sqrt(length(x) * 13), col = 4, lty = 2, lwd = 2)
-            points(x = maps[2] - LAG.MAX - 1, y = min(ccf_sc, -4 / sqrt(length(x))), 
+            points(x = maps[2] - LAG.MAX - 1, y = ylim[1], 
                 pch = 24, col = 1, cex = 1.25, bg = "red")
             # mtext(side = 3, line = 1, adj = 1, "c", cex = 1.5, font = 2) 
             mtext(side = 3, line = .5, adj = 0, 

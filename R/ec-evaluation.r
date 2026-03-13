@@ -1197,10 +1197,15 @@ process_ec_fluxes <- function(
         # which dyn lag approach should be taken?
         , lag_dyn_calc_pw = FALSE
         , lag_dyn_method = c('raw-cov', 'simple-pw', 'boot-pw')
-        , lag_dyn_wdt = 5 # as suggested in Vitale
+        # , lag_dyn_wdt = 5 # suggested in RFlux
+        , lag_dyn_wdt = 7 
         , lag_dyn_lagmax = 10 # dito
         , lag_dyn_model = c('ar', 'arima')[1]
-        , lag_dyn_smooth = 'mean'
+        # , lag_dyn_smooth = 'mean' # original Vitale smoothing
+        , lag_dyn_smooth = function(x, wdt) {
+            flt <-  getOption('md.filter.function.list')$BmNuttall(wdt)
+            sum(x * flt, na.rm = TRUE) / sum(flt, na.rm = TRUE)
+        }
         # re_rmse window
         , gamma_time_window = c(5, 10)
         # damping_reference: either a specific covariance as 'wxT' or best quality ogives

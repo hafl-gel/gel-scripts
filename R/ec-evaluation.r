@@ -2648,7 +2648,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             }
 
             # check if any fluxes can be derived
-            if (has_flux <- length(covariances_variables)) {
+            if (has_flux <- length(covariances_variables) > 0) {
                 # start of flux relevant data manipulation
                 # ------------------------------------------------------------------ 
                 # ------------------------------------------------------------------ 
@@ -3219,13 +3219,13 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         })
                     }, by = subint, .SDcols = scalars]
                 }
+                # prepare output
+                sub_flux_fix_lag <- vector(mode = 'list', length = subint_n)
+                sub_flux_dyn_lag <- vector(mode = 'list', length = subint_n)
                 # check flux
                 if (has_flux) {
                     # be verbose
                     cat("  (subint)  -> processing fluxes...\n")
-                    # prepare output
-                    sub_flux_fix_lag <- vector(mode = 'list', length = subint_n)
-                    sub_flux_dyn_lag <- vector(mode = 'list', length = subint_n)
                     # loop over sub-intervals
                     for(si in SDsub[, unique(subint)]) {
                         # calculate covariances with fix lag time:

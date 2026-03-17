@@ -2194,7 +2194,8 @@ process_ec_fluxes <- function(
         }
 
         # declination
-        current_declination <- daily_data[, mag_dec(Time[1]), by = bin][, V1]
+        current_declination <- daily_data[, mag_dec(Time[1]), by = bin][, 
+            setNames(V1, bin)]
         d_north <- dev_north + current_declination
 
         ## coordinate rotation
@@ -2230,6 +2231,10 @@ process_ec_fluxes <- function(
             }, c.system = coord.system)
             , by = bin]
 
+        ### correct for sonic north deviation
+        daily_data[, WD := (WD + d_north[.BY[[1]]]) %% 360, 
+            by = as.character(bin)]
+
         # rotate subintervals here
         if (subintervals) {
             cat("  (subint)  -> rotating data...\n")
@@ -2257,10 +2262,9 @@ process_ec_fluxes <- function(
                         0
                     }, c.system = coord.system
                 ), by = subint]
+            ### correct for sonic north deviation
+            daily_data[, subint_WD := (subint_WD + d_north[.BY[[1]]]) %% 360, by = as.character(bin)]
         }
-
-        ### correct for sonic north deviation
-        daily_data[, WD := (WD + d_north[.GRP]) %% 360, by = bin]
 
         # get relevant environment objects
         env_obj <- setdiff(ls(envir = current_env), c(

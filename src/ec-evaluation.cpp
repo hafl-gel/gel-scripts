@@ -8,15 +8,16 @@ Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2)
 	{
 	Rcpp::List Out(y1);
 	int lenx = x.size();
-    LogicalVector LogVec = rep(false, lenx);
+    // LogicalVector LogVec = rep(false, lenx);
 	int leny = y1.size();
 	int run = 0;
-	int j = 0;
+    int run_next = 0;
+	// int j = 0;
 	for (int i = 0; i < leny; i++) {
         // pass j to runner & set j to 0
-        run = j;
-        j = 0;
-        LogVec = rep(false, lenx);
+        run = run_next;
+        // j = 0;
+        LogicalVector LogVec = rep(false, lenx);
 		if (x[lenx - 1] < y1[i] || x[run] > y2[i]) {
 			Out[i] = LogVec;
 		} else {
@@ -24,22 +25,25 @@ Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2)
 			while (run < lenx && x[run] < y1[i]) {
 				run += 1;
 			}
+            // assign run to run_next (here should next loop start)
+            // Rcout << run << "\n";
+            run_next = run;
             // goto y2[i]
 			while (run < lenx && x[run] < y2[i]) {
-                if (i < (leny - 1) && j == 0 && x[run] >= y1[i + 1]) {
-                    j = run;
-                }
+                // if (i < (leny - 1) && j == 0 && x[run] >= y1[i + 1]) {
+                //     j = run;
+                // }
                 LogVec[run] = true;
 				run += 1; 
 			}
-            // check overflowing run
-            if (run == lenx) {
-                run -= 1;
-            }
-            // check j
-            if (j == 0) {
-                j = run;
-            }
+            // // check overflowing run
+            // if (run == lenx) {
+            //     run -= 1;
+            // }
+            // // check j
+            // if (j == 0) {
+            //     j = run;
+            // }
             Out[i] = LogVec;
 		}
 	}

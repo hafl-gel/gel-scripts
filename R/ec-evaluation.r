@@ -110,14 +110,7 @@ check_limits <- function(dat, limits, lim_window = 500,
                     x[isna] <- sapply(seq_along(isna), \(i) {
                         verb <- paste(i, '/', length(isna))
                         cat(verb)
-                        # i <- 1
-                        # i <- length(isna)
                         j <- which(ind[[i]])
-                        # if (all(is.na(x[j]))) {
-                        #     browser()
-                        #     # only NA values
-                        #     out <- NA
-                        # } else if (length(j) != length(w_1)) {
                         if (length(j) != length(w_1)) {
                             w_i <- j - isna[i] + win_half * d_t + 1
                             out <- sum(x[j] * w_1[w_i], na.rm = TRUE) / 

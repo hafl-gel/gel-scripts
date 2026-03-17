@@ -1196,8 +1196,8 @@ process_ec_fluxes <- function(
             nh3_ugm3 = 0.95, h2o_mmolm3 = 0.95, co2_mmolm3 = 0.95)
         , despike_quantile_width = c(u = 30, v = 30, w = 30, T = 30, nh3_ppb = 30, 
             nh3_ugm3 = 30, h2o_mmolm3 = 30, co2_mmolm3 = 30)
-        , despike_quantile_multiply = c(u = 4, v = 4, w = 4, T = 4, nh3_ppb = 4, 
-            nh3_ugm3 = 4, h2o_mmolm3 = 4, co2_mmolm3 = 4)
+        , despike_quantile_multiply = c(u = 2, v = 2, w = 2, T = 2, nh3_ppb = 2, 
+            nh3_ugm3 = 2, h2o_mmolm3 = 2, co2_mmolm3 = 2)
 		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 'wxco2_mmolm3')
         # fix lag in seconds
 		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, 
@@ -2666,6 +2666,35 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             )
             if (length(scalars)) {
                 scalar_list <- SD[, I(lapply(.SD, na.omit)), .SDcols = scalars]
+
+                # # despiking figures
+                # if (any(despike) && create_graphs) {
+                #     if (!dir.exists(path_folder)) {
+                #         dir.create(path_folder, recursive = FALSE)
+                #     }
+                #     # get end of current interval time in UTC
+                #     soi_user <- with_tz(interval_start, tz_user)
+                #     # eoi_user <- with_tz(end_time[.BY[[1]]], tz_user)
+                #     # get date in correct format
+                #     date_formatted <- format(soi_user, '%Y%m%d')
+                #     time2 <- format(soi_user, format = "%H%M")
+                #     plotname <- paste("despiked-timeseries", date_formatted, time2, 
+                #         sep="-") 
+                #     despike_vars <- names(despike)[despike]
+                #     par(mfrow = c(length(despike_vars), 1), 
+                #         mar = c(2, 4, 2, 2))
+                #     for (d in despike_vars) {
+                #         SD[, {
+                #             plot(Time, orig, type = 'l', col = 'indianred')
+                #             lines(Time, lo, col = 'dodgerblue3')
+                #             lines(Time, hi, col = 'dodgerblue3')
+                #             lines(Time, desp)
+                #         }, env = list(orig = paste0(d, '_original'),
+                #             desp = d, lo = paste0(d, '_lo'),
+                #             hi = paste0(d, '_hi'))]
+                #     }
+                # }
+
                 # detrend scalars
                 # ------------------------------------------------------------------ 
                 cat("~~~\ndetrending scalars...\n")
@@ -4253,33 +4282,61 @@ despike_filter2 <- function(i, ma, c_orig, n = n_filt2,
     quantile(abs(ma[i] - c_orig[i]), quant, na.rm = TRUE)
 }
 despike_timeseries <- function(dat, scalar, filter_width = 1, 
-    qval = 0.95, qwidth = 30, qmult = 4, 
+    qval = 0.95, qwidth = 30, qmult = 2, 
     filter1 = despike_filt1, filter2 = despike_filter2) {
     cat('despiking', scalar, '\n')
     Hz <- dat[, Hz[1]]
     md_filters <- getOption('md.filter.function.list')
     filt <- md_filters$BmNuttall(filter_width * Hz)
     n_filt2 <- qwidth * Hz
-    dat[, (scalar) := {
-        n <- length(filt)
-        # filter 1
-        cat('-> apply filter 1\n')
-        ma0 <- frollapply(c_ext <- c(scal[.N - (n:1) + 1], scal,
-            scal[1:n]), n = n, FUN = despike_filter1, align = 'center',
-            flt = filt
-        )
-        # filter 2
-        cat('-> apply filter 2\n')
-        mq <- frollapply(seq_along(ma0), n = n_filt2, FUN = despike_filter2, 
-            align = 'center', ma = ma0, c_orig = c_ext, quant = 0.75)
-        qd <- mq[seq_along(scal) + n]
-        ma <- ma0[seq_along(scal) + n]
-        d <- ma - scal
-        qthresh <- qd * qmult
-        flag <- abs(d) > qthresh
-        c1 <- scal
-        c1[flag] <- NA
-        c1
-    }, env = list(scal = scalar)]
+    # loop over bins
+    for (b in dat[, unique(bin)]) {
+        # TODO: be verbose
+        # cat(b, '/', )
+        desp_conc <- dat[, {
+            # get index
+            ext <- ind <- which(bin == b)
+            # get length of filter
+            n <- length(filt)
+            n2 <- 2 * n
+            ind2 <- seq_along(ind) + n2
+            # extended index
+            if (ext[1] <= n2) {
+                ext <- c(rep(ext[1], n2), ext)
+            } else {
+                ext <- c(ext[1] - (n2:1), ext)
+            }
+            if (ext[length(ext)] >= .N - n2 + 1) {
+                ext <- c(ext, rep(ext[length(ext)], n2))
+            } else {
+                ext <- c(ext, ext[length(ext)] + 1:n2)
+            }
+            # filter 1
+            # cat('-> apply filter 1\n')
+            ma0 <- frollapply(c_ext <- scal[ext], n = n, 
+                FUN = despike_filter1, align = 'center', flt = filt
+            )
+            # filter 2
+            # cat('-> apply filter 2\n')
+            mq <- frollapply(seq_along(ma0), n = n_filt2, FUN = despike_filter2, 
+                align = 'center', ma = ma0, c_orig = c_ext, quant = 0.75)
+            c1 <- scal[ind]
+            ma <- ma0[ind2]
+            # qd <- mq[ind2]
+            qd <- mq[ind2] + sd(ma, na.rm = TRUE)
+            d <- ma - scal[ind]
+            qthresh <- qd * qmult
+            flag <- abs(d) > qthresh
+            c1[flag] <- NA
+            browser()
+            plot(Time[ind], scal[ind], type = 'l', col = 'indianred')
+            lines(Time[ind], ma - qthresh, col = 'dodgerblue3')
+            lines(Time[ind], ma + qthresh, col = 'dodgerblue3')
+            lines(Time[ind], c1)
+            c1
+        }, env = list(scal = scalar)]
+        # assign
+        dat[b == bin, (scalar) := desp_conc]
+    }
     invisible(dat)
 }

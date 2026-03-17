@@ -1187,6 +1187,17 @@ process_ec_fluxes <- function(
             co2_mmolm3 = 5000)
         , na_limits_window = c(pass = '10secs', replace = '5mins')
         , na_limits_method = c('norepl', 'median', 'dist', 'squaredist')[4]
+        , despike = c(u = FALSE, v = FALSE, w = FALSE, T = FALSE, 
+            nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
+            co2_mmolm3 = TRUE)
+        , despike_filter_width = c(u = 1, v = 1, w = 1, T = 1, nh3_ppb = 1, 
+            nh3_ugm3 = 1, h2o_mmolm3 = 1, co2_mmolm3 = 1)
+        , despike_quantile = c(u = 0.95, v = 0.95, w = 0.95, T = 0.95, nh3_ppb = 0.95, 
+            nh3_ugm3 = 0.95, h2o_mmolm3 = 0.95, co2_mmolm3 = 0.95)
+        , despike_quantile_width = c(u = 30, v = 30, w = 30, T = 30, nh3_ppb = 30, 
+            nh3_ugm3 = 30, h2o_mmolm3 = 30, co2_mmolm3 = 30)
+        , despike_quantile_multiply = c(u = 4, v = 4, w = 4, T = 4, nh3_ppb = 4, 
+            nh3_ugm3 = 4, h2o_mmolm3 = 4, co2_mmolm3 = 4)
 		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 'wxco2_mmolm3')
         # fix lag in seconds
 		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, 
@@ -1365,6 +1376,11 @@ process_ec_fluxes <- function(
         na_limits <- fix_defaults(na_limits, variables)
         limits_lower <- fix_defaults(limits_lower, variables)
         limits_upper <- fix_defaults(limits_upper, variables)
+        despike <- fix_defaults(despike, variables)
+        despike_filter_width <- fix_defaults(despike_filter_width, variables)
+        despike_quantile <- fix_defaults(despike_quantile, variables)
+        despike_quantile_width <- fix_defaults(despike_quantile_width, variables)
+        despike_quantile_multiply <- fix_defaults(despike_quantile_multiply, variables)
         lag_fix <- fix_defaults(lag_fix, covariances)
         lag_dyn <- fix_defaults(lag_dyn, covariances)
         lag_dyn_method <- match.arg(lag_dyn_method)
@@ -2172,7 +2188,29 @@ process_ec_fluxes <- function(
                 daily_data[, sum(li_co2ss < co2ss_threshold, na.rm = TRUE)], '\n')
         }
 
-        # raw data quality control I, i.e. hard limits = physical range
+        # raw data quality control I, despiking
+        # --------------------------------------------------------------------------
+
+        # backup original data for plotting
+        daily_data[, paste0(names(despike), '_original') := copy(.SD),
+            .SDcols = names(despike)]
+
+        # despiking procedure
+        if (any(despike)) {
+            cat("~~~\nDespiking time series...\n")
+            # routine
+            for (s in names(despike)[despike]) {
+                # s <- 'co2_mmolm3'
+                despike_timeseries(daily_data, scalar = s,
+                    filter_width = despike_filter_width[[s]],
+                    qval = despike_quantile[[s]],
+                    qwidth = despike_quantile_width[[s]],
+                    qmult = despike_quantile_multiply[[s]]
+                )
+            }
+        }
+
+        # raw data quality control II, i.e. hard limits = physical range
         # --------------------------------------------------------------------------
         cat("~~~\nchecking NA-values and hard limits...\n")
         hl_vars <- names(na_limits)[na_limits]
@@ -2185,6 +2223,7 @@ process_ec_fluxes <- function(
         }
         check_limits(daily_data, lim_range[, hl_vars], na_limits_window, 
             na_limits_method, rec_Hz, n_threshold)
+
 
         # define coordinate system
         if (daily_data[, sonic[1] == 'HS']) {
@@ -3337,7 +3376,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     ts_plot <- plot.tseries(
                         cbind(st = Time, as.data.frame(SD)),
                         wind, detrended_scalars, ts_vars,
-                        plotting_var_colors, plotting_var_units)
+                        plotting_var_colors, plotting_var_units
+                    )
                     # fix time zone
                     attr(ts_plot$x.limits, 'tzone') <- tz_user
                     print(ts_plot)
@@ -4200,3 +4240,46 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
 
 }
 
+## despiking of timeseries ----------------------------------------
+
+# move outside
+despike_filter1 <- function(x, flt = filt) {
+    m <- median(x, na.rm = TRUE)
+    w <- 1 / (1 + abs(x - m) ^ 2)
+    sum(x * w * flt, na.rm = TRUE) / sum(w * flt, na.rm = TRUE)
+}
+despike_filter2 <- function(i, ma, c_orig, n = n_filt2, 
+    quant = 0.95) {
+    quantile(abs(ma[i] - c_orig[i]), quant, na.rm = TRUE)
+}
+despike_timeseries <- function(dat, scalar, filter_width = 1, 
+    qval = 0.95, qwidth = 30, qmult = 4, 
+    filter1 = despike_filt1, filter2 = despike_filter2) {
+    cat('despiking', scalar, '\n')
+    Hz <- dat[, Hz[1]]
+    md_filters <- getOption('md.filter.function.list')
+    filt <- md_filters$BmNuttall(filter_width * Hz)
+    n_filt2 <- qwidth * Hz
+    dat[, (scalar) := {
+        n <- length(filt)
+        # filter 1
+        cat('-> apply filter 1\n')
+        ma0 <- frollapply(c_ext <- c(scal[.N - (n:1) + 1], scal,
+            scal[1:n]), n = n, FUN = despike_filter1, align = 'center',
+            flt = filt
+        )
+        # filter 2
+        cat('-> apply filter 2\n')
+        mq <- frollapply(seq_along(ma0), n = n_filt2, FUN = despike_filter2, 
+            align = 'center', ma = ma0, c_orig = c_ext, quant = 0.75)
+        qd <- mq[seq_along(scal) + n]
+        ma <- ma0[seq_along(scal) + n]
+        d <- ma - scal
+        qthresh <- qd * qmult
+        flag <- abs(d) > qthresh
+        c1 <- scal
+        c1[flag] <- NA
+        c1
+    }, env = list(scal = scalar)]
+    invisible(dat)
+}

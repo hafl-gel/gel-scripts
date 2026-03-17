@@ -4291,8 +4291,7 @@ despike_timeseries <- function(dat, scalar, filter_width = 1,
     n_filt2 <- qwidth * Hz
     # loop over bins
     for (b in dat[, unique(bin)]) {
-        # TODO: be verbose
-        # cat(b, '/', )
+        cat('\r\r', b, '/', dat[, max(bin)])
         desp_conc <- dat[, {
             # get index
             ext <- ind <- which(bin == b)
@@ -4328,15 +4327,11 @@ despike_timeseries <- function(dat, scalar, filter_width = 1,
             qthresh <- qd * qmult
             flag <- abs(d) > qthresh
             c1[flag] <- NA
-            browser()
-            plot(Time[ind], scal[ind], type = 'l', col = 'indianred')
-            lines(Time[ind], ma - qthresh, col = 'dodgerblue3')
-            lines(Time[ind], ma + qthresh, col = 'dodgerblue3')
-            lines(Time[ind], c1)
             c1
         }, env = list(scal = scalar)]
         # assign
         dat[b == bin, (scalar) := desp_conc]
     }
+    cat('\n')
     invisible(dat)
 }

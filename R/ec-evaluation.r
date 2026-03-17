@@ -2208,6 +2208,7 @@ process_ec_fluxes <- function(
                     qmult = despike_quantile_multiply[[s]]
                 )
             }
+            # plottin is done in intervals
         }
 
         # raw data quality control II, i.e. hard limits = physical range
@@ -2667,33 +2668,35 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             if (length(scalars)) {
                 scalar_list <- SD[, I(lapply(.SD, na.omit)), .SDcols = scalars]
 
-                # # despiking figures
-                # if (any(despike) && create_graphs) {
-                #     if (!dir.exists(path_folder)) {
-                #         dir.create(path_folder, recursive = FALSE)
-                #     }
-                #     # get end of current interval time in UTC
-                #     soi_user <- with_tz(interval_start, tz_user)
-                #     # eoi_user <- with_tz(end_time[.BY[[1]]], tz_user)
-                #     # get date in correct format
-                #     date_formatted <- format(soi_user, '%Y%m%d')
-                #     time2 <- format(soi_user, format = "%H%M")
-                #     plotname <- paste("despiked-timeseries", date_formatted, time2, 
-                #         sep="-") 
-                #     despike_vars <- names(despike)[despike]
-                #     par(mfrow = c(length(despike_vars), 1), 
-                #         mar = c(2, 4, 2, 2))
-                #     for (d in despike_vars) {
-                #         SD[, {
-                #             plot(Time, orig, type = 'l', col = 'indianred')
-                #             lines(Time, lo, col = 'dodgerblue3')
-                #             lines(Time, hi, col = 'dodgerblue3')
-                #             lines(Time, desp)
-                #         }, env = list(orig = paste0(d, '_original'),
-                #             desp = d, lo = paste0(d, '_lo'),
-                #             hi = paste0(d, '_hi'))]
-                #     }
-                # }
+                # despiking figures
+                if (any(despike) && create_graphs) {
+                    if (!dir.exists(path_folder)) {
+                        dir.create(path_folder, recursive = FALSE)
+                    }
+                    # get end of current interval time in UTC
+                    soi_user <- with_tz(interval_start, tz_user)
+                    # eoi_user <- with_tz(end_time[.BY[[1]]], tz_user)
+                    # get date in correct format
+                    date_formatted <- format(soi_user, '%Y%m%d')
+                    time2 <- format(soi_user, format = "%H%M")
+                    plotname <- paste("despiked-timeseries", date_formatted, time2, 
+                        sep="-") 
+                    despike_vars <- names(despike)[despike]
+                    jpeg(filename = paste0(path_folder, '/', plotname, ".jpg"), 
+                        width = 600, height = sum(despike) * 100, 
+                        quality = 60)
+                        par(mfrow = c(length(despike_vars), 1), 
+                            mar = c(2, 4, 2, 2), oma = c(2, 0, 0, 0))
+                        for (d in despike_vars) {
+                            SD[, {
+                                plot(Time, orig, type = 'l', col = 'indianred',
+                                    ylab = d, xlab = '')
+                                lines(Time, dspk)
+                            }, env = list(orig = paste0(d, '_original'),
+                                dspk = d)]
+                        }
+                    dev.off()
+                }
 
                 # detrend scalars
                 # ------------------------------------------------------------------ 

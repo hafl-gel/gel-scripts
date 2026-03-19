@@ -1183,14 +1183,14 @@ process_ec_fluxes <- function(
         , despike = c(u = FALSE, v = FALSE, w = FALSE, T = FALSE, 
             nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
             co2_mmolm3 = TRUE)
-        , despike_filter_width = c(u = 1, v = 1, w = 1, T = 1, nh3_ppb = 1, 
-            nh3_ugm3 = 1, h2o_mmolm3 = 1, co2_mmolm3 = 1)
+        , despike_filter_width = c(u = 10, v = 10, w = 10, T = 10, nh3_ppb = 10, 
+            nh3_ugm3 = 10, h2o_mmolm3 = 10, co2_mmolm3 = 10)
         , despike_quantile = c(u = 0.95, v = 0.95, w = 0.95, T = 0.95, nh3_ppb = 0.95, 
             nh3_ugm3 = 0.95, h2o_mmolm3 = 0.95, co2_mmolm3 = 0.95)
         , despike_quantile_width = c(u = 30, v = 30, w = 30, T = 30, nh3_ppb = 30, 
             nh3_ugm3 = 30, h2o_mmolm3 = 30, co2_mmolm3 = 30)
-        , despike_quantile_multiply = c(u = 2, v = 2, w = 2, T = 2, nh3_ppb = 2, 
-            nh3_ugm3 = 2, h2o_mmolm3 = 2, co2_mmolm3 = 2)
+        , despike_quantile_multiply = c(u = 4, v = 4, w = 4, T = 4, nh3_ppb = 4, 
+            nh3_ugm3 = 4, h2o_mmolm3 = 4, co2_mmolm3 = 4)
 		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 'wxco2_mmolm3')
         # fix lag in seconds
 		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, 
@@ -4274,10 +4274,13 @@ despike_filter1 <- function(x, flt = filt) {
 }
 despike_filter2 <- function(i, ma, c_orig, n = n_filt2, 
     quant = 0.95) {
-    quantile(abs(ma[i] - c_orig[i]), quant, na.rm = TRUE)
+    sd(ma[i], na.rm = TRUE) + 
+        quantile(abs(ma[i] - c_orig[i]), quant, na.rm = TRUE) +
+        # sd(c_orig[i], na.rm = TRUE)
+        mad(c_orig[i], na.rm = TRUE)
 }
-despike_timeseries <- function(dat, scalar, filter_width = 1, 
-    qval = 0.95, qwidth = 30, qmult = 2, 
+despike_timeseries <- function(dat, scalar, filter_width = 10, 
+    qval = 0.95, qwidth = 30, qmult = 4, 
     filter1 = despike_filt1, filter2 = despike_filter2) {
     cat('despiking', scalar, '\n')
     Hz <- dat[, Hz[1]]
@@ -4290,6 +4293,8 @@ despike_timeseries <- function(dat, scalar, filter_width = 1,
         desp_conc <- dat[, {
             # get index
             ext <- ind <- which(bin == b)
+            # # debugging
+            # orig <- scal[ind]
             # get length of filter
             n <- length(filt)
             n2 <- 2 * n
@@ -4316,12 +4321,19 @@ despike_timeseries <- function(dat, scalar, filter_width = 1,
                 align = 'center', ma = ma0, c_orig = c_ext, quant = 0.75)
             c1 <- scal[ind]
             ma <- ma0[ind2]
-            # qd <- mq[ind2]
-            qd <- mq[ind2] + sd(ma, na.rm = TRUE)
             d <- ma - scal[ind]
+            qd <- mq[ind2]
+            # qd <- mq[ind2] + sd(ma, na.rm = TRUE)
             qthresh <- qd * qmult
             flag <- abs(d) > qthresh
+            # c1 <- orig
             c1[flag] <- NA
+            # plot(Time[ind], orig, type = 'l')
+            # lines(Time[ind], ma, col = 'red', lwd = 2)
+            # lines(Time[ind], ma + qthresh, col = 'red')
+            # lines(Time[ind], ma - qthresh, col = 'red')
+            # points(Time[ind][flag], orig[flag], pch = 20, col = 'blue')
+            # browser()
             c1
         }, env = list(scal = scalar)]
         # assign

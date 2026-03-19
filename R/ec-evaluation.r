@@ -2676,8 +2676,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         sep="-") 
                     despike_vars <- names(despike)[despike]
                     jpeg(filename = paste0(path_folder, '/', plotname, ".jpg"), 
-                        width = 600, height = sum(despike) * 100, 
-                        quality = 60)
+                        width = 900, height = sum(despike) * 150, 
+                        quality = 80)
                         par(mfrow = c(length(despike_vars), 1), 
                             mar = c(2, 4, 2, 2), oma = c(2, 0, 0, 0))
                         for (d in despike_vars) {

@@ -2798,6 +2798,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         out
                     }
                 )
+                # fix NA values (fallback to previous max cov method)
+                dyn_lag_max[, is.na(dyn_lag_max[2, ])] <- dlag_max[, is.na(dyn_lag_max[2, ])]
 
                 # covariance function's standard deviation and mean values left and right of fix lag
                 # ----------------------------------------------------------------

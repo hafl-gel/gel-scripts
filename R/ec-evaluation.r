@@ -2948,9 +2948,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     c('q', 'f', 'fx', 'mu', 'A0', 'm')
                 ogive_par_fix <- ogive_quality_fix[3:6, ]
                 ogive_par_dyn <- ogive_quality_dyn[3:6, ]
-                ogive_fitted_fix <- ogive_quality_fix[2, ]
+                flux_modelled_fix <- ogive_quality_fix[2, ]
                 ogive_quality_fix <- ogive_quality_fix[1, ]
-                ogive_fitted_dyn <- ogive_quality_dyn[2, ]
+                flux_modelled_dyn <- ogive_quality_dyn[2, ]
                 ogive_quality_dyn <- ogive_quality_dyn[1, ]
 
                 # should ogives be provided with output
@@ -3158,12 +3158,12 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                                 paste0('lo_cont_dyn_', input_covariances)
                             )
                             , setNames(
-                                ogive_fitted_fix[input_covariances],
-                                paste0('ogive_fitted_fix_', input_covariances)
+                                flux_modelled_fix[input_covariances],
+                                paste0('flux_modelled_fix_', input_covariances)
                             )
                             , setNames(
-                                ogive_fitted_dyn[input_covariances],
-                                paste0('ogive_fitted_dyn_', input_covariances)
+                                flux_modelled_dyn[input_covariances],
+                                paste0('flux_modelled_dyn_', input_covariances)
                             )
                             , setNames(
                                 ogive_quality_fix[input_covariances],

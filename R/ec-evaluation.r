@@ -4036,6 +4036,7 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
 
 
     if (model == "arima") {
+        require(forecast)
         filter.mod <- function(x, model) {
             x <- x - mean(x, na.rm = TRUE)
             if (length(model$Delta) >= 1) 

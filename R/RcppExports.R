@@ -9,6 +9,10 @@ fit_ogive <- function(paras, ogive, f, ilo, ihi) {
     .Call(`_gel_fit_ogive`, paras, ogive, f, ilo, ihi)
 }
 
+fit_ogive_binned <- function(paras, ogive, f, jlo, jhi, jbin) {
+    .Call(`_gel_fit_ogive_binned`, paras, ogive, f, jlo, jhi, jbin)
+}
+
 ht8700_read_cpp <- function(filename) {
     .Call(`_gel_ht8700_read_cpp`, filename)
 }

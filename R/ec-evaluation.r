@@ -2862,75 +2862,110 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 # fit theoretical ogive shape
                 cat('\t- estimate flux quality\n')
                 ogff <- function(pars) {
-                    ogive_model(pars['fx'], 3 / 4, pars['mu'], pars['A0'], freq)
+                    if (length(pars) < 4) {
+                        pars[['hf_offset']] <- 0
+                    }
+                    ogive_model(pars['fx'], 3 / 4, pars['mu'], pars['A0'], freq) - pars[['hf_offset']]
                 }
-                fit_og <- function(pars, ogive, ind = NULL) {
-                    if (is.null(ind)) {
+                fit_og <- function(pars, ogive, i_bound = NULL) {
+                    if (is.null(i_bound)) {
                         fit_ogive(pars, ogive, freq, 1, length(ogive))
                     } else {
-                        fit_ogive(pars, ogive, freq, i_lo, i_hi)
+                        fit_ogive(pars, ogive, freq, i_bound[1], i_bound[2])
+                    }
+                }
+                fit_og_binned <- function(pars, ogive_binned, i_bound = NULL) {
+                    if (is.null(i_bound)) {
+                        fit_ogive_binned(pars, ogive_binned, freq, 1, length(ibins),
+                            ibins)
+                    } else {
+                        fit_ogive_binned(pars, ogive_binned, freq, i_bound[1],
+                            i_bound[2], ibins)
                     }
                 }
 
-                # base range
-                i_r <- i_lo:i_hi
                 # set limit for valid mu values
                 mu_lim <- 10
+                # set initial parameters
+                ini <- c(fx = 0.05, mu = 1 / 6, A0 = NA_real_, hf_offset = 0)
+
+                # equally bin ogives
+                bbins <- 10 ^ seq(log10(1/Hz[1]), log10(1/freq[1]), 
+                    length.out = 50)
+                ibins <- findInterval(1 / freq, bbins, all.inside = TRUE)
+                fix_binned <- sapply(Ogive_fix, \(x) {
+                    tapply(x, ibins, mean)
+                }, simplify = FALSE)
+                dyn_binned <- sapply(Ogive_dyn, \(x) {
+                    tapply(x, ibins, mean)
+                }, simplify = FALSE)
+                fbins <- tapply(1/freq, ibins, mean)
+                bounds_binned <- c(
+                    # which(fbins > 1.2)[1], 
+                    which(fbins > high_cont_sec)[1], 
+                    which(fbins > low_cont_sec)[1]
+                )
+                # base range
+                # bounds_orig <- c(i_lo, i_hi)
+                # bounds_orig <- c(
+                #     1,
+                #     which(1/freq <= 1.2)[1]
+                # )
 
                 # quality of ogive 
                 ogive_quality_fix <- sapply(Ogive_fix, \(x) {
-                    # ini <- c(fx = 0.05, m = 3 / 4, mu = 1 / 6, A0 = x[i_lo] / 50)
-                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
-                    opt <- optim(ini, fit_og, ogive = x, control = list(maxit = 5e3))
+                    ini[['A0']] <- x[i_lo] / 50
+                    opt <- optim(ini[1:3], fit_og, ogive = x, 
+                        control = list(maxit = 5e3))
                     if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
                         return(rep(NA_real_, 6))
                     }
                     fog <- ogff(opt$par)
                     d <- (fog - x) / fog[1]
                     d0 <- diff(d)
-                    c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
+                    c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par[1:3], 3 / 4)
                 })
                 ogive_quality_dyn <- sapply(Ogive_dyn, \(x) {
-                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
-                    opt <- optim(ini, fit_og, ogive = x, control = list(maxit = 5e3))
+                    ini[['A0']] <- x[i_lo] / 50
+                    opt <- optim(ini[1:3], fit_og, ogive = x, 
+                        control = list(maxit = 5e3))
                     if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
                         return(rep(NA_real_, 6))
                     }
                     fog <- ogff(opt$par)
                     d <- (fog - x) / fog[1]
                     d0 <- diff(d)
-                    c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
+                    c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par[1:3], 3 / 4)
                 })
-                # quality of base part of ogive 
-                base_quality_fix <- sapply(Ogive_fix, \(x) {
-                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
-                    opt <- optim(ini, fit_og, ogive = x, ind = i_r, 
-                        control = list(maxit = 5e3))
+                # quality of binned base part of ogive 
+                ogive_nms <- names(Ogive_fix)
+                base_quality_fix <- sapply(ogive_nms, \(x) {
+                    ini[['A0']] <- Ogive_fix[[x]][i_lo] / 50
+                    opt <- optim(ini, fit_og_binned, ogive = fix_binned[[x]], 
+                        i_bound = bounds_binned, control = list(maxit = 5e3))
                     if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
-                        return(NA_real_)
+                        return(rep(NA_real_, 7))
                     }
-                    # d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
-                    # 1 - mean(d ^ 2) ^ (1 / 3)
                     fog <- ogff(opt$par)
-                    d <- (fog - x) / fog[1]
+                    d <- (fog - Ogive_fix[[x]]) / fog[1]
                     d0 <- diff(d)
+                    # c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
                     1 - mean(d0 ^ 6) ^ (1 / 6) * 6
                 })
-                base_quality_dyn <- sapply(Ogive_dyn, \(x) {
-                    ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
-                    opt <- optim(ini, fit_og, ogive = x, ind = i_r, 
-                        control = list(maxit = 5e3))
+                base_quality_dyn <- sapply(ogive_nms, \(x) {
+                    ini[['A0']] <- Ogive_dyn[[x]][i_lo] / 50
+                    opt <- optim(ini, fit_og_binned, ogive = dyn_binned[[x]], 
+                        i_bound = bounds_binned, control = list(maxit = 5e3))
                     if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
-                        return(NA_real_)
+                        return(rep(NA_real_, 7))
                     }
-                    # d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
-                    # 1 - mean(d ^ 2) ^ (1 / 3)
                     fog <- ogff(opt$par)
-                    d <- (fog - x) / fog[1]
+                    d <- (fog - Ogive_dyn[[x]]) / fog[1]
                     d0 <- diff(d)
+                    # c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
                     1 - mean(d0 ^ 6) ^ (1 / 6) * 6
                 })
-                
+
                 # get Albrecht's ogive bias
                 ogive_bias_fix <- sapply(Cospec_fix, \(x) {
                     x[is.na(x)] <- 0

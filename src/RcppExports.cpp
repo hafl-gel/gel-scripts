@@ -38,6 +38,22 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// fit_ogive_binned
+double fit_ogive_binned(const NumericVector paras, const NumericVector ogive, const NumericVector f, const int jlo, const int jhi, const IntegerVector jbin);
+RcppExport SEXP _gel_fit_ogive_binned(SEXP parasSEXP, SEXP ogiveSEXP, SEXP fSEXP, SEXP jloSEXP, SEXP jhiSEXP, SEXP jbinSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const NumericVector >::type paras(parasSEXP);
+    Rcpp::traits::input_parameter< const NumericVector >::type ogive(ogiveSEXP);
+    Rcpp::traits::input_parameter< const NumericVector >::type f(fSEXP);
+    Rcpp::traits::input_parameter< const int >::type jlo(jloSEXP);
+    Rcpp::traits::input_parameter< const int >::type jhi(jhiSEXP);
+    Rcpp::traits::input_parameter< const IntegerVector >::type jbin(jbinSEXP);
+    rcpp_result_gen = Rcpp::wrap(fit_ogive_binned(paras, ogive, f, jlo, jhi, jbin));
+    return rcpp_result_gen;
+END_RCPP
+}
 // ht8700_read_cpp
 Rcpp::List ht8700_read_cpp(String filename);
 RcppExport SEXP _gel_ht8700_read_cpp(SEXP filenameSEXP) {
@@ -197,6 +213,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_gel_find_window", (DL_FUNC) &_gel_find_window, 3},
     {"_gel_fit_ogive", (DL_FUNC) &_gel_fit_ogive, 5},
+    {"_gel_fit_ogive_binned", (DL_FUNC) &_gel_fit_ogive_binned, 6},
     {"_gel_ht8700_read_cpp", (DL_FUNC) &_gel_ht8700_read_cpp, 1},
     {"_gel_ht8700_read_cpp_gzip", (DL_FUNC) &_gel_ht8700_read_cpp_gzip, 1},
     {"_gel_match_times", (DL_FUNC) &_gel_match_times, 3},

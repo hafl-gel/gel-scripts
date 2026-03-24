@@ -2138,6 +2138,13 @@ process_ec_fluxes <- function(
         # fix and dyn lags:                                      
         # ------------------------------------------------------------------------------ 
         # check fix lag (convert to list of functions)
+        # possible ways of providing fix lag:
+        # list(uxw = 0, wxnh3_ugm3 = c('[-45, 135)' = -0.2, 0.4),
+            # wxh2o_mmolm3 = list('[-45, 60)' = 0.2, '[60, 180)' = 0.3), # default from argument lag_fix
+            # wxh2o_mmolm3 = list('[-45, 60)' = 0.2, '[50, 180)' = 0.3, 0), # should fail
+            # if missing => defaults
+            # wxco2_mmolm3 = list('[-45, 60)' = -0.2, '[60, 180)' = 0.3, '[180, -45)' = 0)
+        # also allowed: 60 - 90 or 60/90 or 60//90
         input_lag_functions <- sapply(names(lag_fix), \(nx) {
             x <- lag_fix[[nx]]
             if (length(x) == 1) {
@@ -2160,9 +2167,12 @@ process_ec_fluxes <- function(
                 is_resid <- rgs == ''
                 if (sum(is_resid) > 1) {
                     stop('fix lag by wind sector has more than one default (unnamed) lag time!')
-                } else if (has_resid <- any(is_resid)) {
+                } else if (any(is_resid)) {
                     # convert to numeric
-                    x[is_resid] <- as.numeric(x[is_resid])
+                    resid_value <- as.numeric(x[is_resid])
+                } else {
+                    # get default from arguments
+                    resid_value <- eval(formals(process_ec_fluxes)$lag_fix)[nx]
                 }
                 # subset
                 rgs_sub <- rgs[!is_resid]
@@ -2201,20 +2211,16 @@ process_ec_fluxes <- function(
                     d <- lower[current] - upper[prev]
                     if (d != 0) {
                         # fill with default
-                        if (has_resid) {
-                            out <- rbind(out,
-                                data.frame(
-                                    lower = upper[prev],
-                                    upper = lower[current],
-                                    value = as.numeric(x[is_resid]),
-                                    right_closed = !left_closed[current],
-                                    left_closed = !right_closed[prev],
-                                    pass_360 = lower[current] < upper[prev]
-                                )
+                        out <- rbind(out,
+                            data.frame(
+                                lower = upper[prev],
+                                upper = lower[current],
+                                value = resid_value,
+                                right_closed = !left_closed[current],
+                                left_closed = !right_closed[prev],
+                                pass_360 = lower[current] < upper[prev]
                             )
-                        } else {
-                            stop('no default fix lag for missing wind sectors!')
-                        }
+                        )
                     }
                     # add current
                     out <- rbind(out,

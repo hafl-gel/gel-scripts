@@ -315,8 +315,11 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
                 ) 
             } else if (sub('_\\d+$', '', method) %in% names(filter_list)) {
                 win <- round(as.numeric(sub(".*_", "", method)) * Hz_ts)
+                if (win >= (length(y) + length(na.action(y)))) {
+                    stop('(detrending) filter window ist larger than averaging time!')
+                }
                 if (win >= n) {
-                    warning('filtering window ist larger than available data')
+                    warning('(detrending) filter window ist larger than available data')
                     return(
                         list(
                             coefficients = c(intercept = NA, slope = NA)

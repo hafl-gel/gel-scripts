@@ -2193,6 +2193,8 @@ process_ec_fluxes <- function(
                 # check "closed"
                 left_closed <- grepl('[', rgs_sub, fixed = TRUE)
                 right_closed <- grepl(']', rgs_sub, fixed = TRUE)
+                # fix missing closed
+                left_closed[!left_closed & !right_closed] <- TRUE
                 # split
                 xs <- strsplit(gsub('[[]|[(]|[)]|[]]|,|/|\\s-\\s', '', rgs_sub), split = '\\s+')
                 # convert to numeric

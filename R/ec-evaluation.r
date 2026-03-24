@@ -2877,6 +2877,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
                 # find dynlag using pre-whitening
                 if (lag_dyn_calc_pw) {
+                    cat('\t  ** pre-whitened, bootstrapped dyn lag\n')
                     if (create_graphs) {
                         if (!dir.exists(path_folder)) {
                             dir.create(path_folder, recursive = FALSE)

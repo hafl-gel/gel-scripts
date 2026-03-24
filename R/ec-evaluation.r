@@ -2196,7 +2196,7 @@ process_ec_fluxes <- function(
                 # fix missing closed
                 left_closed[!left_closed & !right_closed] <- TRUE
                 # split
-                xs <- strsplit(gsub('[[]|[(]|[)]|[]]|,|/|\\s-\\s', '', rgs_sub), split = '\\s+')
+                xs <- strsplit(trimws(gsub('[[]|[(]|[)]|[]]|,|/|(\\s[-]\\s)', ' ', rgs_sub)), split = '\\s+')
                 # convert to numeric
                 xs <- lapply(xs, as.numeric)
                 # get lower & upper

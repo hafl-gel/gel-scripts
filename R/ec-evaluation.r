@@ -2182,13 +2182,13 @@ process_ec_fluxes <- function(
                 pattern <- paste0(
                     '^\\s*([[]|[(])?\\s*',
                     pdig,
-                    '\\s*([,]|[/]|\\s-\\s)\\s*',
+                    '\\s*([,]|[/][/]?|\\s[-]\\s)\\s*',
                     pdig,
-                    '\\s*([)]|[]])\\s*$'
+                    '\\s*([)]|[]])?\\s*$'
                 )
                 is_valid <- grepl(pattern, rgs_sub)
                 if (any(!is_valid)) {
-                    stop('fix lag named entries: ', paste(rgs_sub[!is_valid], collapse = ', '), ' are not valid!')
+                    stop('fix lag named entries: ', paste(paste0('"', rgs_sub[!is_valid], '"'), collapse = '; '), ' are not valid!')
                 }
                 # check "closed"
                 left_closed <- grepl('[', rgs_sub, fixed = TRUE)

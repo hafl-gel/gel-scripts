@@ -2137,11 +2137,135 @@ process_ec_fluxes <- function(
 
         # fix and dyn lags:                                      
         # ------------------------------------------------------------------------------ 
-        input_fix_lag <- round(lag_fix * rec_Hz)
-        input_dyn_lag <- rbind(
-            lower = round((lag_fix - lag_dyn) * rec_Hz)
-            , upper = round((lag_fix + lag_dyn) * rec_Hz)
-        )
+        # check fix lag (convert to list of functions)
+        input_lag_functions <- sapply(names(lag_fix), \(nx) {
+            x <- lag_fix[[nx]]
+            if (length(x) == 1) {
+                fun_out <- function(wd, dyn = FALSE) {
+                    if (dyn) {
+                        c(
+                            lower = lag_value - dlag,
+                            upper = lag_value + dlag
+                        )
+                    } else {
+                        lag_value
+                    }
+                }
+                efun <- environment(fun_out)
+                efun$lag_value <- round(x * rec_Hz)
+            } else {
+                # get ranges
+                rgs <- names(x)
+                # is there a residual lag time?
+                is_resid <- rgs == ''
+                if (sum(is_resid) > 1) {
+                    stop('fix lag by wind sector has more than one default (unnamed) lag time!')
+                } else if (has_resid <- any(is_resid)) {
+                    # convert to numeric
+                    x[is_resid] <- as.numeric(x[is_resid])
+                }
+                # subset
+                rgs_sub <- rgs[!is_resid]
+                x_sub <- as.numeric(x[!is_resid])
+                # check ranges validity
+                pdig <- '(-|+)?\\d+[.]?\\d*'
+                pattern <- paste0(
+                    '^\\s*([[]|[(])?\\s*',
+                    pdig,
+                    '\\s*([,]|[/]|\\s-\\s)\\s*',
+                    pdig,
+                    '\\s*([)]|[]])\\s*$'
+                )
+                is_valid <- grepl(pattern, rgs_sub)
+                if (any(!is_valid)) {
+                    stop('fix lag named entries: ', paste(rgs_sub[!is_valid], collapse = ', '), ' are not valid!')
+                }
+                # check "closed"
+                left_closed <- grepl('[', rgs_sub, fixed = TRUE)
+                right_closed <- grepl(']', rgs_sub, fixed = TRUE)
+                # split
+                xs <- strsplit(gsub('[[]|[(]|[)]|[]]|,|/|\\s-\\s', '', rgs_sub), split = '\\s+')
+                # convert to numeric
+                xs <- lapply(xs, as.numeric)
+                # get lower & upper
+                lower <- sapply(xs, '[[', 1) %% 360
+                upper <- sapply(xs, '[[', 2) %% 360
+                value <- as.numeric(x[!is_resid]) * rec_Hz
+                # fill up
+                out <- data.frame(lower = numeric(0), upper = numeric(0), 
+                    value = numeric(0), right_closed = logical(0), 
+                    left_closed = logical(0), pass_360 = logical(0))
+                for (current in seq_along(lower)) {
+                    prev <- if (current == 1) length(lower) else current - 1
+                    # check overlapping & ranges coverage
+                    d <- lower[current] - upper[prev]
+                    if (d != 0) {
+                        # fill with default
+                        if (has_resid) {
+                            out <- rbind(out,
+                                data.frame(
+                                    lower = upper[prev],
+                                    upper = lower[current],
+                                    value = as.numeric(x[is_resid]),
+                                    right_closed = !left_closed[current],
+                                    left_closed = !right_closed[prev],
+                                    pass_360 = lower[current] < upper[prev]
+                                )
+                            )
+                        } else {
+                            stop('no default fix lag for missing wind sectors!')
+                        }
+                    }
+                    # add current
+                    out <- rbind(out,
+                        data.frame(
+                            lower = lower[current],
+                            upper = upper[current],
+                            value = x_sub[current],
+                            right_closed = right_closed[current],
+                            left_closed = left_closed[current],
+                            pass_360 = upper[current] < lower[current]
+                        )
+                    )
+                }
+                # check overlapping sectors
+                degs <- sum((out$upper - out$lower) %% 360)
+                if (degs > 360) {
+                    stop('overlapping wind sectors defined in fix lag!')
+                }
+                # build function
+                fun_out <- function(wd, dyn = FALSE) {
+                    mwd <- wd %% 360
+                    # check left closed?
+                    is_left <- mwd == tab$lower & tab$left_closed
+                    is_right <- mwd == tab$upper & tab$right_closed
+                    is_normal <- mwd > tab$lower & mwd < tab$upper & !tab$pass_360
+                    is_p360 <- (mwd > tab$lower | mwd < tab$upper) & tab$pass_360
+                    out <- tab$value[is_left | is_right | is_normal | is_p360]
+                    if (dyn) {
+                        c(
+                            lower = out - dlag,
+                            upper = out + dlag
+                        )
+                    } else {
+                        out
+                    }
+                }
+                # assign table to function environment
+                efun <- environment(fun_out)
+                efun$tab <- out
+            }
+            # add dlag
+            efun$dlag <- lag_dyn[[nx]]
+            # return function
+            fun_out
+        }, simplify = FALSE)
+
+        # input_fix_lag <- round(lag_fix * rec_Hz)
+        # input_dyn_lag <- rbind(
+        #     lower = round((lag_fix - lag_dyn) * rec_Hz)
+        #     , upper = round((lag_fix + lag_dyn) * rec_Hz)
+        # )
 
         # be verbose
         cat("\n~~~\nCalculation will include",
@@ -2586,8 +2710,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             scalar_covariances <- input_scalar_covariances
             flux_variables <- input_flux_variables
             plot_timeseries <- input_plot_timeseries
-            fix_lag <- input_fix_lag
-            dyn_lag <- input_dyn_lag
+            # fix_lag <- input_fix_lag
+            # dyn_lag <- input_dyn_lag
+            lag_functions <- input_lag_functions
             damping_reference <- input_damping_reference
             damp_region <- input_damp_region
             if (
@@ -2612,8 +2737,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                             damp_region <- damp_region[
                                 !(names(damp_region) %in% covariances[sind])]
                             covariances <- covariances[-sind]
-                            fix_lag <- fix_lag[-sind]
-                            dyn_lag <- dyn_lag[, -sind, drop = FALSE]
+                            # fix_lag <- fix_lag[-sind]
+                            # dyn_lag <- dyn_lag[, -sind, drop = FALSE]
                             covariances_variables <- covariances_variables[-sind]
                             covariances_plotnames <- covariances_plotnames[-sind]
                             scalar_covariances <- scalar_covariances[-sind]
@@ -2629,8 +2754,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                             damp_region <- damp_region[
                                 !(names(damp_region) %in% covariances[sind])]
                             covariances <- covariances[-sind]
-                            fix_lag <- fix_lag[-sind]
-                            dyn_lag <- dyn_lag[, -sind, drop = FALSE]
+                            # fix_lag <- fix_lag[-sind]
+                            # dyn_lag <- dyn_lag[, -sind, drop = FALSE]
                             covariances_variables <- covariances_variables[-sind]
                             covariances_plotnames <- covariances_plotnames[-sind]
                             scalar_covariances <- scalar_covariances[-sind]
@@ -2639,15 +2764,19 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 }
             }
 
-            # calculate wind direction, rotate u, v, w, possibly detrend T (+ u,v,w)
+            # detrend sonic data (T, u, v + w)
             # ---------------------------------------------------------------------- 
             cat("~~~\ndeterending sonic data...\n")
             wind <- detrend_sonic_data(SD, detrending, rec_Hz)
 
-            # calculate some turbulence parameters and collect some wind parameters
+            # calculate wind statistics: turbulence values and MOST parameters
             # ---------------------------------------------------------------------- 
             wind_stats <- wind_statistics(wind, z_canopy[[1]], z_ec[[1]], 
                 ustar_method = ustar_method)
+
+            # get dyn & fix lag
+            dyn_lag <- sapply(lag_functions, \(x) x(WD[1], dyn = TRUE))
+            fix_lag <- sapply(lag_functions, \(x) x(WD[1]))
 
             # switch to list with different lengths
             # only for scalar fluxes!

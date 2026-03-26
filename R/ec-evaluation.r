@@ -1894,8 +1894,16 @@ process_ec_fluxes <- function(
         unlink(tf_ht)
         unlink(tf_sonic)
         unlink(tf_licor)
+        # fix subints
+        if (return_subint) {
+            subints <- rbindlist(lapply(out_list, attr, 'subintervals'),
+                fill = TRUE, use.names = TRUE)
+        }
         # rbind output list
         results <- rbindlist(out_list, fill = TRUE)
+        if (return_subint) {
+            setattr(results, 'subintervals', subints)
+        }
         if (!(create_dailygraphs || ogives_out)) {
             rm(out_list)
             for (i in 1:10) gc()
@@ -2652,9 +2660,15 @@ process_ec_fluxes <- function(
                 )
             ]
         }
+        if (processing_strategy != 'recursive' && return_subint) {
+            subint <- attr(results, 'subintervals')
+        }
         # convert to ibts
         if (processing_strategy != 'recursive' && as_ibts) {
             results <- as.ibts(results)
+        }
+        if (processing_strategy != 'recursive' && return_subint) {
+            setattr(results, 'subintervals', subint)
         }
     }
 

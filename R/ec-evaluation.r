@@ -3451,6 +3451,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 env_sub$rotate_subint <- TRUE
                 # despiking has been done
                 env_sub$despike[] <- FALSE
+                env_sub$freq <- rec_Hz * seq(floor(env_sub$n_period / 2)) / floor(env_sub$n_period / 2)
 
                 # fix gamma_time_window
                 if (max(env_sub$gamma_time_window) * 60 >= env_sub$avg_secs) {
@@ -3459,9 +3460,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
                 # add extra figures subint sub-directory
                 if (create_graphs) {
-                    env_sub$folder <- paste0(env_list$folder, '/subintervals')
-                    if (!dir.exists(env_sub$folder)) {
-                        dir.create(env_sub$folder)
+                    env_sub$path_folder <- paste0(env_list$path_folder, '/subintervals')
+                    if (!dir.exists(env_sub$path_folder)) {
+                        dir.create(env_sub$path_folder, recursive = TRUE)
                     }
                 }
 

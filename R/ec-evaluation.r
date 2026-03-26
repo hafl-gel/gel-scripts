@@ -2241,6 +2241,8 @@ process_ec_fluxes <- function(
                 if (degs > 360) {
                     stop('overlapping wind sectors defined in fix lag!')
                 }
+                # change secs -> steps
+                out$value <- out$value * rec_Hz
                 # build function
                 fun_out <- function(wd, dyn = FALSE) {
                     mwd <- wd %% 360
@@ -2264,7 +2266,7 @@ process_ec_fluxes <- function(
                 efun$tab <- out
             }
             # add dlag
-            efun$dlag <- lag_dyn[[nx]]
+            efun$dlag <- lag_dyn[[nx]] * rec_Hz
             # return function
             fun_out
         }, simplify = FALSE)
@@ -2894,11 +2896,12 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     tlag_pw <- sapply(covariances_variables,
                         \(v) {
                             pv <- paste(v, collapse = 'x')
-                            lws <- dyn_lag['lower', pv] / Hz[1]
-                            uws <- dyn_lag['upper', pv] / Hz[1]
+                            # lws, uws & LAG.MAX in secs
+                            lws <- dyn_lag['lower', pv] / rec_Hz
+                            uws <- dyn_lag['upper', pv] / rec_Hz
                             tlag_detection(
                                 SD[, .SD, .SDcols = v],
-                                mfreq = Hz[1], Rboot = 100, 
+                                mfreq = rec_Hz, Rboot = 100, 
                                 lws = lws, uws = uws, 
                                 LAG.MAX = lag_dyn_lagmax,
                                 model = lag_dyn_model,

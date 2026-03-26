@@ -3213,7 +3213,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     , et = end_time[.BY[[1]]]
                     , Hz = rec_Hz
                     , n_values = .N
-                    #, SubInts =  subint_n
+                    , n_subint =  if (subintervals) subint_n else NA_integer_
                 )
                 , as.list(v_stats)
                 , if (ht_provided) {

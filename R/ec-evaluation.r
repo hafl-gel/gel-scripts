@@ -1850,6 +1850,7 @@ process_ec_fluxes <- function(
             for (i in seq_along(out_list_paths)) {
                 # check on try errors
                 if (inherits(out_list_paths[[i]], 'try-error')) {
+                    # add times
                     cat('try errors in parallel calls!',
                         'Returning worker results list for checking..\n')
                     return(out_list_paths)
@@ -3693,6 +3694,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
     ))
     # save to tmpfile on success
     if (inherits(out, 'try-error')) {
+        # add intervals
+        attr(out, 'start_time') <- resid_list$start_time[ind]
+        attr(out, 'end_time') <- resid_list$end_time[ind]
         # return error
         return(out)
     }

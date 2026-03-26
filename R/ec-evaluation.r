@@ -1231,6 +1231,7 @@ process_ec_fluxes <- function(
         , subint_prefix = 'subint_'
         , subint_n = 5
         , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
+        , return_subint = FALSE
         , oss_threshold = 0
         , co2ss_threshold = 0
         , na_alarm_code = c(1:3, 5:8, 11, 13)
@@ -1395,6 +1396,7 @@ process_ec_fluxes <- function(
             subint_n <= 8)) {
             stop('argument "subint_n" must be an integer number between 3 and 10')
         }
+        subintervals <- subintervals || return_subint
         subint_detrending <- fix_defaults(subint_detrending, variables)
         ts_vars <- variables
         if (!ht_null) {
@@ -2443,10 +2445,13 @@ process_ec_fluxes <- function(
             daily_data[, subint_WD := (subint_WD + d_north[.BY[[1]]]) %% 360, by = as.character(bin)]
         }
 
+        # switch of rotation of data
+        rotate_subint <- FALSE
+
         # get relevant environment objects
         env_obj <- setdiff(ls(envir = current_env), c(
             'cl', 'ncores', 'run_parallel', 'daily_data', 
-            'current_env', 'rotation_args', 'mag_dec'
+            'current_env'#, 'rotation_args', 'mag_dec'
         ))
         eobj <- mget(env_obj, envir = current_env)
 
@@ -2692,7 +2697,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
     for (what in names(env_list)) {
         assign(what, env_list[[what]])
     }
-    rm(env_list)
+    # rm(env_list)
     # prepare ogive output
     if (create_dailygraphs || ogives_out) {
         e_ogive <- new.env()
@@ -2781,6 +2786,24 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 }
             }
 
+            # rotate data
+            if (rotate_subint) {
+                cat('~~~\nrotate subinterval data...\n')
+                SD[, c("WD", "phi", "urot", "vrot", "wrot") := 
+                    rotate_twoaxis(u, v, w,
+                        phi = if (rotation_method[1] %in% "two axis") {
+                            # two-axis rotation
+                            rotation_args$phi 
+                        } else if (is.na(alpha[1])) {
+                            # planar fit failed
+                            NULL 
+                        } else {
+                            # planar fit successful
+                            0
+                        }, c.system = coord.system
+                    )]
+            }
+
             # detrend sonic data (T, u, v + w)
             # ---------------------------------------------------------------------- 
             cat("~~~\ndeterending sonic data...\n")
@@ -2792,8 +2815,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 ustar_method = ustar_method)
 
             # get dyn & fix lag
-            dyn_lag <- sapply(lag_functions, \(x) x(WD[1], dyn = TRUE))
-            fix_lag <- sapply(lag_functions, \(x) x(WD[1]))
+            dyn_lag <- sapply(lag_functions, \(x) x(SD[, WD[1]], dyn = TRUE))
+            fix_lag <- sapply(lag_functions, \(x) x(SD[, WD[1]]))
 
             # switch to list with different lengths
             # only for scalar fluxes!
@@ -3245,17 +3268,17 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         c('sUu', 'sVu', 'sWu')
                     )
                     # wind direction
-                    , WD = WD[1]
+                    , WD = SD[, WD[1]]
                     # rotation parameters
                     , if (rotation_method == 'planar fit') {
                         c(
-                            alpha = alpha[1],
-                            beta = beta[1],
-                            w_bias = w_bias[1]
+                            alpha = SD[, alpha[1]],
+                            beta = SD[, beta[1]],
+                            w_bias = SD[, w_bias[1]]
                         )
                     } else {
                         c (
-                            phi = phi[1]
+                            phi = SD[, phi[1]]
                         )
                     }
                     # Ra(z_ec - d) & Rb
@@ -3389,102 +3412,58 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             # sub-intervals:
             # -----------------------------------------------------------------------
             if (subintervals) {
+
                 # be verbose
-                cat(paste0('~~~\nprocessing sub-intervals (', subint_n, 
+                cat('\n\n~~~ START SUBINTERVALS\n')
+
+                cat(paste0('\n~~~\nprocessing sub-intervals (', subint_n, 
                         ' intervals @ ', round(avg_secs / subint_n / 60, 1), 
                         ' mins)\n'))
+
                 # copy original .SD for sub-interval processing
-                SDsub <- copy(.SD)
-                # rename urot, vrot, wrot from prior subint coord rotation
-                SDsub[, c('urot', 'vrot', 'wrot') := .(
-                    subint_urot, subint_vrot, subint_wrot)]
-                # prepare output
-                sub_wind_stats <- vector(mode = 'list', length = subint_n)
-                # detrending sonic data
-                cat("  (subint)  -> deterending sonic data...\n")
-                for (si in SDsub[, unique(subint)]) {
-                    # si = SDsub[, unique(subint)[1]]
-                    # copy SDsub
-                    sds <- SDsub[subint == si]
-                    # detrend
-                    sub_wind <- detrend_sonic_data(sds, subint_detrending,
-                        rec_Hz)
-                    # turbulence
-                    sub_wind_stats[[si]] <- wind_statistics(sub_wind, 
-                        z_canopy[[1]], z_ec[[1]], 
-                        ustar_method = ustar_method)
-                    # reassign
-                    SDsub[subint == si, c('u', 'v', 'w', 'T') := 
-                        sds[, .(u, v, w, T)]]
+                SDsub <- copy(SD)
+
+                # copy environment
+                env_sub <- copy(env_list)
+
+                # fix entries to match subint
+                env_sub$avg_secs <- env_list$avg_secs / subint_n
+                env_sub$start_time <- seq(start_time[.BY[[1]]], end_time[.BY[[1]]], by = env_sub$avg_secs)[1:subint_n]
+                env_sub$end_time <- env_sub$start_time + env_sub$avg_secs
+                env_sub$subintervals <- FALSE
+                env_sub$detrending <- env_list$subint_detrending
+                env_sub$n_period <- env_sub$avg_secs * rec_Hz
+                env_sub$n_threshold <- env_sub$n_period * env_sub$thresh_period
+                env_sub$rotate_subint <- TRUE
+                # despiking has been done
+                env_sub$despike[] <- FALSE
+
+                # fix gamma_time_window
+                if (max(env_sub$gamma_time_window) * 60 >= env_sub$avg_secs) {
+                    env_sub$gamma_time_window <- c(5, 10) / 30 * env_sub$avg_secs / 60
                 }
-                # detrending scalars
-                if (length(scalars)) {
-                    # be verbose
-                    cat("  (subint)  -> detrending scalars...\n")
-                    SDsub[, (scalars) := {
-                        # get values
-                        scalar_list <- lapply(.SD, na.omit)
-                        # detrend
-                        subdetrended_scalars <- mapply(trend, y = scalar_list, 
-                            method = subint_detrending[scalars], 
-                            MoreArgs = list(Hz_ts = rec_Hz), SIMPLIFY = FALSE
-                        )
-                        # fix NA
-                        lapply(names(subdetrended_scalars), \(nms) {
-                            if (!is.null(isna <- na.action(scalar_list[[nms]]))) {
-                                out <- rep(NA_real_, .N)
-                                x <- subdetrended_scalars[[nms]]$residuals
-                                out[-isna] <- x
-                                out
-                            } else {
-                                subdetrended_scalars[[nms]]$residuals
-                            }
-                        })
-                    }, by = subint, .SDcols = scalars]
-                }
-                # prepare output
-                sub_flux_fix_lag <- vector(mode = 'list', length = subint_n)
-                sub_flux_dyn_lag <- vector(mode = 'list', length = subint_n)
-                # check flux
-                if (has_flux) {
-                    # be verbose
-                    cat("  (subint)  -> processing fluxes...\n")
-                    # loop over sub-intervals
-                    for(si in SDsub[, unique(subint)]) {
-                        # calculate covariances with fix lag time:
-                        sub_Covars <- get_covariance(SDsub[subint == si], 
-                            covariances_variables, covariances, n_period)
-                        # # get fix lag index
-                        # fix_lag_index <- mapply(fixlag_index, sub_Covars, fix_lag) 
-                        ### get fluxes
-                        # sub_flux_fix_lag[[si]] <- mapply('[', sub_Covars, 
-                        #     fix_lag_index)
-                        # sub_flux_dyn_lag[[si]] <- mapply('[', sub_Covars, 
-                        #     dyn_lag_max[1,])
-                        # fix lag
-                        sub_Cospec_fix <- get_cospectra(SDsub[subint == si], 
-                            sub_Covars, covariances_variables, covariances, 
-                            fix_lag[covariances], n_period)
-                        # dyn lag
-                        sub_Cospec_dyn <- get_cospectra(SDsub[subint == si], 
-                            sub_Covars, covariances_variables, covariances, 
-                            dyn_lag_max[2, covariances], n_period)
-                        sub_flux_fix_lag[[si]] <- sapply(sub_Cospec_fix, sum)
-                        names(sub_flux_fix_lag[[si]]) <- paste0('flux_fix_', 
-                            names(sub_Cospec_fix))
-                        sub_flux_dyn_lag[[si]] <- sapply(sub_Cospec_dyn, sum)
-                        names(sub_flux_dyn_lag[[si]]) <- paste0('flux_dyn_', 
-                            names(sub_Cospec_dyn))
+
+                # add extra figures subint sub-directory
+                if (create_graphs) {
+                    env_sub$folder <- paste0(env_list$folder, '/subintervals')
+                    if (!dir.exists(env_sub$folder)) {
+                        dir.create(env_sub$folder)
                     }
                 }
-                # gather output
-                subint <- data.table(
-                    do.call(rbind, sub_wind_stats),
-                    do.call(rbind, sub_flux_fix_lag),
-                    do.call(rbind, sub_flux_dyn_lag)
-                )
+
+                # add bins
+                SDsub[, bin := rleid(subint)]
+
+                # run subintervals
+                res_sub <- .ec_main(SDsub, env_sub)
+
+                cat('\n~~~ END SUBINTERVALS\n\n')
+
                 # get averages
-                avg_subint <- subint[, lapply(.SD, mean)]
+                avg_subint <- res_sub[, lapply(.SD, mean), 
+                    .SDcols = c(names(wind_stats), 
+                        paste0('flux_fix_', names(flux_fix_lag)), 
+                        paste0('flux_dyn_', names(flux_dyn_lag)))]
                 # unselect z_sonic etc.
                 avg_sel <- grep('^(z_sonic|z_canopy|d)$', names(avg_subint), 
                     invert = TRUE, value = TRUE)
@@ -3514,7 +3493,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     .(Ustar, L, z0)
                 }]
                 # get var
-                var_subint <- subint[, lapply(.SD, var), .SDcols = avg_sel]
+                var_subint <- res_sub[, lapply(.SD, var), .SDcols = avg_sel]
                 # subset avg
                 avg_subint <- avg_subint[, .SD, .SDcols = avg_sel]
                 # fix names
@@ -3524,6 +3503,11 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         names(wstats_subint)))
                 # bind together and append to output
                 out <- c(out, as.list(cbind(avg_subint, wstats_subint, var_subint)))
+                # attach subinterval results
+                if (return_subint) {
+                    setattr(out, 'subintervals', res_sub)
+                }
+
             } # END subintervals
 
 
@@ -3649,8 +3633,18 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
         return(NULL)
     }
 
+    # get subintervals
+    if (return_subint) {
+        subints <- out[, rbindlist(lapply(V1, attr, 'subintervals'),
+            fill = TRUE, use.names = TRUE)]
+    }
+
     # bind lists to one data.table
     out <- out[, rbindlist(V1, fill = TRUE, use.names = TRUE)]
+
+    if (return_subint) {
+        setattr(out, 'subintervals', subints)
+    }
 
     # output incl. ogives
     if (create_dailygraphs || ogives_out) {

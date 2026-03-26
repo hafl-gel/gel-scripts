@@ -1,7 +1,7 @@
 Package: gel
 Type: Package
 Title: GEL tools
-Version: 0.9-4
+Version: 0.9-5
 Date: 2026-03-26
 Author: Christoph Haeni
 Maintainer: Christoph Haeni <christoph.haeni@bfh.ch>

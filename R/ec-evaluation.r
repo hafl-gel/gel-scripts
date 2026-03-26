@@ -1202,7 +1202,8 @@ process_ec_fluxes <- function(
 		, lag_dyn = c(uxw = 0.5, wxT = 0.5, wxnh3_ppb = 1.5, wxnh3_ugm3 = 1.5, 
             wxh2o_mmolm3 = 1.5, wxco2_mmolm3 = 1.5)
         # which dyn lag approach should be taken?
-        , lag_dyn_calc_pw = FALSE
+		, lag_dyn_calc_pw = c(uxw = FALSE, wxT = FALSE, wxnh3_ugm3 = FALSE, 
+            wxh2o_mmolm3 = FALSE, wxco2_mmolm3 = FALSE)
         , lag_dyn_method = c('raw-cov', 'simple-pw', 'boot-pw')
         # , lag_dyn_wdt = 5 # suggested in RFlux
         , lag_dyn_wdt = 7 
@@ -1380,7 +1381,12 @@ process_ec_fluxes <- function(
         lag_fix <- fix_defaults(lag_fix, covariances)
         lag_dyn <- fix_defaults(lag_dyn, covariances)
         lag_dyn_method <- match.arg(lag_dyn_method)
-        lag_dyn_calc_pw <- lag_dyn_calc_pw || lag_dyn_method != 'raw-cov'
+        lag_dyn_calc_pw <- fix_defaults(lag_dyn_calc_pw, covariances)
+        # check lag_dyn_method vs lag_dyn_calc_pw
+        if (lag_dyn_method != 'raw-cov' && all(!lag_dyn_calc_pw)) {
+            stop('argument "lag_dyn_method" != "raw-cov" but pre-whitening',
+                ' method is switched off for all covariances!')
+        }
         damping_reference <- fix_defaults(damping_reference, covariances[scalar_covariances])
         damping_lower <- fix_defaults(damping_lower, covariances[scalar_covariances])
         damping_upper <- fix_defaults(damping_upper, covariances[scalar_covariances])
@@ -2878,7 +2884,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 }, x = Covars, lag = dyn_lag)
 
                 # find dynlag using pre-whitening
-                if (lag_dyn_calc_pw) {
+                if (any(lag_dyn_calc_pw)) {
+                    pw_covs <- names(lag_dyn_calc_pw)[lag_dyn_calc_pw]
+                    pw_vars <- strsplit(pw_covs, split = 'x', fixed = TRUE)
                     cat('\t  ** pre-whitened, bootstrapped dyn lag\n')
                     if (create_graphs) {
                         if (!dir.exists(path_folder)) {
@@ -2893,9 +2901,10 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         plotname <- paste("pwb-timelag", date_formatted, time2, 
                             sep="-") 
                     }
-                    tlag_pw <- sapply(covariances_variables,
+                    tlag_pw <- sapply(pw_vars,
                         \(v) {
                             pv <- paste(v, collapse = 'x')
+                            cat('\t    - ', pv, '\n')
                             # lws, uws & LAG.MAX in secs
                             lws <- dyn_lag['lower', pv] / rec_Hz
                             uws <- dyn_lag['upper', pv] / rec_Hz
@@ -2914,32 +2923,30 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                             )
                         }, simplify = FALSE
                     )
-                    names(tlag_pw) <- covariances
+                    names(tlag_pw) <- pw_covs
                     # prepare output
                     pw_out <- unlist(tlag_pw)
                     names(pw_out) <- paste0('dyn_lag_pw_', names(pw_out))
                 }
 
                 # which dyn lag approach should be taken?
-                dyn_lag_max <- switch(lag_dyn_method
-                    , 'raw-cov' = dlag_max
+                dyn_lag_max <- dlag_max
+                switch(lag_dyn_method
                     , 'simple-pw' = {
                         out <- sapply(tlag_pw, '[[', 'tl_pw')
                         out <- rbind(
-                            dlag_max[1, ] - dlag_max[2, ] + out,
+                            dlag_max[1, pw_covs] - dlag_max[2, pw_covs] + out,
                             out
                         )
-                        rownames(out) <- rownames(dlag_max)
-                        out
+                        dyn_lag_max[, pw_covs] <- out
                     }
                     , 'boot-pw' = {
                         out <- sapply(tlag_pw, '[[', 'tl_pwb')
                         out <- rbind(
-                            dlag_max[1, ] - dlag_max[2, ] + out,
+                            dlag_max[1, pw_covs] - dlag_max[2, pw_covs] + out,
                             out
                         )
-                        rownames(out) <- rownames(dlag_max)
-                        out
+                        dyn_lag_max[, pw_covs] <- out
                     }
                 )
                 # fix NA values (fallback to previous max cov method)
@@ -3359,14 +3366,14 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                                     )
                                 )
                             }
-                            , if (lag_dyn_calc_pw) {
+                            , if (any(lag_dyn_calc_pw)) {
                                 # print all lag times again
                                 c(
                                     # raw-cov
                                     setNames(
-                                        dlag_max['tau', ],
+                                        dlag_max['tau', pw_covs],
                                         paste0('dyn_lag_raw-cov_', 
-                                            colnames(dlag_max))
+                                            pw_covs)
                                     ),
                                     # pre-whitening
                                     pw_out

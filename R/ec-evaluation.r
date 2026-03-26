@@ -2884,8 +2884,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 }, x = Covars, lag = dyn_lag)
 
                 # find dynlag using pre-whitening
-                if (any(lag_dyn_calc_pw)) {
-                    pw_covs <- names(lag_dyn_calc_pw)[lag_dyn_calc_pw]
+                if (any(lag_dyn_calc_pw[covariances])) {
+                    pw_covs <- intersect(covariances, 
+                        names(lag_dyn_calc_pw)[lag_dyn_calc_pw])
                     pw_vars <- strsplit(pw_covs, split = 'x', fixed = TRUE)
                     cat('\t  ** pre-whitened, bootstrapped dyn lag\n')
                     if (create_graphs) {

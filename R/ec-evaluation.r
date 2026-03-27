@@ -2446,8 +2446,11 @@ process_ec_fluxes <- function(
                         0
                     }, c.system = coord.system
                 ), by = subint]
-            ### correct for sonic north deviation
+            # correct for sonic north deviation
             daily_data[, subint_WD := (subint_WD + d_north[.BY[[1]]]) %% 360, by = as.character(bin)]
+            # backup original T_sonic + scalars
+            daily_data[, paste0('subint_', c('T', scalars)) := .SD,
+                .SDcols = c('T', scalars)]
         }
 
         # get relevant environment objects
@@ -3469,6 +3472,10 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 SDsub[, c("WD", "phi", "urot", "vrot", "wrot") := .SD,
                     .SDcols = paste0('subint_', c("WD", "phi", "urot",
                             "vrot", "wrot"))]
+
+                # use original T_sonic & scalars
+                SDsub[, c('T', scalars) := .SD, 
+                    .SDcols = paste0('subint_', c('T', scalars))]
 
                 # run subintervals
                 res_sub <- .ec_main(SDsub, env_sub)

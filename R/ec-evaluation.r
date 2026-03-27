@@ -2645,6 +2645,12 @@ process_ec_fluxes <- function(
             st = with_tz(st, tz_user),
             et = with_tz(et, tz_user)
         )]
+        # transfer attributes
+        if (processing_strategy != 'recursive' && (return_subint || ogives_out)) {
+            anms <- names(attributes(results))
+            tatts <- sapply(grep('covars|cospec|ogv|subintervals', anms, value = TRUE),
+                \(a) attr(results, a), simplify = FALSE)
+        }
         # check if minimal output is requested
         if (minimal_output) {
             results <- results[, .SD, .SDcols = c('st', 'et', 'n_values', 'Hz',
@@ -2656,15 +2662,15 @@ process_ec_fluxes <- function(
                 )
             ]
         }
-        if (processing_strategy != 'recursive' && return_subint) {
-            subint <- attr(results, 'subintervals')
-        }
         # convert to ibts
         if (processing_strategy != 'recursive' && as_ibts) {
             results <- as.ibts(results)
         }
-        if (processing_strategy != 'recursive' && return_subint) {
-            setattr(results, 'subintervals', subint)
+        # assign attributes back
+        if (processing_strategy != 'recursive' && (return_subint || ogives_out)) {
+            for (a in names(tatts)) {
+                setattr(results, a, tatts[[a]])
+            }
         }
     }
 

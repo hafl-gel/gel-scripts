@@ -3477,6 +3477,14 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 # add bins
                 SDsub[, bin := rleid(subint)]
 
+                # add parent interval
+                env_sub$parent_interval <- .BY[[1]]
+                # env_sub$parent_interval <- list(
+                #     st = start_time[.BY[[1]]],
+                #     et = end_time[.BY[[1]]],
+                #     bin = .BY[[1]]
+                # )
+
                 # run subintervals
                 res_sub <- .ec_main(SDsub, env_sub)
 
@@ -3528,6 +3536,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 out <- c(out, as.list(cbind(avg_subint, wstats_subint, var_subint)))
                 # attach subinterval results
                 if (return_subint) {
+                    # add parent interval
+                    res_sub[, parent_interval := .BY[[1]]]
+                    # attach
                     setattr(out, 'subintervals', res_sub)
                 }
 
@@ -3556,8 +3567,14 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 # ------------------------------------------------------------------------
                 ## TODO: -> fix tz!!! -> use UTC but indicate in name!!!
                 time2 <- format(soi_user, format = "%H%M")
-                plotname <- paste("timeseries", date_formatted, time2, sep="-") 
                 ts_vars <- names(plot_timeseries)[plot_timeseries]
+                if ('parent_interval' %in% names(env_list)) {
+                    plotname <- paste("timeseries", date_formatted, 
+                        'parent', parent_interval,
+                        time2, sep="-") 
+                } else {
+                    plotname <- paste("timeseries", date_formatted, time2, sep="-") 
+                }
                 jpeg(filename = paste0(path_folder, '/', plotname, ".jpg"), width = 600, 
                     height = (sum(plot_timeseries)) * 100, quality = 80)
                     ts_plot <- plot.tseries(
@@ -3577,8 +3594,14 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 for(i in covariances){
                     # i <- "w'TDL CH4'"
                     # i <- covariances[3]
-                    plotname <- paste("plots", date_formatted, time2, 
-                        covariances_plotnames[i], sep = "-")
+                    if ('parent_interval' %in% names(env_list)) {
+                        plotname <- paste("plots", date_formatted, 
+                            'parent', parent_interval,
+                            time2, covariances_plotnames[i], sep = "-")
+                    } else {
+                        plotname <- paste("plots", date_formatted, time2, 
+                            covariances_plotnames[i], sep = "-")
+                    }
                     # fix ylab
                     ylab <- sub('(.+)x(.+)', "<\\1'\\2'>", i)
                     jpeg(filename = paste0(path_folder, '/', plotname, ".jpg"), 

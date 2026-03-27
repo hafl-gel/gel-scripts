@@ -1232,7 +1232,7 @@ process_ec_fluxes <- function(
         , subint_prefix = 'subint_'
         , subint_n = 5
         , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
-        , return_subint = FALSE
+        , subint_return = FALSE
         , oss_threshold = 0
         , co2ss_threshold = 0
         , na_alarm_code = c(1:3, 5:8, 11, 13)
@@ -1256,7 +1256,7 @@ process_ec_fluxes <- function(
         , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred', 
             wxnh3_ugm3 = 'indianred', wxh2o_mmolm3 = '#8FC1E6', wxco2_mmolm3 = 'seagreen4')
         , model_colors = c(cospec = '#F02E42', ogive = '#9A33DA')
-		, ogives_out = FALSE
+		, ogives_return = FALSE
         , as_ibts = TRUE
         , ncores = 1
         , parallel_mem_limit = NULL
@@ -1397,7 +1397,7 @@ process_ec_fluxes <- function(
             subint_n <= 8)) {
             stop('argument "subint_n" must be an integer number between 3 and 10')
         }
-        subintervals <- subintervals || return_subint
+        subintervals <- subintervals || subint_return
         subint_detrending <- fix_defaults(subint_detrending, variables)
         ts_vars <- variables
         if (!ht_null) {
@@ -1896,16 +1896,16 @@ process_ec_fluxes <- function(
         unlink(tf_sonic)
         unlink(tf_licor)
         # fix subints
-        if (return_subint) {
+        if (subint_return) {
             subints <- rbindlist(lapply(out_list, attr, 'subintervals'),
                 fill = TRUE, use.names = TRUE)
         }
         # rbind output list
         results <- rbindlist(out_list, fill = TRUE)
-        if (return_subint) {
+        if (subint_return) {
             setattr(results, 'subintervals', subints)
         }
-        if (!(create_dailygraphs || ogives_out)) {
+        if (!(create_dailygraphs || ogives_return)) {
             rm(out_list)
             for (i in 1:10) gc()
         }
@@ -2497,7 +2497,7 @@ process_ec_fluxes <- function(
         results <- NULL
     } else {
         # fix ogives out
-        if (create_dailygraphs || ogives_out) {
+        if (create_dailygraphs || ogives_return) {
             if (processing_strategy == 'sequential') {
                 # get ogives etc.
                 Covars_Out <- unlist(lapply(out_list, attr, 'covars'), 
@@ -2510,7 +2510,7 @@ process_ec_fluxes <- function(
                     recursive = FALSE)
                 Ogive_dyn_Out <- unlist(lapply(out_list, attr, 'ogv_dyn'), 
                     recursive = FALSE)
-                if (ogives_out) {
+                if (ogives_return) {
                     # assign to output
                     results <- structure(
                         results, 
@@ -2646,7 +2646,7 @@ process_ec_fluxes <- function(
             et = with_tz(et, tz_user)
         )]
         # transfer attributes
-        if (processing_strategy != 'recursive' && (return_subint || ogives_out)) {
+        if (processing_strategy != 'recursive' && (subint_return || ogives_return)) {
             anms <- names(attributes(results))
             tatts <- sapply(grep('covars|cospec|ogv|subintervals', anms, value = TRUE),
                 \(a) attr(results, a), simplify = FALSE)
@@ -2667,7 +2667,7 @@ process_ec_fluxes <- function(
             results <- as.ibts(results)
         }
         # assign attributes back
-        if (processing_strategy != 'recursive' && (return_subint || ogives_out)) {
+        if (processing_strategy != 'recursive' && (subint_return || ogives_return)) {
             for (a in names(tatts)) {
                 setattr(results, a, tatts[[a]])
             }
@@ -2715,7 +2715,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
     }
     # rm(env_list)
     # prepare ogive output
-    if (create_dailygraphs || ogives_out) {
+    if (create_dailygraphs || ogives_return) {
         e_ogive <- new.env()
         e_ogive$Cospec_dyn_Out <- e_ogive$Cospec_fix_Out <- e_ogive$Covars_Out <- 
             e_ogive$Ogive_fix_Out <- e_ogive$Ogive_dyn_Out <- list()
@@ -3154,7 +3154,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 ogive_quality_dyn <- ogive_quality_dyn[1, ]
 
                 # should ogives be provided with output
-                if (ogives_out || create_dailygraphs) {
+                if (ogives_return || create_dailygraphs) {
                     int_start <- format(interval_start, '%Y-%m-%d %H:%M')
                     e_ogive$Cospec_fix_Out[[int_start]] <- c(
                         list(freq = freq, model_coef = ogive_par_fix), Cospec_fix)
@@ -3535,7 +3535,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 # bind together and append to output
                 out <- c(out, as.list(cbind(avg_subint, wstats_subint, var_subint)))
                 # attach subinterval results
-                if (return_subint) {
+                if (subint_return) {
                     # add parent interval
                     res_sub[, parent_interval := .BY[[1]]]
                     # attach
@@ -3682,7 +3682,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
     }
 
     # get subintervals
-    if (return_subint) {
+    if (subint_return) {
         subints <- out[, rbindlist(lapply(V1, attr, 'subintervals'),
             fill = TRUE, use.names = TRUE)]
     }
@@ -3690,12 +3690,12 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
     # bind lists to one data.table
     out <- out[, rbindlist(V1, fill = TRUE, use.names = TRUE)]
 
-    if (return_subint) {
+    if (subint_return) {
         setattr(out, 'subintervals', subints)
     }
 
     # output incl. ogives
-    if (create_dailygraphs || ogives_out) {
+    if (create_dailygraphs || ogives_return) {
         out <- structure(
             out, 
             covars = e_ogive$Covars_Out,

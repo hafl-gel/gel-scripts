@@ -1229,7 +1229,6 @@ process_ec_fluxes <- function(
         , high_cont_sec = 2
         , cont_pts = 5
         , subintervals = TRUE
-        , subint_use_raw = FALSE
         , subint_prefix = 'subint_'
         , subint_n = 5
         , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
@@ -2431,30 +2430,25 @@ process_ec_fluxes <- function(
                 sub_ints <- getIntervals(Time, st_sub, et_sub)
                 paste(.BY[[1]], sub_ints, sep = '-')
             }, by = bin]
-            if (subint_use_raw) {
-                cat('~~~\nrotate subinterval data...\n')
-                # rotate raw data
-                daily_data[, paste0('subint_', 
-                    c("WD", "phi", "urot", "vrot", "wrot")) := 
-                    rotate_twoaxis(u, v, w,
-                        phi = if (rotation_method[1] %in% "two axis") {
-                            # two-axis rotation
-                            rotation_args$phi 
-                        } else if (is.na(alpha[1])) {
-                            # planar fit failed
-                            NULL 
-                        } else {
-                            # planar fit successful
-                            0
-                        }, c.system = coord.system
-                    ), by = subint]
-                ### correct for sonic north deviation
-                daily_data[, subint_WD := (subint_WD + d_north[.BY[[1]]]) %% 360, by = as.character(bin)]
-            }
+            cat('~~~\nrotate subinterval data...\n')
+            # rotate raw data
+            daily_data[, paste0('subint_', 
+                c("WD", "phi", "urot", "vrot", "wrot")) := 
+                rotate_twoaxis(u, v, w,
+                    phi = if (rotation_method[1] %in% "two axis") {
+                        # two-axis rotation
+                        rotation_args$phi 
+                    } else if (is.na(alpha[1])) {
+                        # planar fit failed
+                        NULL 
+                    } else {
+                        # planar fit successful
+                        0
+                    }, c.system = coord.system
+                ), by = subint]
+            ### correct for sonic north deviation
+            daily_data[, subint_WD := (subint_WD + d_north[.BY[[1]]]) %% 360, by = as.character(bin)]
         }
-
-        # switch of rotation of data
-        rotate_subint <- FALSE
 
         # get relevant environment objects
         env_obj <- setdiff(ls(envir = current_env), c(
@@ -2803,31 +2797,6 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                             scalar_covariances <- scalar_covariances[-sind]
                         }
                     }
-                }
-            }
-
-            # rotate subinterval data
-            if (rotate_subint) {
-                if (subint_use_raw) {
-                    # use already rotated raw data
-                    SD[, c("WD", "phi", "urot", "vrot", "wrot") := .SD,
-                        .SDcols = paste0('subint_', c("WD", "phi", "urot",
-                                "vrot", "wrot"))]
-                } else {
-                    cat('~~~\nrotate subinterval data...\n')
-                    SD[, c("WD", "phi", "urot", "vrot", "wrot") := 
-                        rotate_twoaxis(u, v, w,
-                            phi = if (rotation_method[1] %in% "two axis") {
-                                # two-axis rotation
-                                rotation_args$phi 
-                            } else if (is.na(alpha[1])) {
-                                # planar fit failed
-                                NULL 
-                            } else {
-                                # planar fit successful
-                                0
-                            }, c.system = coord.system
-                        )]
                 }
             }
 
@@ -3469,7 +3438,6 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 env_sub$subintervals <- FALSE
                 env_sub$subint_return <- FALSE
                 env_sub$detrending <- env_list$subint_detrending
-                env_sub$rotate_subint <- TRUE
                 # despiking has been done
                 env_sub$despike[] <- FALSE
 
@@ -3496,6 +3464,11 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 #     et = end_time[.BY[[1]]],
                 #     bin = .BY[[1]]
                 # )
+
+                # use already rotated raw data
+                SDsub[, c("WD", "phi", "urot", "vrot", "wrot") := .SD,
+                    .SDcols = paste0('subint_', c("WD", "phi", "urot",
+                            "vrot", "wrot"))]
 
                 # run subintervals
                 res_sub <- .ec_main(SDsub, env_sub)

@@ -822,7 +822,7 @@ get_cospectra <- function(dt, cvrs, cvars, cvars_name, lag_tau, nperiod) {
 
 
 # plot time series including filtered trend
-plot.tseries <- function(dat,wind,scal,selection,color,units){
+plot.tseries <- function(dat,wind,scal,selection,color,units,st_sub=NULL){
 	msg <- paste(c(format(dat[1,1],"%d.%m.%Y")," - time series"),collapse="")
     # fix wind variables
 	dat[, c("u", "v", "w", "T")] <- dat[, paste0(c('u', 'v', 'w', 'T'), 'rot')]
@@ -897,6 +897,7 @@ plot.tseries <- function(dat,wind,scal,selection,color,units){
                 # panel.xyplot(x, y2, type = "l", lwd = 2, lty = 2, col = "#B37FDF")
                 lattice::panel.xyplot(x, y2, type = "l", lwd = 3, col = "darkgrey")
             }
+            if (!is.null(st_sub)) lattice::panel.abline(v = st_sub, lty = 2, lwd = 2, col = 'grey')
 		}
 	)  	
 }
@@ -2863,9 +2864,13 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                             mar = c(2, 4, 2, 2), oma = c(2, 0, 0, 0))
                         for (d in despike_vars) {
                             SD[, {
+                                n_spikes <- sum(is.na(dspk)) - sum(is.na(orig))
                                 plot(Time, orig, type = 'l', col = 'indianred',
                                     ylab = d, xlab = '')
                                 lines(Time, dspk)
+                                mtext(text = sprintf('%i spikes removed', n_spikes),
+                                    adj = 0
+                                )
                             }, env = list(
                                 orig = paste0(d, '_original'),
                                 dspk = paste0(d, '_despiked')
@@ -3548,11 +3553,13 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 plotname <- paste("timeseries", date_formatted, time2, sep="-") 
                 ts_vars <- names(plot_timeseries)[plot_timeseries]
                 jpeg(filename = paste0(path_folder, '/', plotname, ".jpg"), width = 600, 
-                    height = (sum(plot_timeseries)) * 100, quality = 60)
+                    height = (sum(plot_timeseries)) * 100, quality = 80)
                     ts_plot <- plot.tseries(
                         cbind(st = Time, as.data.frame(SD)),
                         wind, detrended_scalars, ts_vars,
-                        plotting_var_colors, plotting_var_units
+                        plotting_var_colors, plotting_var_units,
+                        if (subintervals) c(env_sub$start_time[1],
+                            env_sub$end_time) else NULL
                     )
                     # fix time zone
                     attr(ts_plot$x.limits, 'tzone') <- tz_user

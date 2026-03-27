@@ -2082,9 +2082,6 @@ process_ec_fluxes <- function(
         if (rec_Hz < 10) {
             stop('Frequency is lower than 10 Hz! Aborting script!')
         }
-        n_period <- avg_secs * rec_Hz
-        n_threshold <- thresh_period * n_period
-        freq <- rec_Hz * seq(floor(n_period / 2)) / floor(n_period / 2)
 
         # fix time to exactly xx Hz
         t_basis <- unlist(mapply(\(x_st, x_et) {
@@ -2132,22 +2129,10 @@ process_ec_fluxes <- function(
         # define bins & subset again & just make sure sonic has no missing data
         daily_data[, bin := getIntervals(Time, start_time, end_time)]
 
-        # # remove incomplete intervals
-        # cat('checking interval data threshold...\n')
-        # np0 <- daily_data[, uniqueN(bin)]
-        # daily_data <- daily_data[, keep := .N >= n_threshold, by = bin][(keep)][,
-            # keep := NULL]
-        # np <- daily_data[, uniqueN(bin)]
-        # if (np0 - np > 1) {
-            # cat(np0 - np, 'intervals have less than', thresh_period * 100, '% of valid data\n')
-        # } else if (np0 - np > 0) {
-            # cat(np0 - np, 'interval has less than', thresh_period * 100, '% of valid data\n')
-        # }
-
-        # # check again if empty
-        # if (nrow(daily_data) == 0) {
-            # stop('No valid data available within given time range!')
-        # }
+        # TODO: add measures on interval basis
+        n_period <- avg_secs * rec_Hz
+        n_threshold <- thresh_period * n_period
+        freq <- rec_Hz * seq(floor(n_period / 2)) / floor(n_period / 2)
 
         # --------------------- read fix lags from lag_lookuptable ---------------------
         # TODO: only if necessary/wanted
@@ -2428,9 +2413,8 @@ process_ec_fluxes <- function(
         daily_data[, WD := (WD + d_north[.BY[[1]]]) %% 360, 
             by = as.character(bin)]
 
-        # rotate subintervals here
+        # get subinterval bins
         if (subintervals) {
-            cat("  (subint)  -> rotating data...\n")
             # add subint bins
             daily_data[, subint := {
                 # split into sub-intervals
@@ -3452,14 +3436,14 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 env_sub$avg_secs <- env_list$avg_secs / subint_n
                 env_sub$start_time <- seq(start_time[.BY[[1]]], end_time[.BY[[1]]], by = env_sub$avg_secs)[1:subint_n]
                 env_sub$end_time <- env_sub$start_time + env_sub$avg_secs
-                env_sub$subintervals <- FALSE
-                env_sub$detrending <- env_list$subint_detrending
                 env_sub$n_period <- env_sub$avg_secs * rec_Hz
                 env_sub$n_threshold <- env_sub$n_period * env_sub$thresh_period
+                env_sub$freq <- rec_Hz * seq(floor(env_sub$n_period / 2)) / floor(env_sub$n_period / 2)
+                env_sub$subintervals <- FALSE
+                env_sub$detrending <- env_list$subint_detrending
                 env_sub$rotate_subint <- TRUE
                 # despiking has been done
                 env_sub$despike[] <- FALSE
-                env_sub$freq <- rec_Hz * seq(floor(env_sub$n_period / 2)) / floor(env_sub$n_period / 2)
 
                 # fix gamma_time_window
                 if (max(env_sub$gamma_time_window) * 60 >= env_sub$avg_secs) {

@@ -2338,13 +2338,14 @@ process_ec_fluxes <- function(
         # raw data quality control I, despiking
         # --------------------------------------------------------------------------
 
-        # backup original data for plotting
-        daily_data[, paste0(names(despike), '_original') := copy(.SD),
-            .SDcols = names(despike)]
-
         # despiking procedure
         if (any(despike)) {
-            cat("~~~\nDespiking time series...\n")
+
+            # backup original data for plotting
+            daily_data[, paste0(names(despike), '_original') := copy(.SD),
+                .SDcols = names(despike)]
+
+            cat("~~~\nDespiking raw time series...\n")
             # routine
             for (s in names(despike)[despike]) {
                 # s <- 'co2_mmolm3'
@@ -2356,6 +2357,11 @@ process_ec_fluxes <- function(
                 )
             }
             # plottin is done in intervals
+
+            # backup despiked data for plotting
+            daily_data[, paste0(names(despike), '_despiked') := copy(.SD),
+                .SDcols = names(despike)]
+
         }
 
         # raw data quality control II, i.e. hard limits = physical range
@@ -2871,8 +2877,10 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                                 plot(Time, orig, type = 'l', col = 'indianred',
                                     ylab = d, xlab = '')
                                 lines(Time, dspk)
-                            }, env = list(orig = paste0(d, '_original'),
-                                dspk = d)]
+                            }, env = list(
+                                orig = paste0(d, '_original'),
+                                dspk = paste0(d, '_despiked')
+                            )]
                         }
                     dev.off()
                 }
@@ -4455,6 +4463,7 @@ despike_timeseries <- function(dat, scalar, filter_width = 10,
     md_filters <- getOption('md.filter.function.list')
     filt <- md_filters$BmNuttall(filter_width * Hz)
     n_filt2 <- qwidth * Hz
+    sna_before <- dat[, sum(is.na(scal)), env = list(scal = scalar)]
     # loop over bins
     for (b in dat[, unique(bin)]) {
         cat('\r\r', b, '/', dat[, max(bin)])
@@ -4507,7 +4516,8 @@ despike_timeseries <- function(dat, scalar, filter_width = 10,
         # assign
         dat[b == bin, (scalar) := desp_conc]
     }
-    cat('\n')
+    sna_after <- dat[, sum(is.na(scal)), env = list(scal = scalar)]
+    cat(' ->', sna_after - sna_before, 'spikes removed\n')
     invisible(dat)
 }
 

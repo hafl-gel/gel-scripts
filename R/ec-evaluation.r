@@ -3456,6 +3456,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 env_sub$n_threshold <- env_sub$n_period * env_sub$thresh_period
                 env_sub$freq <- rec_Hz * seq(floor(env_sub$n_period / 2)) / floor(env_sub$n_period / 2)
                 env_sub$subintervals <- FALSE
+                env_sub$subint_return <- FALSE
                 env_sub$detrending <- env_list$subint_detrending
                 env_sub$rotate_subint <- TRUE
                 # despiking has been done
@@ -3487,8 +3488,6 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
                 # run subintervals
                 res_sub <- .ec_main(SDsub, env_sub)
-
-                cat('\n~~~ END SUBINTERVALS\n\n')
 
                 # get averages
                 avg_subint <- res_sub[, lapply(.SD, mean), 
@@ -3541,6 +3540,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     # attach
                     setattr(out, 'subintervals', res_sub)
                 }
+
+                cat('\n~~~ END SUBINTERVALS\n\n')
 
             } # END subintervals
 
@@ -3696,14 +3697,11 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
     # output incl. ogives
     if (create_dailygraphs || ogives_return) {
-        out <- structure(
-            out, 
-            covars = e_ogive$Covars_Out,
-            cospec_fix = e_ogive$Cospec_fix_Out, 
-            cospec_dyn = e_ogive$Cospec_dyn_Out,
-            ogv_fix = e_ogive$Ogive_fix_Out, 
-            ogv_dyn = e_ogive$Ogive_dyn_Out
-        )
+        nogv <- names(e_ogive)
+        natt <- tolower(sub('_Out', '', nogv))
+        natt <- sub('ogive', 'ogv', natt)
+        names(natt) <- nogv
+        for (nm in nogv) setattr(out, natt[nm], e_ogive[[nm]])
     }
 
     # return

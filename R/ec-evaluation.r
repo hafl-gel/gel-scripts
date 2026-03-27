@@ -2416,13 +2416,18 @@ process_ec_fluxes <- function(
         # get subinterval bins
         if (subintervals) {
             # add subint bins
+            avg_sub <- avg_secs / subint_n
+            i_sub <- 1:subint_n
             daily_data[, subint := {
+                # get st & et
+                st_int <- start_time[.BY[[1]]]
+                et_int <- end_time[.BY[[1]]]
+                # get sub times
+                st_sub <- seq(st_int, et_int, by = avg_sub)[i_sub]
+                et_sub <- st_sub + avg_sub
                 # split into sub-intervals
-                breaks <- seq(Time[1], Time[1] + avg_secs, 
-                    length.out = subint_n + 1)
-                # cut
-                cut(Time, breaks, 
-                    labels = paste(.BY[[1]], seq_len(subint_n), sep = '-'))
+                sub_ints <- getIntervals(Time, st_sub, et_sub)
+                paste(.BY[[1]], sub_ints, sep = '-')
             }, by = bin]
             # rotate
             daily_data[, paste0('subint_', 

@@ -1,28 +1,29 @@
 ## documentation (parts) ec-processing function ----------------------------------------
 
-# x. despiking of time series
+# 1. despiking of time series
 # default: scalar data are despiked, sonic data is not
 # despike = c(u = FALSE, v = FALSE, w = FALSE, T = FALSE, 
 #    nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
 #    co2_mmolm3 = TRUE)
 #   => can be switched on/off for all, e.g. despike = FALSE
-# despike_filter_width = c(u = 10, v = 10, w = 10, T = 10, nh3_ppb = 10, 
+# despike_baseline_width = c(u = 10, v = 10, w = 10, T = 10, nh3_ppb = 10, 
 #    nh3_ugm3 = 10, h2o_mmolm3 = 10, co2_mmolm3 = 10)
 #   => Blackman-Nuttall hight-pass filter is applied on time series to get a baseline
-#       "despike_filter_width" is the filter window width in seconds
+#       "despike_baseline_width" is the filter window width in seconds
 #       defaults to 10 secs
 # despike_quantile = c(u = 0.95, v = 0.95, w = 0.95, T = 0.95, nh3_ppb = 0.95, 
 #    nh3_ugm3 = 0.95, h2o_mmolm3 = 0.95, co2_mmolm3 = 0.95)
 #   => statistics on the baseline, timeseries and their difference (d = timeseries - baseline) is gathered.
 #       The statistics is calculated as sd(baseline) + mad(timeseries) + quantile(d, q),
 #       where q is given by "despike_quantile". Defaults to 0.95
-# despike_quantile_width = c(u = 30, v = 30, w = 30, T = 30, nh3_ppb = 30, 
+# despike_stats_width = c(u = 30, v = 30, w = 30, T = 30, nh3_ppb = 30, 
 #    nh3_ugm3 = 30, h2o_mmolm3 = 30, co2_mmolm3 = 30)
 #   => width (in seconds) of the statistics window, i.e. the window where the statistics is calculated within
-# despike_quantile_multiply = c(u = 4, v = 4, w = 4, T = 4, nh3_ppb = 4, 
+#       defaults to 30 secs
+# despike_stats_multiply = c(u = 4, v = 4, w = 4, T = 4, nh3_ppb = 4, 
 #    nh3_ugm3 = 4, h2o_mmolm3 = 4, co2_mmolm3 = 4)
 #   => multiplication of the statistics value s for the final filtering band.
-#       the filtering criteria is given by abs(d) > (baseline + s * "despike_quantile_multiply")
+#       the filtering criteria is given by abs(d) > (baseline + s * "despike_stats_multiply")
 
 # x. Sonic Rotation Method
 # rotation_method = c("two axis", "planar fit")
@@ -1189,6 +1190,17 @@ process_ec_fluxes <- function(
         , declination = NULL
 		, z_ec = NULL
 		, z_canopy = NULL
+        , despike = c(u = FALSE, v = FALSE, w = FALSE, T = FALSE, 
+            nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
+            co2_mmolm3 = TRUE)
+        , despike_baseline_width = c(u = 10, v = 10, w = 10, T = 10, nh3_ppb = 10, 
+            nh3_ugm3 = 10, h2o_mmolm3 = 10, co2_mmolm3 = 10)
+        , despike_quantile = c(u = 0.95, v = 0.95, w = 0.95, T = 0.95, nh3_ppb = 0.95, 
+            nh3_ugm3 = 0.95, h2o_mmolm3 = 0.95, co2_mmolm3 = 0.95)
+        , despike_stats_width = c(u = 30, v = 30, w = 30, T = 30, nh3_ppb = 30, 
+            nh3_ugm3 = 30, h2o_mmolm3 = 30, co2_mmolm3 = 30)
+        , despike_stats_multiply = c(u = 4, v = 4, w = 4, T = 4, nh3_ppb = 4, 
+            nh3_ugm3 = 4, h2o_mmolm3 = 4, co2_mmolm3 = 4)
 		, rotation_method = c("two axis", "planar fit")
 		, rotation_args = list(
             phi = NULL, 
@@ -1214,17 +1226,6 @@ process_ec_fluxes <- function(
             co2_mmolm3 = 5000)
         , na_limits_window = c(pass = '10secs', replace = '5mins')
         , na_limits_method = c('norepl', 'median', 'dist', 'squaredist')[4]
-        , despike = c(u = FALSE, v = FALSE, w = FALSE, T = FALSE, 
-            nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
-            co2_mmolm3 = TRUE)
-        , despike_filter_width = c(u = 10, v = 10, w = 10, T = 10, nh3_ppb = 10, 
-            nh3_ugm3 = 10, h2o_mmolm3 = 10, co2_mmolm3 = 10)
-        , despike_quantile = c(u = 0.95, v = 0.95, w = 0.95, T = 0.95, nh3_ppb = 0.95, 
-            nh3_ugm3 = 0.95, h2o_mmolm3 = 0.95, co2_mmolm3 = 0.95)
-        , despike_quantile_width = c(u = 30, v = 30, w = 30, T = 30, nh3_ppb = 30, 
-            nh3_ugm3 = 30, h2o_mmolm3 = 30, co2_mmolm3 = 30)
-        , despike_quantile_multiply = c(u = 4, v = 4, w = 4, T = 4, nh3_ppb = 4, 
-            nh3_ugm3 = 4, h2o_mmolm3 = 4, co2_mmolm3 = 4)
 		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 'wxco2_mmolm3')
         # fix lag in seconds
 		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, 
@@ -1406,10 +1407,10 @@ process_ec_fluxes <- function(
         limits_lower <- fix_defaults(limits_lower, variables)
         limits_upper <- fix_defaults(limits_upper, variables)
         despike <- fix_defaults(despike, variables)
-        despike_filter_width <- fix_defaults(despike_filter_width, variables)
+        despike_baseline_width <- fix_defaults(despike_baseline_width, variables)
         despike_quantile <- fix_defaults(despike_quantile, variables)
-        despike_quantile_width <- fix_defaults(despike_quantile_width, variables)
-        despike_quantile_multiply <- fix_defaults(despike_quantile_multiply, variables)
+        despike_stats_width <- fix_defaults(despike_stats_width, variables)
+        despike_stats_multiply <- fix_defaults(despike_stats_multiply, variables)
         lag_fix <- fix_defaults(lag_fix, covariances)
         lag_dyn <- fix_defaults(lag_dyn, covariances)
         lag_dyn_method <- match.arg(lag_dyn_method)
@@ -2366,10 +2367,10 @@ process_ec_fluxes <- function(
             for (s in names(despike)[despike]) {
                 # s <- 'co2_mmolm3'
                 despike_timeseries(daily_data, scalar = s,
-                    filter_width = despike_filter_width[[s]],
+                    filter_width = despike_baseline_width[[s]],
                     qval = despike_quantile[[s]],
-                    qwidth = despike_quantile_width[[s]],
-                    qmult = despike_quantile_multiply[[s]]
+                    qwidth = despike_stats_width[[s]],
+                    qmult = despike_stats_multiply[[s]]
                 )
             }
             # plottin is done in intervals

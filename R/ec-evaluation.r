@@ -1,3 +1,33 @@
+## documentation (parts) ec-processing function ----------------------------------------
+
+# x. despiking of time series
+# default: scalar data are despiked, sonic data is not
+# despike = c(u = FALSE, v = FALSE, w = FALSE, T = FALSE, 
+#    nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
+#    co2_mmolm3 = TRUE)
+#   => can be switched on/off for all, e.g. despike = FALSE
+# despike_filter_width = c(u = 10, v = 10, w = 10, T = 10, nh3_ppb = 10, 
+#    nh3_ugm3 = 10, h2o_mmolm3 = 10, co2_mmolm3 = 10)
+#   => Blackman-Nuttall hight-pass filter is applied on time series to get a baseline
+#       "despike_filter_width" is the filter window width in seconds
+#       defaults to 10 secs
+# despike_quantile = c(u = 0.95, v = 0.95, w = 0.95, T = 0.95, nh3_ppb = 0.95, 
+#    nh3_ugm3 = 0.95, h2o_mmolm3 = 0.95, co2_mmolm3 = 0.95)
+#   => statistics on the baseline, timeseries and their difference (d = timeseries - baseline) is gathered.
+#       The statistics is calculated as sd(baseline) + mad(timeseries) + quantile(d, q),
+#       where q is given by "despike_quantile". Defaults to 0.95
+# despike_quantile_width = c(u = 30, v = 30, w = 30, T = 30, nh3_ppb = 30, 
+#    nh3_ugm3 = 30, h2o_mmolm3 = 30, co2_mmolm3 = 30)
+#   => width (in seconds) of the statistics window, i.e. the window where the statistics is calculated within
+# despike_quantile_multiply = c(u = 4, v = 4, w = 4, T = 4, nh3_ppb = 4, 
+#    nh3_ugm3 = 4, h2o_mmolm3 = 4, co2_mmolm3 = 4)
+#   => multiplication of the statistics value s for the final filtering band.
+#       the filtering criteria is given by abs(d) > (baseline + s * "despike_quantile_multiply")
+
+# x. Sonic Rotation Method
+# rotation_method = c("two axis", "planar fit")
+# default: two-axis rotation
+# two-axis rotation as usually done (rotat
 
 ## helper functions ----------------------------------------
 

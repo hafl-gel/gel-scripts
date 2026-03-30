@@ -25,6 +25,26 @@
 #   => multiplication of the statistics value s for the final filtering band.
 #       the filtering criteria is given by abs(d) > (baseline + s * "despike_stats_multiply")
 
+# 2. check hard limits and replace/interpolate NA values
+# default: hard limits are applied to all time series and NA values are interpolated by a weighted (w = 1/r^2) mean
+# na_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, 
+#    nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
+#    co2_mmolm3 = TRUE)
+# limits_lower = c(u = -30, v = -30, w = -10, T = 243, 
+#    nh3_ppb = -100, nh3_ugm3 = -100, h2o_mmolm3 = -100, 
+#    co2_mmolm3 = -100)
+# limits_upper = c(u = 30, v = 30, w = 10, T = 333, 
+#    nh3_ppb = 22000, nh3_ugm3 = 15000, h2o_mmolm3 = 5000, 
+#    co2_mmolm3 = 5000)
+# na_limits_method = c('norepl', 'median', 'dist', 'squaredist')[4]
+#   => norepl: no replacing, 
+#       median: median(y_win, na.rm = TRUE), 
+#       dist: mean(w * y_win, na.rm = TRUE) where w = 1/d_x,
+#       squaredist: mean(w * y_win, na.rm = TRUE) where w = 1/d_x ^ 2 (closer values get higher weights)
+# na_limits_window = c(pass = '10secs', replace = '5mins')
+#   => windows -> pass: consecutive NA values longer than xx seconds are not replaced (default = 10 secs)
+#              -> replace: window width on which interpolation of central NA value is based (default = 5mins)
+
 # x. Sonic Rotation Method
 # rotation_method = c("two axis", "planar fit")
 # default: two-axis rotation
@@ -1142,8 +1162,8 @@ process_turbulence <- function(
     , na_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE)
     , limits_lower = c(u = -30, v = -30, w = -10, T = 243)
     , limits_upper = c(u = 30, v = 30, w = 10, T = 333)
-    , na_limits_window = c(pass = '10secs', replace = '5mins')
     , na_limits_method = c('norepl', 'median', 'dist', 'squaredist')[4]
+    , na_limits_window = c(pass = '10secs', replace = '5mins')
     , covariances = c('uxw', 'wxT')
     , create_graphs = FALSE
     , ogive_out = FALSE
@@ -1201,6 +1221,17 @@ process_ec_fluxes <- function(
             nh3_ugm3 = 30, h2o_mmolm3 = 30, co2_mmolm3 = 30)
         , despike_stats_multiply = c(u = 4, v = 4, w = 4, T = 4, nh3_ppb = 4, 
             nh3_ugm3 = 4, h2o_mmolm3 = 4, co2_mmolm3 = 4)
+        , na_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, 
+            nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
+            co2_mmolm3 = TRUE)
+        , limits_lower = c(u = -30, v = -30, w = -10, T = 243, 
+            nh3_ppb = -100, nh3_ugm3 = -100, h2o_mmolm3 = -100, 
+            co2_mmolm3 = -100)
+        , limits_upper = c(u = 30, v = 30, w = 10, T = 333, 
+            nh3_ppb = 22000, nh3_ugm3 = 15000, h2o_mmolm3 = 5000, 
+            co2_mmolm3 = 5000)
+        , na_limits_window = c(pass = '10secs', replace = '5mins')
+        , na_limits_method = c('norepl', 'median', 'dist', 'squaredist')[4]
 		, rotation_method = c("two axis", "planar fit")
 		, rotation_args = list(
             phi = NULL, 
@@ -1215,17 +1246,6 @@ process_ec_fluxes <- function(
         , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', T = 'blockAVG', 
             nh3_ppb = 'blockAVG', nh3_ugm3 = 'blockAVG', h2o_mmolm3 = 'blockAVG', 
             co2_mmolm3 = 'blockAVG')
-        , na_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, 
-            nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
-            co2_mmolm3 = TRUE)
-        , limits_lower = c(u = -30, v = -30, w = -10, T = 243, 
-            nh3_ppb = -100, nh3_ugm3 = -100, h2o_mmolm3 = -100, 
-            co2_mmolm3 = -100)
-        , limits_upper = c(u = 30, v = 30, w = 10, T = 333, 
-            nh3_ppb = 22000, nh3_ugm3 = 15000, h2o_mmolm3 = 5000, 
-            co2_mmolm3 = 5000)
-        , na_limits_window = c(pass = '10secs', replace = '5mins')
-        , na_limits_method = c('norepl', 'median', 'dist', 'squaredist')[4]
 		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 'wxco2_mmolm3')
         # fix lag in seconds
 		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, 

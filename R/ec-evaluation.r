@@ -3620,8 +3620,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 ts_vars <- names(plot_timeseries)[plot_timeseries]
                 if ('parent_interval' %in% names(env_list)) {
                     plotname <- paste("timeseries", date_formatted, 
-                        'parent', parent_interval,
-                        time2, sep="-") 
+                        time2, 'parent', parent_interval, sep="-") 
                 } else {
                     plotname <- paste("timeseries", date_formatted, time2, sep="-") 
                 }
@@ -3646,8 +3645,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     # i <- covariances[3]
                     if ('parent_interval' %in% names(env_list)) {
                         plotname <- paste("plots", date_formatted, 
+                            time2, covariances_plotnames[i], 
                             'parent', parent_interval,
-                            time2, covariances_plotnames[i], sep = "-")
+                            sep = "-")
                     } else {
                         plotname <- paste("plots", date_formatted, time2, 
                             covariances_plotnames[i], sep = "-")

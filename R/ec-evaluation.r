@@ -2971,6 +2971,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 }, x = Covars, lag = dyn_lag)
 
                 # find dynlag using pre-whitening
+                dyn_lag_max <- dlag_max
                 if (any(lag_dyn_calc_pw[covariances])) {
                     pw_covs <- intersect(covariances, 
                         names(lag_dyn_calc_pw)[lag_dyn_calc_pw])
@@ -3015,31 +3016,30 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     # prepare output
                     pw_out <- unlist(tlag_pw)
                     names(pw_out) <- paste0('dyn_lag_pw_', names(pw_out))
+                    # which dyn lag approach should be taken?
+                    switch(lag_dyn_method
+                        , 'simple-pw' = {
+                            out <- sapply(tlag_pw, '[[', 'tl_pw')
+                            out <- rbind(
+                                dlag_max[1, pw_covs] - dlag_max[2, pw_covs] + out,
+                                out
+                            )
+                            dyn_lag_max[, pw_covs] <- out
+                        }
+                        , 'boot-pw' = {
+                            out <- sapply(tlag_pw, '[[', 'tl_pwb')
+                            out <- rbind(
+                                dlag_max[1, pw_covs] - dlag_max[2, pw_covs] + out,
+                                out
+                            )
+                            dyn_lag_max[, pw_covs] <- out
+                        }
+                    )
+                    # fix NA values (fallback to previous max cov method)
+                    dyn_lag_max[, is.na(dyn_lag_max[2, ])] <- dlag_max[, is.na(dyn_lag_max[2, ])]
+                } else if (lag_dyn_method != 'raw-cov') {
+                    warning('fallback to "raw-cov" dyn lag')
                 }
-
-                # which dyn lag approach should be taken?
-                dyn_lag_max <- dlag_max
-                switch(lag_dyn_method
-                    , 'simple-pw' = {
-                        out <- sapply(tlag_pw, '[[', 'tl_pw')
-                        out <- rbind(
-                            dlag_max[1, pw_covs] - dlag_max[2, pw_covs] + out,
-                            out
-                        )
-                        dyn_lag_max[, pw_covs] <- out
-                    }
-                    , 'boot-pw' = {
-                        out <- sapply(tlag_pw, '[[', 'tl_pwb')
-                        out <- rbind(
-                            dlag_max[1, pw_covs] - dlag_max[2, pw_covs] + out,
-                            out
-                        )
-                        dyn_lag_max[, pw_covs] <- out
-                    }
-                )
-                # fix NA values (fallback to previous max cov method)
-                dyn_lag_max[, is.na(dyn_lag_max[2, ])] <- dlag_max[, is.na(dyn_lag_max[2, ])]
-
                 # covariance function's standard deviation and mean values left and right of fix lag
                 # ----------------------------------------------------------------
                 # RE_RMSE (Eq. 9 in Langford et al. 2015)

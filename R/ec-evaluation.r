@@ -3115,6 +3115,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 i_r <- i_lo:i_hi
                 # set limit for valid mu values
                 mu_lim <- 10
+                # get bins
+                q_bounds <- exp(seq(log(freq[1]), log(tail(freq, 1)), length.out = 4))
+                q_bins <- findInterval(freq, q_bounds)
 
                 # quality of ogive 
                 ogive_quality_fix <- sapply(Ogive_fix, \(x) {
@@ -3125,9 +3128,11 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         return(rep(NA_real_, 6))
                     }
                     fog <- ogff(opt$par)
-                    d <- (fog - x) / fog[1]
-                    d0 <- diff(d)
-                    c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
+                    d <- fog - x
+                    md <- tapply(d, q_bins, \(x) mean(x ^ 6) ^ (1/6))
+                    mm <- tapply(fog, q_bins, \(x) mean(x ^ 6) ^ (1/6))
+                    qv <- mean(md) / mean(mm)
+                    c(1 - qv, fog[1], opt$par, 3 / 4)
                 })
                 ogive_quality_dyn <- sapply(Ogive_dyn, \(x) {
                     ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
@@ -3136,9 +3141,11 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         return(rep(NA_real_, 6))
                     }
                     fog <- ogff(opt$par)
-                    d <- (fog - x) / fog[1]
-                    d0 <- diff(d)
-                    c(1 - mean(d0 ^ 6) ^ (1 / 6) * 6, fog[1], opt$par, 3 / 4)
+                    d <- fog - x
+                    md <- tapply(d, q_bins, \(x) mean(x ^ 6) ^ (1/6))
+                    mm <- tapply(fog, q_bins, \(x) mean(x ^ 6) ^ (1/6))
+                    qv <- mean(md) / mean(mm)
+                    c(1 - qv, fog[1], opt$par, 3 / 4)
                 })
                 # quality of base part of ogive 
                 base_quality_fix <- sapply(Ogive_fix, \(x) {
@@ -3148,12 +3155,12 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
                         return(NA_real_)
                     }
-                    # d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
-                    # 1 - mean(d ^ 2) ^ (1 / 3)
                     fog <- ogff(opt$par)
-                    d <- (fog - x) / fog[1]
-                    d0 <- diff(d)
-                    1 - mean(d0 ^ 6) ^ (1 / 6) * 6
+                    d <- fog - x
+                    md <- tapply(d, q_bins, \(x) mean(x ^ 6) ^ (1/6))
+                    mm <- tapply(fog, q_bins, \(x) mean(x ^ 6) ^ (1/6))
+                    qv <- mean(md) / mean(mm)
+                    1 - qv
                 })
                 base_quality_dyn <- sapply(Ogive_dyn, \(x) {
                     ini <- c(fx = 0.05, mu = 1 / 6, A0 = x[i_lo] / 50)
@@ -3162,12 +3169,12 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     if (opt$convergence != 0 || opt$par['mu'] > mu_lim) {
                         return(NA_real_)
                     }
-                    # d <- (ogff(opt$par)[i_r] - x[i_r]) / mean(x[i_r])
-                    # 1 - mean(d ^ 2) ^ (1 / 3)
                     fog <- ogff(opt$par)
-                    d <- (fog - x) / fog[1]
-                    d0 <- diff(d)
-                    1 - mean(d0 ^ 6) ^ (1 / 6) * 6
+                    d <- fog - x
+                    md <- tapply(d, q_bins, \(x) mean(x ^ 6) ^ (1/6))
+                    mm <- tapply(fog, q_bins, \(x) mean(x ^ 6) ^ (1/6))
+                    qv <- mean(md) / mean(mm)
+                    1 - qv
                 })
                 
                 # get Albrecht's ogive bias

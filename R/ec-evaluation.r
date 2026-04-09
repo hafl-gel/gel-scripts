@@ -3085,18 +3085,22 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 i_hi <- which(1 / freq < high_cont_sec)[1]
                 if (length(i_hi) != 1) stop('check argument "high_cont_sec"!')
                 hi_cont_fix <- sapply(Ogive_fix, \(x) {
-                    (x[1] - mean(x[i_hi + seq(-cont_pts, cont_pts)]))/ x[1]
+                    hi_ind <- seq(max(1, i_hi - cont_pts), min(length(x), i_hi + cont_pts))
+                    (x[1] - mean(x[hi_ind]))/ x[1]
                 })
                 hi_cont_dyn <- sapply(Ogive_dyn, \(x) {
-                    (x[1] - mean(x[i_hi + seq(-cont_pts, cont_pts)]))/ x[1]
+                    hi_ind <- seq(max(1, i_hi - cont_pts), min(length(x), i_hi + cont_pts))
+                    (x[1] - mean(x[hi_ind]))/ x[1]
                 })
                 i_lo <- which(1 / freq <= low_cont_sec)[1]
                 if (length(i_lo) != 1) stop('check argument "low_cont_sec"!')
                 lo_cont_fix <- sapply(Ogive_fix, \(x) {
-                    (x[1] - mean(x[i_lo + seq(-cont_pts, cont_pts)])) / x[1]
+                    lo_ind <- seq(max(1, i_lo - cont_pts), min(length(x), i_lo + cont_pts))
+                    (x[1] - mean(x[lo_ind])) / x[1]
                 })
                 lo_cont_dyn <- sapply(Ogive_dyn, \(x) {
-                    (x[1] - mean(x[i_lo + seq(-cont_pts, cont_pts)])) / x[1]
+                    lo_ind <- seq(max(1, i_lo - cont_pts), min(length(x), i_lo + cont_pts))
+                    (x[1] - mean(x[lo_ind])) / x[1]
                 })
 
                 # fit theoretical ogive shape

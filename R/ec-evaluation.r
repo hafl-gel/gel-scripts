@@ -4038,12 +4038,14 @@ merge_data <- function(basis, ..., ec_subset = TRUE) {
     miro <- licor <- ht <- snc <- NULL
     # capture dots
     for (i in seq_len(...length())) {
-        switch(names(...elt(i))[3]
-            , 'u' = snc <- ...elt(i)
-            , 'nh3_ppb' = ht <- ...elt(i)
-            , 'CO2D' = licor <- ...elt(i)
-            , 'ch4_wet' = miro <- ...elt(i)
-        )
+        if (!is.null(...elt(i))) {
+            switch(names(...elt(i))[3]
+                , 'u' = snc <- ...elt(i)
+                , 'nh3_ppb' = ht <- ...elt(i)
+                , 'CO2D' = licor <- ...elt(i)
+                , 'ch4_wet' = miro <- ...elt(i)
+            )
+        }
     }
     # prepare output
     n_out <- nrow(basis)

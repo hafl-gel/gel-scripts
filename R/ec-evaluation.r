@@ -1675,7 +1675,8 @@ process_ec_fluxes <- function(
         } 
 
         # fix start_time (only use sonic)
-        if (length(start_time) == 1 && start_time == 'first') {
+        if (length(start_time) == 1 && is.character(start_time) && 
+            start_time == 'first') {
             start_time <- with_tz(start_sonic, tz_user)
         } else if (!is.null(start_time)) {
             start_time <- parse_date_time3(start_time, tz = tz_user)
@@ -1684,7 +1685,8 @@ process_ec_fluxes <- function(
         # fix end_time (only use sonic)
         if (is.null(end_time)) {
             end_time <- start_time + avg_secs
-        } else if (length(end_time) == 1 && end_time == 'last') {
+        } else if (length(end_time) == 1 && is.character(end_time) && 
+            end_time == 'last') {
             end_time <- with_tz(end_sonic, tz_user)
         } else {
             end_time <- parse_date_time3(end_time, tz = tz_user)

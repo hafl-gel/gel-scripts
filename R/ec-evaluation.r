@@ -2782,7 +2782,12 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
         # TODO (maybe for later): include NA where d_t>2*mean, remove entries where d_t < 0.5*mean
 
         # be verbose
-        cat("\n\n~~~~~~~~\n", format(interval_start), " - interval ", .GRP, 
+        if ('parent_interval' %in% names(env_list)) {
+            wint <- ' - subinterval '
+        } else {
+            wint <- ' - interval '
+        }
+        cat("\n\n~~~~~~~~\n", format(interval_start), wint, .GRP, 
             " of ", .NGRP, "\n", sep = '')
 
         # ugly copy because of inability to change .SD values

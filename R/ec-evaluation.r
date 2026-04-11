@@ -1896,9 +1896,9 @@ process_ec_fluxes <- function(
                     start_time = start_time, 
                     end_time = end_time
                     ), tf_resid, warn_unsupported_types = FALSE)
-            # be verbose
-            cat('~~~\nRunning main function in parallel...\n')
             if (isTRUE(debug_parallel)) {
+                # be verbose
+                cat('~~~\nDebugging main function in parallel mode...\n')
                 # debug parallelism
                 out_list_paths <- list()
                 for (ispl in ind_split) {
@@ -1910,6 +1910,8 @@ process_ec_fluxes <- function(
                     )
                 }
             } else {
+                # be verbose
+                cat('~~~\nRunning main function in parallel...\n')
                 # # call main function in parallel
                 out_list_paths <- .clusterApplyLB(cl, ind_split, 
                     .pef_wrapper, tf_cobj = tf_cobj, tf_resid = tf_resid, 
@@ -2532,7 +2534,6 @@ process_ec_fluxes <- function(
 
         # loop over intervals: call MAIN function
         if (run_parallel) {
-            cat('~~~\nprocessing fluxes in parallel...\n')
             # save env objects
             tf_env <- paste0(tf, '-env.qs2')
             qs2::qs_save(eobj, tf_env)
@@ -2544,12 +2545,14 @@ process_ec_fluxes <- function(
                 .(tf_sd)
             }, by = bin]
             if (isTRUE(debug_parallel)) {
+                cat('~~~\ndebugging fluxes in parallel mode...\n')
                 # debug parallelism
                 out_list <- list()
                 for (tf_sd in dd[, tf_sd]) {
                     out_list <- c(out_list, .wrapper_main(tf_sd, tf_env))
                 }
             } else {
+                cat('~~~\nprocessing fluxes in parallel...\n')
                 # run main function
                 out_list <- .clusterApplyLB(cl, dd[, tf_sd], .wrapper_main, 
                     tf_env = tf_env)

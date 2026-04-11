@@ -179,7 +179,6 @@
                 cmd <- paste0('export R_MAX_VSIZE=', memory_limit, 
                     ' && export R_GC_MEM_GROW=0 && ', cmd)
             #~~~~ memory limit
-            # FIXME: a) fix sequential strategy mem_limit + below does just repeat cmd???
             cmd <- paste(rep(cmd, length(cl)), collapse = " & ")
             system(cmd, wait = FALSE)
         }

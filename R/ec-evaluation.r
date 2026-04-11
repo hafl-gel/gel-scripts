@@ -2978,6 +2978,26 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     })]
             }
 
+            # fix detrending resulting in NA
+            for (fv in unique(c(flux_variables, 'u', 'v', 'w', 'T'))) {
+                if (SD[, !any(is.finite(var)), env = list(var = fv)]) {
+                    scalars <- scalars[!(scalars %in% fv)]
+                    flux_variables <- flux_variables[!(flux_variables %in% fv)]
+                    plot_timeseries <- plot_timeseries[!(names(plot_timeseries) %in% fv)]
+                    sind <- grep(fv, covariances)
+                    if (length(sind)) {
+                        damping_reference <- damping_reference[
+                            !(names(damping_reference) %in% covariances[sind])]
+                        damp_region <- damp_region[
+                            !(names(damp_region) %in% covariances[sind])]
+                        covariances <- covariances[-sind]
+                        covariances_variables <- covariances_variables[-sind]
+                        covariances_plotnames <- covariances_plotnames[-sind]
+                        scalar_covariances <- scalar_covariances[-sind]
+                    }
+                }
+            }
+
             # check if any fluxes can be derived
             if (has_flux <- length(covariances_variables) > 0) {
                 # start of flux relevant data manipulation

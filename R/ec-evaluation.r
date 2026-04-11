@@ -3001,6 +3001,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     pw_covs <- intersect(covariances, 
                         names(lag_dyn_calc_pw)[lag_dyn_calc_pw])
                     pw_vars <- strsplit(pw_covs, split = 'x', fixed = TRUE)
+                    names(pw_vars) <- pw_covs
                     cat('\t  ** pre-whitened, bootstrapped dyn lag\n')
                     if (create_graphs) {
                         if (!dir.exists(path_folder)) {
@@ -3015,9 +3016,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         plotname <- paste("pwb-timelag", date_formatted, time2, 
                             sep="-") 
                     }
-                    tlag_pw <- sapply(pw_vars,
-                        \(v) {
-                            pv <- paste(v, collapse = 'x')
+                    tlag_pw <- sapply(pw_covs,
+                        \(pv) {
+                            v <- pw_vars[[pv]]
                             cat('\t    - ', pv, '\n')
                             # lws, uws & LAG.MAX in secs
                             lws <- dyn_lag['lower', pv] / rec_Hz

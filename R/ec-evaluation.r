@@ -1311,6 +1311,7 @@ process_ec_fluxes <- function(
 		, ogives_return = FALSE
         , as_ibts = TRUE
         , ncores = 1
+        , psock_args = NULL
         , parallel_mem_limit = NULL
         , processing_strategy = c('sequential', 'all-in-one')[1]
         , minimal_output = FALSE
@@ -1754,8 +1755,9 @@ process_ec_fluxes <- function(
             } else {
                 cat('\nSetting up parallelism...\n')
                 # start cluster
-                cl <- .makePSOCKcluster(ncores, 
-                    memory_limit = parallel_mem_limit)
+                cl <- do.call(.makePSOCKcluster,
+                    c(list(names = ncores, memory_limit = parallel_mem_limit),
+                        psock_args))
                 # stop cluster on exit
                 on.exit(parallel::stopCluster(cl))
                 # set data.table threads to 1 on slaves

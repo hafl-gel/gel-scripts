@@ -1312,6 +1312,7 @@ process_ec_fluxes <- function(
         , as_ibts = TRUE
         , ncores = 1
         , psock_args = NULL
+        , debug_parallel = FALSE
         , parallel_mem_limit = NULL
         , processing_strategy = c('sequential', 'all-in-one')[1]
         , minimal_output = FALSE
@@ -1897,11 +1898,24 @@ process_ec_fluxes <- function(
                     ), tf_resid, warn_unsupported_types = FALSE)
             # be verbose
             cat('~~~\nRunning main function in parallel...\n')
-            # # call main function in parallel
-            out_list_paths <- .clusterApplyLB(cl, ind_split, 
-                .pef_wrapper, tf_cobj = tf_cobj, tf_resid = tf_resid, 
-                tf_sonic = tf_sonic, tf_ht = tf_ht, tf_licor = tf_licor
-            )
+            if (isTRUE(debug_parallel)) {
+                # debug parallelism
+                out_list_paths <- list()
+                for (ispl in ind_split) {
+                    out_list_paths <- c(out_list_paths,
+                        .pef_wrapper(ispl, tf_cobj = tf_cobj, 
+                            tf_resid = tf_resid, tf_sonic = tf_sonic, 
+                            tf_ht = tf_ht, tf_licor = tf_licor
+                        )
+                    )
+                }
+            } else {
+                # # call main function in parallel
+                out_list_paths <- .clusterApplyLB(cl, ind_split, 
+                    .pef_wrapper, tf_cobj = tf_cobj, tf_resid = tf_resid, 
+                    tf_sonic = tf_sonic, tf_ht = tf_ht, tf_licor = tf_licor
+                )
+            }
             # remove files
             unlink(tf_resid)
             # loop over list
@@ -2529,9 +2543,17 @@ process_ec_fluxes <- function(
                     warn_unsupported_types = FALSE)
                 .(tf_sd)
             }, by = bin]
-            # run main function
-            out_list <- .clusterApplyLB(cl, dd[, tf_sd], .wrapper_main, 
-                tf_env = tf_env)
+            if (isTRUE(debug_parallel)) {
+                # debug parallelism
+                out_list <- list()
+                for (tf_sd in dd[, tf_sd]) {
+                    out_list <- c(out_list, .wrapper_main(tf_sd, tf_env))
+                }
+            } else {
+                # run main function
+                out_list <- .clusterApplyLB(cl, dd[, tf_sd], .wrapper_main, 
+                    tf_env = tf_env)
+            }
             results <- rbindlist(lapply(out_list, \(x) {
                 # read results
                 out <- qs2::qd_read(x)

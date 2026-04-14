@@ -634,7 +634,7 @@ find_dynlag <- function(x, dyn) {
 	ind <- seq(dyn[1], dyn[2]) + m
 	# find max relative to baseline (average):
     mi <- seq(max(m - 500, 1), min(m + 500, length(x)))
-    avg <- mean(x[mi])
+    avg <- mean(x[mi], na.rm = TRUE)
 	maxis <- ind[which.max(abs(x[ind] - avg))]
 	c(index = maxis, tau = maxis - m)
 }
@@ -2995,7 +2995,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
             # fix detrending resulting in NA
             for (fv in unique(c(flux_variables, 'u', 'v', 'w', 'T'))) {
-                if (SD[, !any(is.finite(var)), env = list(var = fv)]) {
+                if (SD[, sum(is.finite(var)) < n_threshold, env = list(var = fv)]) {
                     scalars <- scalars[!(scalars %in% fv)]
                     flux_variables <- flux_variables[!(flux_variables %in% fv)]
                     plot_timeseries <- plot_timeseries[!(names(plot_timeseries) %in% fv)]

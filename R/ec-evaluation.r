@@ -312,19 +312,24 @@ filter_list <- list(
 
 # detrending time series
 trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360"), Hz_ts = 10) {
-    isfin <- is.finite(y)
-    n <- sum(isfin)
-    yfin <- y[isfin]
+    if (is.null(naa <- na.action(y))) {
+        y <- na.omit(y)
+        naa <- na.action(y)
+    }
+    yfin <- y
+    n <- length(y)
     fitted <- rep(NA_real_, length(y))
 	method <- method[1]
 	switch(method, 
 		"blockAVG" = {
 			my <- mean(y, na.rm = TRUE)
-			fitted[isfin] <- rep(my, n) 
+			fitted <- rep(my, n) 
+            resid <- y - fitted
+            attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
 			list(
 				coefficients = c(intercept = my, slope = 0)
 				, fitted = fitted
-				, residuals = y - fitted
+				, residuals = resid
 				) 
 		}
 		, "linear" = {
@@ -333,11 +338,13 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
 			xstr <- (x <- seq.int(n)) - mx
 			b <- sum(xstr * (yfin - my)) / (n - 1) / (sum(xstr ^ 2) / (n - 1))
 			a <- my - mx * b
-			fitted[isfin] <- a + b * x
+			fitted <- a + b * x
+            resid <- y - fitted
+            attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
 			list(
 				coefficients = c(intercept = a, slope = b)
 				, fitted = fitted
-				, residuals = y - fitted
+				, residuals = resid
 				) 
 		}
 		, "linear_robust" = {
@@ -345,24 +352,28 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
 			cfs <- mod$coefficients
 			a <- cfs[1]
 			b <- cfs[2]
-			fitted[isfin] <- mod$fitted
+			fitted <- mod$fitted
+            resid <- y - fitted
+            attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
 			if (!mod$converged) {
 				stop("robust linear regression did not converge!")
 			}
 			list(
 				coefficients = c(intercept = a, slope = b)
 				, fitted = fitted
-				, residuals = y - fitted
+				, residuals = resid
 				) 
 		}
 		,{
             if (grepl('^ma_', method)) {
                 ma <- round(as.numeric(sub("ma_", "", method)) * Hz_ts)
-                fitted[isfin] <- caTools::runmean(yfin, ma, "C", "mean")
+                fitted <- caTools::runmean(yfin, ma, "C", "mean")
+                resid <- y - fitted
+                attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
                 list(
                     coefficients = c(intercept = NA, slope = NA)
                     , fitted = fitted
-                    , residuals = y - fitted
+                    , residuals = resid
                 ) 
             } else if (sub('_\\d+$', '', method) %in% names(filter_list)) {
                 win <- round(as.numeric(sub(".*_", "", method)) * Hz_ts)
@@ -371,11 +382,13 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
                 }
                 if (win >= n) {
                     warning('(detrending) filter window ist larger than available data')
+                    resid <- y - fitted
+                    attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
                     return(
                         list(
                             coefficients = c(intercept = NA, slope = NA)
                             , fitted = fitted
-                            , residuals = y - fitted
+                            , residuals = resid
                         )
                     )
                 }
@@ -388,12 +401,14 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
                 ym <- yfin - (yh2 - yh1)
                 yp <- yfin - (yh1 - yh2)
                 z <- c(ym[n + 1 - ihalf], yfin, yp[ihalf])
-                fitted[isfin] <- stats::filter(z, filt, 'convolution', 2, 
+                fitted <- stats::filter(z, filt, 'convolution', 2, 
                     circular = FALSE)[1:n + ihalf[length(ihalf)]]
+                resid <- y - fitted
+                attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
                 list(
                     coefficients = c(intercept = NA, slope = NA)
                     , fitted = fitted
-                    , residuals = y - fitted
+                    , residuals = resid
                 )
             } else {
                 stop(
@@ -887,7 +902,7 @@ plot.tseries <- function(dat,wind,scal,selection,color,units,st_sub=NULL){
 	if(!is.null(scal)){
         # fix scalars
         dat[, names(scal)] <- lapply(scal, \(x) {
-            if (is.null(isna <- na.action(x$residuals))) {
+            if (is.null(isna <- na.action(x$fitted))) {
                 x$fitted + x$residuals
             } else {
                 out <- rep(NA_real_, nrow(dat))
@@ -897,7 +912,7 @@ plot.tseries <- function(dat,wind,scal,selection,color,units,st_sub=NULL){
         })
         # add scalars
 		dat3 <- cbind(dat3, lapply(scal, \(x) {
-                if (is.null(isna <- na.action(x$residuals))) {
+                if (is.null(isna <- na.action(x$fitted))) {
                     x$fitted
                 } else {
                     out <- rep(NA_real_, nrow(dat3))

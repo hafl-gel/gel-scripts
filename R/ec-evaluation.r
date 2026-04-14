@@ -2861,32 +2861,13 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             ) {
                 # loop over flux_variables & check
                 for (fv in unique(c(flux_variables, 'u', 'v', 'w', 'T'))) {
-                    # fv <- flux_variables[1]
-                    # x <- SD[, unlist(mget(fv, ifnotfound = NA))]
-                    x <- SD[, unlist(mget(paste0(fv, '_flag'), ifnotfound = NA))]
-                    if (x[1] < -2) {
+                    x <- SD[, v, env = list(v = fv)]
+                    if (all(is.na(x))) {
                         cat('=> ', fv, ': measurement contains only NA values',
                             ' -> exclude from current interval\n', sep = '')
                         scalars <- scalars[!(scalars %in% fv)]
                         flux_variables <- flux_variables[!(flux_variables %in% fv)]
                         plot_timeseries <- plot_timeseries[!(names(plot_timeseries) %in% fv)]
-                        sind <- grep(fv, covariances)
-                        if (length(sind)) {
-                            damping_reference <- damping_reference[
-                                !(names(damping_reference) %in% covariances[sind])]
-                            damp_region <- damp_region[
-                                !(names(damp_region) %in% covariances[sind])]
-                            covariances <- covariances[-sind]
-                            # fix_lag <- fix_lag[-sind]
-                            # dyn_lag <- dyn_lag[, -sind, drop = FALSE]
-                            covariances_variables <- covariances_variables[-sind]
-                            covariances_plotnames <- covariances_plotnames[-sind]
-                            scalar_covariances <- scalar_covariances[-sind]
-                        }
-                    } else if (x[1] < -1) {
-                        cat('=> ', fv, ': measurement contains NA values',
-                            ' -> exclude from flux processing\n', sep = '')
-                        flux_variables <- flux_variables[!(flux_variables %in% fv)]
                         sind <- grep(fv, covariances)
                         if (length(sind)) {
                             damping_reference <- damping_reference[
@@ -2976,6 +2957,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                     detrending[scalars], MoreArgs = list(Hz_ts = rec_Hz), 
                     SIMPLIFY = FALSE
                 )
+
                 # calculate scalar averages and sd:
                 # ------------------------------------------------------------------ 
                 scalar_means[scalars] <- sapply(scalar_list, mean)
@@ -2994,11 +2976,11 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             }
 
             # fix detrending resulting in NA
-            for (fv in unique(c(flux_variables, 'u', 'v', 'w', 'T'))) {
+            for (fv in unique(c(scalars, 'u', 'v', 'w', 'T'))) {
                 if (SD[, sum(is.finite(var)) < n_threshold, env = list(var = fv)]) {
-                    scalars <- scalars[!(scalars %in% fv)]
+                    cat('=> ', fv, ': measurement contains too many NA values',
+                        ' -> exclude from flux processing\n', sep = '')
                     flux_variables <- flux_variables[!(flux_variables %in% fv)]
-                    plot_timeseries <- plot_timeseries[!(names(plot_timeseries) %in% fv)]
                     sind <- grep(fv, covariances)
                     if (length(sind)) {
                         damping_reference <- damping_reference[

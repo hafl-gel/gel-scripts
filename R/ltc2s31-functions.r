@@ -193,7 +193,8 @@ read_tc_sensors <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = F
     dat
 }
 
-read_dds75 <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = FALSE) {
+read_dds75 <- function(path_data, sensor, from, to, tz = 'UTC', 
+    recording_frequency = NULL, as_ibts = FALSE) {
     # process from/to
     if (missing(from)) {
         from_psx <- from_int <- 1
@@ -261,10 +262,15 @@ read_dds75 <- function(path_data, sensor, from, to, tz = 'UTC', as_ibts = FALSE)
         round() |> as.POSIXct()]
     # fix apparently sometimes occuring wrong time order
     setorder(dat, et)
-    # recorded are 1-minute averages
-    dat[, st := c(et[1] - 60, et[-.N])]
+    # recorded at xxx frequency
+    if (is.null(recording_frequency)) {
+        dTime <- dat[, median(as.numeric(diff(et), units = 'secs'))]
+    } else {
+        dTime <- parse_time_diff(recording_frequency)
+    }
+    dat[, st := c(et[1] - dTime, et[-.N])]
     # restrict time gaps to 70 seconds
-    dat[which(as.numeric(et - st) > 70), st := et - 60]
+    dat[which(as.numeric(et - st, units = 'secs') > (dTime * 1.2)), st := et - dTime]
     # remove time column
     dat[, time := NULL]
     # subset by from/to

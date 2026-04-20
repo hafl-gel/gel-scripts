@@ -3596,10 +3596,15 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 res_sub <- .ec_main(SDsub, env_sub)
 
                 # get averages
-                avg_subint <- res_sub[, lapply(.SD, mean), 
-                    .SDcols = c(names(wind_stats), 
-                        paste0('flux_fix_', names(flux_fix_lag)), 
-                        paste0('flux_dyn_', names(flux_dyn_lag)))]
+                if (has_flux) {
+                    avg_subint <- res_sub[, lapply(.SD, mean), 
+                        .SDcols = c(names(wind_stats), 
+                            paste0('flux_fix_', names(flux_fix_lag)), 
+                            paste0('flux_dyn_', names(flux_dyn_lag)))]
+                } else {
+                    avg_subint <- res_sub[, lapply(.SD, mean), 
+                        .SDcols = names(wind_stats)]
+                }
                 # unselect z_sonic etc.
                 avg_sel <- grep('^(z_sonic|z_canopy|d)$', names(avg_subint), 
                     invert = TRUE, value = TRUE)

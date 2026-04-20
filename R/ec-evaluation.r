@@ -715,8 +715,17 @@ detrend_sonic_data <- function(x, detr, rhz) {
     # keep T for plotting
     x[, Trot := T]
     # replace detrended variables
-    x[, c("u", "v", "w", "T") := 
-        wind[c("uprot", "vprot", "wprot", "Tdet")]]
+    ind <- x[, seq_len(.N)]
+    vkey <- c("u" = 'uprot', "v" = 'vprot', "w" = 'wprot', "T" = 'Tdet')
+    for (w in names(vkey)) {
+        vcol <- vkey[[w]]
+        naa <- na.action(wind[[vcol]])
+        if (is.null(naa)) {
+            set(x, , w, wind[[vcol]])
+        } else {
+            set(x, i = ind[-naa], w, wind[[vcol]])
+        }
+    }
     # return wind
     wind
 }

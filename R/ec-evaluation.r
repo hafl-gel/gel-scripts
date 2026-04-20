@@ -1173,6 +1173,7 @@ process_turbulence <- function(
     , declination = NULL
     , z_canopy = NULL
 	, avg_period = '30mins'
+    , subintervals = FALSE
     , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', T = 'blockAVG')
     , ustar_method = c('neg_sqrt', 'double_sqrt', 'fallback')[1]
     , na_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE)
@@ -1199,6 +1200,7 @@ process_turbulence <- function(
         , declination = declination
         , z_canopy = z_canopy
 		, avg_period = avg_period
+        , subintervals = subintervals
         , detrending = detrending
         , na_limits = na_limits
         , limits_lower = limits_lower

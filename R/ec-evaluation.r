@@ -3104,15 +3104,19 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 m <- ifelse(n_period %% 2, (n_period + 1) / 2, 
                     n_period / 2 + 1)
                 lo_range <- m - rev(gamma_time_window) * 60 * rec_Hz
+                lo_ind <- seq(lo_range[1], lo_range[2])
+                lo_ind <- lo_ind[lo_ind > 1]
                 hi_range <- m + gamma_time_window * 60 * rec_Hz
+                hi_ind <- seq(hi_range[1], hi_range[2])
+                hi_ind <- hi_ind[hi_ind <= n_period]
                 # -> sd_cov_low
-                sd_cov_lo <- sapply(Covars, \(x) sd(x[lo_range]))
+                sd_cov_lo <- sapply(Covars, \(x) sd(x[lo_ind], na.rm = TRUE))
                 # -> avg_cov_low
-                avg_cov_lo <- sapply(Covars, \(x) mean(x[lo_range]))
+                avg_cov_lo <- sapply(Covars, \(x) mean(x[lo_ind], na.rm = TRUE))
                 # -> sd_cov_hi
-                sd_cov_hi <- sapply(Covars, \(x) sd(x[hi_range]))
+                sd_cov_hi <- sapply(Covars, \(x) sd(x[hi_ind], na.rm = TRUE))
                 # -> avg_cov_hi
-                avg_cov_hi <- sapply(Covars, \(x) mean(x[hi_range]))
+                avg_cov_hi <- sapply(Covars, \(x) mean(x[hi_ind], na.rm = TRUE))
                 re_rmse <- sqrt(0.5 * (sd_cov_lo ^ 2 + avg_cov_lo ^ 2 +
                         sd_cov_hi ^ 2 + avg_cov_hi ^ 2))
 

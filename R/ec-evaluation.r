@@ -131,7 +131,7 @@ check_limits <- function(dat, limits, lim_window = 500,
                     max_size <- win_half * 2 * Hz[1] * 1.2
                     ind <- find_window(as.numeric(Time), x1, x2, max_size)
                     # replace values
-                    cat('- replace values: ')
+                    cat(' - replace values: ')
                     x[isna] <- sapply(seq_along(isna), \(i) {
                         verb <- paste(i, '/', length(isna))
                         cat(verb)
@@ -159,13 +159,13 @@ check_limits <- function(dat, limits, lim_window = 500,
                     max_size <- win_half * 2 * Hz[1] * 1.2
                     ind <- find_window(as.numeric(Time), x1, x2, max_size)
                     # replace values
-                    cat('- replace values: ')
+                    cat(' - replace values: ')
                     x[isna] <- sapply(seq_along(isna), \(i) {
                         verb <- paste(i, '/', length(isna))
                         cat(verb)
                         j <- setdiff(ind[[i]], 0L)
                         if (length(j) != length(w_1)) {
-                            w_i <- j - isna[i] + win_half * d_t + 1
+                            w_i <- j - isna[i] + win_half * d_t + 2
                             out <- sum(x[j] * w_1[w_i], na.rm = TRUE) / 
                                 sum(w_1[w_i][x_flag[j] == 0])
                         } else {

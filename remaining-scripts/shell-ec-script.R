@@ -10,59 +10,113 @@ suppressMessages(
     }
 )
 
-suppressMessages(library(docopt))       # we need docopt (>= 0.3) as on CRAN
+# load gel
+suppressMessages(library(gel))
 
-doc <- "Usage: shell-ec-script.R [-S SONIC] [-h]
+# build shell interface
+doc <- paste0('Usage: shell-ec-script.R',
+    ' SONIC_FILE [-H HT_FILE] [-L LICOR_FILE] [-M MIRO_FILE]',
+    ' [-S START] [-E END] [-Z ZSONIC] [-C ZCANOPY] [-D DEVNORTH]',
+    ' [ARGS...] [-h]
 
--S --sonic SONIC    sonic file or path to sonic file (required)
--h --help           show this help text"
+SONIC_FILE                          (required) path to sonic file
+-H HT_FILE --ht=HT_FILE             path to ht8700 file [default: NULL]
+-L LICOR_FILE --licor=LICOR_FILE    path to licor file [default: NULL]
+-M MIRO_FILE --miro=MIRO_FILE       path to miro file [default: NULL]
+-S START --start=START             start datetime [default: -30mins]
+-E END --end=END                   end datetime [default: now]
+-Z ZSONIC --zsonic=ZSONIC          sonic height in m a.g.l [default: 2]
+-C CANOPY --canopy=CANOPY          canopy height in m [default: 0.2]
+-D DEVNORTH --north=DEVNORTH       sonic north deviation [default: 0]
+ARGS                                (optional) additional arguments passed to process_ec_fluxes() [default: NULL]
+-h, --help                          show this help text
 
+Some defaults are changed compared to the original R function, namely subintervals=FALSE, create_graphs=FALSE and as_ibts=FALSE
+')
+
+# process
 opt <- docopt(doc)
 
-print(opt)
+# check ARGS
+if (length(opt$ARGS) > 0) {
+    # parse additional arguments
+    ARGS <- eval(parse(text = paste0(
+        'list(', paste(opt$ARGS, collapse = ','), ')'
+    )))
+} else {
+    ARGS <- NULL
+}
 
-# if (opt$deps == "TRUE" || opt$deps == "FALSE") {
-#     opt$deps <- as.logical(opt$deps)
-# } else if (opt$deps == "NA") {
-#     opt$deps <- NA
-# }
+# check licor
+if (opt$licor == 'NULL') {
+    opt$licor <- NULL
+}
+# check ht
+if (opt$ht == 'NULL') {
+    opt$ht <- NULL
+}
+# check miro
+if (opt$miro == 'NULL') {
+    opt$miro <- NULL
+}
 
-# if (opt$repos == "NULL") {
-#     opt$repos <- NULL
-# }
+# check start
+nw <- now()
+if (opt$start != 'first') {
+    # try parsing
+    start <- try(parse_date_time3(opt$start))
+    if (inherits(start, 'try-error') || is.na(start)) {
+        start <- nw + parse_time_diff(opt$start)
+    }
+    # check start
+    stopifnot(start < nw)
+    opt$start <- start
+}
 
-# # check if PACKAGES is a path to a file/directory
-# if (length(opt$PACKAGES) == 1 && file.exists(opt$PACKAGES)) {
-#     old_path <- opt$PACKAGES
-#     # try to find package top directory (max two levels up)
-#     i <- 0
-#     while (!(is_top <- 'NAMESPACE' %in% dir(opt$PACKAGES)) && i <= 2) {
-#         i <- i + 1
-#         opt$PACKAGES <- dirname(opt$PACKAGES)
-#     }
-#     opt$repos <- NULL
-#     opt$deps <- NA
-# } else {
-#     is_top <- TRUE
-# }
+# check end
+if (opt$end %in% c('now', 'last')) {
+    opt$end <- nw
+}
+# check stop
+stopifnot(opt$end <= nw)
 
-# if (!is_top) {
-#     cat('cannot find package top directory from given path!\n')
-# } else if (opt$error) {
-#     withCallingHandlers(
-#         install.packages(pkgs  = opt$PACKAGES,
-#                          lib   = opt$libloc,
-#                          repos = opt$repos,
-#                          clean = TRUE,
-#                          Ncpus = opt$ncpus,
-#                          dependencies=opt$deps),
-#         warning = stop)
+# get arguments
+opt <- opt[c('SONIC_FILE', 'ht', 'licor', 'miro', 'start', 'end',
+    'zsonic', 'canopy', 'north')]
+# fix names
+names(opt) <- c('sonic_directory', 'ht_directory', 'licor_directory',
+    'miro_directory', 'start_time', 'end_time', 'z_ec', 'z_canopy', 'dev_north')
 
-# } else {
-#     install.packages(pkgs  = opt$PACKAGES,
-#                      lib   = opt$libloc,
-#                      repos = opt$repos,
-#                      clean = TRUE,
-#                      ncpus = opt$ncpus,
-#                      dependencies=opt$deps)
-# }
+# fix declination default
+if ('declination' %in% names(ARGS)) {
+    opt$declination <- ARGS$declination
+    ARGS$declination <- NULL
+} else {
+    opt$declination <- 0
+}
+# fix subintervals defaults
+if ('subintervals' %in% names(ARGS)) {
+    opt$subintervals <- ARGS$subintervals
+    ARGS$subintervals <- NULL
+} else {
+    opt$subintervals <- FALSE
+}
+# fix create_graphs defaults
+if ('create_graphs' %in% names(ARGS)) {
+    opt$create_graphs <- ARGS$create_graphs
+    ARGS$create_graphs <- NULL
+} else {
+    opt$create_graphs <- FALSE
+}
+# fix as_ibts defaults
+if ('as_ibts' %in% names(ARGS)) {
+    opt$as_ibts <- ARGS$as_ibts
+    ARGS$as_ibts <- NULL
+} else {
+    opt$as_ibts <- FALSE
+}
+
+# call flux processing function
+out <- do.call(process_ec_fluxes, c(opt, ARGS))
+
+out

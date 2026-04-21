@@ -11,15 +11,16 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // find_window
-Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2);
-RcppExport SEXP _gel_find_window(SEXP xSEXP, SEXP y1SEXP, SEXP y2SEXP) {
+Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2, const int maximum_size);
+RcppExport SEXP _gel_find_window(SEXP xSEXP, SEXP y1SEXP, SEXP y2SEXP, SEXP maximum_sizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type y1(y1SEXP);
     Rcpp::traits::input_parameter< NumericVector >::type y2(y2SEXP);
-    rcpp_result_gen = Rcpp::wrap(find_window(x, y1, y2));
+    Rcpp::traits::input_parameter< const int >::type maximum_size(maximum_sizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(find_window(x, y1, y2, maximum_size));
     return rcpp_result_gen;
 END_RCPP
 }

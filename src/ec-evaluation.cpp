@@ -4,49 +4,43 @@ using namespace Rcpp;
 
 // C++ helper function used in hard limits function
 // [[Rcpp::export]]
-Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2)
+Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2,
+        const int maximum_size)
 	{
 	Rcpp::List Out(y1);
 	int lenx = x.size();
-    // LogicalVector LogVec = rep(false, lenx);
 	int leny = y1.size();
 	int run = 0;
     int run_next = 0;
-	// int j = 0;
+    int mody = leny / 10;
+    int j;
+    Rcout << "[";
 	for (int i = 0; i < leny; i++) {
-        // pass j to runner & set j to 0
+        if ((i % mody) < 1) Rcout << "=";
+        // pass previous position to runner
         run = run_next;
-        // j = 0;
-        LogicalVector LogVec = rep(false, lenx);
 		if (x[lenx - 1] < y1[i] || x[run] > y2[i]) {
-			Out[i] = LogVec;
+			Out[i] = IntegerVector::create();
 		} else {
             // goto y1[i]
 			while (run < lenx && x[run] < y1[i]) {
 				run += 1;
 			}
             // assign run to run_next (here should next loop start)
-            // Rcout << run << "\n";
+            // Rcout << "\r00000000000000000\r" << i << "/" << run << "\n";
             run_next = run;
+            IntegerVector IntVec(maximum_size);
+            j = 0;
             // goto y2[i]
-			while (run < lenx && x[run] < y2[i]) {
-                // if (i < (leny - 1) && j == 0 && x[run] >= y1[i + 1]) {
-                //     j = run;
-                // }
-                LogVec[run] = true;
+			while (run < lenx && x[run] < y2[i] && j < maximum_size) {
+                IntVec[j] = run;
 				run += 1; 
+                j += 1;
 			}
-            // // check overflowing run
-            // if (run == lenx) {
-            //     run -= 1;
-            // }
-            // // check j
-            // if (j == 0) {
-            //     j = run;
-            // }
-            Out[i] = LogVec;
+            Out[i] = IntVec;
 		}
 	}
+    Rcout << "]";
 	return(Out);
 }
 

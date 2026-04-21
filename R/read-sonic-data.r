@@ -69,7 +69,7 @@ read_sonic <- function(file_path, from = NULL, to = NULL, tz = 'UTC',
             out <- readRDS(file_path)
         } else if (grepl("^(py_)?fnf_01_", bn)) {
             out <- read_hs_ascii(file_path)
-        } else if (grepl('^data_sonic-._\\d{8}_\\d{6}', bn)) {
+        } else if (grepl('^data_sonic-._\\d{8}_\\d{6}|^py_fnf_0(2|3)_*', bn)) {
             out <- read_windmaster_ascii(file_path)
         } else {
             # wrong file name

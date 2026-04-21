@@ -127,10 +127,11 @@ check_limits <- function(dat, limits, lim_window = 500,
                     x1 <- as.numeric(Time[isna]) - win_half
                     x2 <- as.numeric(Time[isna]) + win_half
                     # find window for each NA
-                    cat('get windows - ')
-                    ind <- find_window(Time, x1, x2)
+                    cat('get windows ')
+                    max_size <- win_half * 2 * Hz[1] * 1.2
+                    ind <- find_window(as.numeric(Time), x1, x2, max_size)
                     # replace values
-                    cat('replace values: ')
+                    cat('- replace values: ')
                     x[isna] <- sapply(seq_along(isna), \(i) {
                         verb <- paste(i, '/', length(isna))
                         cat(verb)
@@ -154,14 +155,15 @@ check_limits <- function(dat, limits, lim_window = 500,
                     x1 <- as.numeric(Time[isna]) - win_half
                     x2 <- as.numeric(Time[isna]) + win_half
                     # find window for each NA
-                    cat('get windows - ')
-                    ind <- find_window(as.numeric(Time), x1, x2)
+                    cat('get windows ')
+                    max_size <- win_half * 2 * Hz[1] * 1.2
+                    ind <- find_window(as.numeric(Time), x1, x2, max_size)
                     # replace values
-                    cat('replace values: ')
+                    cat('- replace values: ')
                     x[isna] <- sapply(seq_along(isna), \(i) {
                         verb <- paste(i, '/', length(isna))
                         cat(verb)
-                        j <- which(ind[[i]])
+                        j <- setdiff(ind[[i]], 0L)
                         if (length(j) != length(w_1)) {
                             w_i <- j - isna[i] + win_half * d_t + 1
                             out <- sum(x[j] * w_1[w_i], na.rm = TRUE) / 
@@ -2315,9 +2317,9 @@ process_ec_fluxes <- function(
                     miro <- rbindlist(lapply(
                             file.path(miro_directory, miro_selected), 
                             \(x) {
-                                cat('\tFile:', x, '- ')
+                                # cat('\tFile:', x, '- ')
                                 out <- read_miro(x)
-                                cat('done\n')
+                                # cat('done\n')
                                 out
                             }
                     ))

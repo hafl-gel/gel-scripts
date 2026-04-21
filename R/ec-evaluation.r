@@ -1369,7 +1369,9 @@ process_ec_fluxes <- function(
 		, add_name = ''
         , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, 
             ht_oss = TRUE, nh3_ppb = FALSE, nh3_ugm3 = TRUE, 
-            li_co2ss = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
+            li_co2ss = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE,
+            h2o_molfrac = TRUE, ch4_molfrac = TRUE, n2o_molfrac = TRUE
+        )
         , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', 
             T = 'K', ht_oss = '-', nh3_ppb = 'ppb', nh3_ugm3 = 'ug/m3', 
             li_co2ss = '-', h2o_mmolm3 = 'mmol/m3', co2_mmolm3 = 'mmol/m3',

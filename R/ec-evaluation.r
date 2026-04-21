@@ -1290,11 +1290,11 @@ process_ec_fluxes <- function(
             pf_U_thresh = 0
         )
         # detrending -> valid entries are blockAVG,linear,linear_robust,ma_xx (xx = time in seconds)
-        , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', 
-            T = 'blockAVG', nh3_ppb = 'blockAVG', nh3_ugm3 = 'blockAVG', 
-            h2o_mmolm3 = 'blockAVG', co2_mmolm3 = 'blockAVG',
-            h2o_molfrac = 'blockAVG', ch4_molfrac = 'blockAVG',
-            n2o_molfrac = 'blockAVG'
+        , detrending = c(u = 'linear', v = 'linear', w = 'linear', 
+            T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', 
+            h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear',
+            h2o_molfrac = 'linear', ch4_molfrac = 'linear',
+            n2o_molfrac = 'linear'
         )
 		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 
             'wxco2_mmolm3', 'wxh2o_molfrac', 'wxch4_molfrac', 
@@ -1351,11 +1351,11 @@ process_ec_fluxes <- function(
         , subintervals = TRUE
         , subint_prefix = 'subint_'
         , subint_n = 5
-        , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', 
-            T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', 
-            h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear', 
-            h2o_molfrac = 'linear', ch4_molfrac = 'linear', 
-            n2o_molfrac = 'linear'
+        , subint_detrending = c(u = 'blockAVG', v = 'blockAVG', 
+            w = 'blockAVG', T = 'blockAVG', nh3_ppb = 'blockAVG', 
+            nh3_ugm3 = 'blockAVG', h2o_mmolm3 = 'blockAVG', 
+            co2_mmolm3 = 'blockAVG', h2o_molfrac = 'blockAVG', 
+            ch4_molfrac = 'blockAVG', n2o_molfrac = 'blockAVG'
         )
         , subint_return = FALSE
         , oss_threshold = 0

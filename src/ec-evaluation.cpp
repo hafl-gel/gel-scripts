@@ -40,7 +40,7 @@ Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2,
             Out[i] = IntVec;
 		}
 	}
-    Rcout << "]";
+    Rcout << "] 100%";
 	return(Out);
 }
 

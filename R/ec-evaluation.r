@@ -2359,7 +2359,7 @@ process_ec_fluxes <- function(
         # get matching indices
         t_indices <- sonic_raw[, {
             I(match_times(t_basis - t0, as.numeric(Time, units = 'secs') - t0, 
-                rec_Hz
+                rec_Hz * 1.1
             ))
         }]
         rm(t0)
@@ -4321,8 +4321,8 @@ merge_data <- function(basis, ..., ec_subset = TRUE) {
         t_basis <- basis[, as.numeric(Time)]
         t_draw <- snc[, as.numeric(Time)]
         t0 <- t_basis[1]
-        # ~ 1/Hz
-        d_t <- median(diff(t_basis))
+        # ~ 10 Hz
+        d_t <- median(diff(t_basis)) * 1.1
         # get matching indices
         indices <- match_times(t_basis - t0, t_draw - t0, d_t)
         # fill values
@@ -4353,8 +4353,8 @@ merge_data <- function(basis, ..., ec_subset = TRUE) {
         t_basis <- basis[, as.numeric(Time)]
         t_draw <- ht[, as.numeric(Time)]
         t0 <- t_basis[1]
-        # ~ 1/Hz
-        d_t <- median(diff(t_basis))
+        # ~ 10 Hz
+        d_t <- median(diff(t_basis)) * 1.1
         # get matching indices
         indices <- match_times(t_basis - t0, t_draw - t0, d_t)
         # fill values
@@ -4384,8 +4384,8 @@ merge_data <- function(basis, ..., ec_subset = TRUE) {
         t_basis <- basis[, as.numeric(Time)]
         t_licor <- licor[, as.numeric(Time)]
         t0 <- t_basis[1]
-        # ~ 1/Hz
-        d_t <- median(diff(t_basis))
+        # ~ 10 Hz
+        d_t <- median(diff(t_basis)) * 1.1
         # get matching indices
         indices <- match_times(t_basis - t0, t_licor - t0, d_t)
         # fill values
@@ -4411,8 +4411,8 @@ merge_data <- function(basis, ..., ec_subset = TRUE) {
         t_basis <- basis[, as.numeric(Time)]
         t_miro <- miro[, as.numeric(Time)]
         t0 <- t_basis[1]
-        # ~ 1/Hz
-        d_t <- median(diff(t_basis))
+        # ~ 10 Hz
+        d_t <- median(diff(t_basis)) * 1.1
         # get matching indices
         indices <- match_times(t_basis - t0, t_miro - t0, d_t)
         # fill values

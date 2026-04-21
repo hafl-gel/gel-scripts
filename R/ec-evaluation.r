@@ -1229,6 +1229,7 @@ process_ec_fluxes <- function(
 		sonic_directory
         , ht_directory = NULL
         , licor_directory = NULL
+        , miro_directory = NULL
 		, start_time = NULL
 		, end_time = NULL
 		, avg_period = '30mins'
@@ -1239,24 +1240,41 @@ process_ec_fluxes <- function(
 		, z_canopy = NULL
         , despike = c(u = FALSE, v = FALSE, w = FALSE, T = FALSE, 
             nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
-            co2_mmolm3 = TRUE)
-        , despike_baseline_width = c(u = 10, v = 10, w = 10, T = 10, nh3_ppb = 10, 
-            nh3_ugm3 = 10, h2o_mmolm3 = 10, co2_mmolm3 = 10)
-        , despike_quantile = c(u = 0.95, v = 0.95, w = 0.95, T = 0.95, nh3_ppb = 0.95, 
-            nh3_ugm3 = 0.95, h2o_mmolm3 = 0.95, co2_mmolm3 = 0.95)
-        , despike_stats_width = c(u = 30, v = 30, w = 30, T = 30, nh3_ppb = 30, 
-            nh3_ugm3 = 30, h2o_mmolm3 = 30, co2_mmolm3 = 30)
-        , despike_stats_multiply = c(u = 4, v = 4, w = 4, T = 4, nh3_ppb = 4, 
-            nh3_ugm3 = 4, h2o_mmolm3 = 4, co2_mmolm3 = 4)
+            co2_mmolm3 = TRUE, h2o_molfrac = TRUE, ch4_molfrac = TRUE,
+            n2o_molfrac = TRUE
+        )
+        , despike_baseline_width = c(u = 10, v = 10, w = 10, T = 10, 
+            nh3_ppb = 10, nh3_ugm3 = 10, h2o_mmolm3 = 10, co2_mmolm3 = 10,
+            h2o_molfrac = 10, ch4_molfrac = 10, n2o_molfrac = 10
+        )
+        , despike_quantile = c(u = 0.95, v = 0.95, w = 0.95, T = 0.95, 
+            nh3_ppb = 0.95, nh3_ugm3 = 0.95, h2o_mmolm3 = 0.95, 
+            co2_mmolm3 = 0.95, h2o_molfrac = 0.95, ch4_molfrac = 0.95,
+            n2o_molfrac = 0.95
+        )
+        , despike_stats_width = c(u = 30, v = 30, w = 30, T = 30, 
+            nh3_ppb = 30, nh3_ugm3 = 30, h2o_mmolm3 = 30, co2_mmolm3 = 30,
+            h2o_molfrac = 30, ch4_molfrac = 30, n2o_molfrac = 30
+        )
+        , despike_stats_multiply = c(u = 4, v = 4, w = 4, T = 4, 
+            nh3_ppb = 4, nh3_ugm3 = 4, h2o_mmolm3 = 4, co2_mmolm3 = 4,
+            h2o_molfrac = 4, ch4_molfrac = 4, n2o_molfrac = 4
+        )
         , na_limits = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, 
             nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
-            co2_mmolm3 = TRUE)
+            co2_mmolm3 = TRUE, h2o_molfrac = TRUE, ch4_molfrac = TRUE,
+            n2o_molfrac = TRUE
+        )
         , limits_lower = c(u = -30, v = -30, w = -10, T = 243, 
             nh3_ppb = -100, nh3_ugm3 = -100, h2o_mmolm3 = -100, 
-            co2_mmolm3 = -100)
+            co2_mmolm3 = -100, h2o_molfrac = -0.1, ch4_molfrac = -0.1,
+            n2o_molfrac = -0.1
+        )
         , limits_upper = c(u = 30, v = 30, w = 10, T = 333, 
-            nh3_ppb = 22000, nh3_ugm3 = 15000, h2o_mmolm3 = 5000, 
-            co2_mmolm3 = 5000)
+            nh3_ppb = 2.2e4, nh3_ugm3 = 1.5e4, h2o_mmolm3 = 5e3, 
+            co2_mmolm3 = 5e3, h2o_molfrac = 0.10, ch4_molfrac = 200e-6,
+            n2o_molfrac = 20e-6
+        )
         , na_limits_window = c(pass = '10secs', replace = '5mins')
         , na_limits_method = c('norepl', 'median', 'dist', 'squaredist')[4]
 		, rotation_method = c("two axis", "planar fit")
@@ -1270,19 +1288,32 @@ process_ec_fluxes <- function(
             pf_U_thresh = 0
         )
         # detrending -> valid entries are blockAVG,linear,linear_robust,ma_xx (xx = time in seconds)
-        , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', T = 'blockAVG', 
-            nh3_ppb = 'blockAVG', nh3_ugm3 = 'blockAVG', h2o_mmolm3 = 'blockAVG', 
-            co2_mmolm3 = 'blockAVG')
-		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 'wxco2_mmolm3')
+        , detrending = c(u = 'blockAVG', v = 'blockAVG', w = 'blockAVG', 
+            T = 'blockAVG', nh3_ppb = 'blockAVG', nh3_ugm3 = 'blockAVG', 
+            h2o_mmolm3 = 'blockAVG', co2_mmolm3 = 'blockAVG',
+            h2o_molfrac = 'blockAVG', ch4_molfrac = 'blockAVG',
+            n2o_molfrac = 'blockAVG'
+        )
+		, covariances = c('uxw', 'wxT', 'wxnh3_ugm3', 'wxh2o_mmolm3', 
+            'wxco2_mmolm3', 'wxh2o_molfrac', 'wxch4_molfrac', 
+            'wxn2o_molfrac'
+        )
         # fix lag in seconds
-		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, wxnh3_ugm3 = -0.4, 
-            wxh2o_mmolm3 = -0.2, wxco2_mmolm3 = -0.2)
+		, lag_fix = c(uxw = 0, wxT = 0, wxnh3_ppb = -0.4, 
+            wxnh3_ugm3 = -0.4, wxh2o_mmolm3 = -0.2, wxco2_mmolm3 = -0.2,
+            wxh2o_molfrac = -0.7, wxch4_molfrac = -0.7, wxn2o_molfrac = -0.7
+        )
         # dyn lag in seconds around lag_fix
-		, lag_dyn = c(uxw = 0.5, wxT = 0.5, wxnh3_ppb = 1.5, wxnh3_ugm3 = 1.5, 
-            wxh2o_mmolm3 = 1.5, wxco2_mmolm3 = 1.5)
+		, lag_dyn = c(uxw = 0.5, wxT = 0.5, wxnh3_ppb = 1.5, 
+            wxnh3_ugm3 = 1.5, wxh2o_mmolm3 = 1.5, wxco2_mmolm3 = 1.5,
+            wxh2o_molfrac = 1.5, wxch4_molfrac = 1.5, wxn2o_molfrac = 1.5
+        )
         # which dyn lag approach should be taken?
 		, lag_dyn_calc_pw = c(uxw = FALSE, wxT = FALSE, wxnh3_ugm3 = FALSE, 
-            wxh2o_mmolm3 = FALSE, wxco2_mmolm3 = FALSE)
+            wxh2o_mmolm3 = FALSE, wxco2_mmolm3 = FALSE, 
+            wxh2o_molfrac = FALSE, wxch4_molfrac = FALSE, 
+            wxn2o_molfrac = FALSE
+        )
         , lag_dyn_method = c('raw-cov', 'simple-pw', 'boot-pw')
         # , lag_dyn_wdt = 5 # suggested in RFlux
         , lag_dyn_wdt = 7 
@@ -1299,17 +1330,31 @@ process_ec_fluxes <- function(
         #   such as either 'base_quality' (for best base_quality_fix/_dyn)
         #   or 'ogive_quality' (for best ogive_quality_fix/_dyn)
 		, damping_reference = c(wxnh3_ppb = 'wxT', wxnh3_ugm3 = 'wxT', 
-            wxh2o_mmolm3 = 'wxT', wxco2_mmolm3 = 'wxT')
+            wxh2o_mmolm3 = 'wxT', wxco2_mmolm3 = 'wxT', 
+            wxh2o_molfrac = 'wxT', wxch4_molfrac = 'wxT', 
+            wxn2o_molfrac = 'wxT'
+        )
         # lower & upper bounds of fitting ogives (in seconds)
-		, damping_lower = c(wxnh3_ppb = 2, wxnh3_ugm3 = 2, wxh2o_mmolm3 = 2, wxco2_mmolm3 = 2)
-		, damping_upper = c(wxnh3_ppb = 20, wxnh3_ugm3 = 20, wxh2o_mmolm3 = 20, wxco2_mmolm3 = 20)
+		, damping_lower = c(wxnh3_ppb = 2, wxnh3_ugm3 = 2, 
+            wxh2o_mmolm3 = 2, wxco2_mmolm3 = 2, wxh2o_molfrac = 2, 
+            wxch4_molfrac = 2, wxn2o_molfrac = 2
+        )
+		, damping_upper = c(wxnh3_ppb = 20, wxnh3_ugm3 = 20, 
+            wxh2o_mmolm3 = 20, wxco2_mmolm3 = 20, wxh2o_molfrac = 20,
+            wxch4_molfrac = 20, wxn2o_molfrac = 20
+        )
         , low_cont_sec = 20
         , high_cont_sec = 2
         , cont_pts = 5
         , subintervals = TRUE
         , subint_prefix = 'subint_'
         , subint_n = 5
-        , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear')
+        , subint_detrending = c(u = 'linear', v = 'linear', w = 'linear', 
+            T = 'linear', nh3_ppb = 'linear', nh3_ugm3 = 'linear', 
+            h2o_mmolm3 = 'linear', co2_mmolm3 = 'linear', 
+            h2o_molfrac = 'linear', ch4_molfrac = 'linear', 
+            n2o_molfrac = 'linear'
+        )
         , subint_return = FALSE
         , oss_threshold = 0
         , co2ss_threshold = 0
@@ -1323,16 +1368,31 @@ process_ec_fluxes <- function(
         , plot_timeseries = c(u = TRUE, v = TRUE, w = TRUE, T = TRUE, 
             ht_oss = TRUE, nh3_ppb = FALSE, nh3_ugm3 = TRUE, 
             li_co2ss = TRUE, h2o_mmolm3 = TRUE, co2_mmolm3 = TRUE)
-        , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', T = 'K', 
-            ht_oss = '-', nh3_ppb = 'ppb', nh3_ugm3 = 'ug/m3', 
-            li_co2ss = '-', h2o_mmolm3 = 'mmol/m3', co2_mmolm3 = 'mmol/m3')
-        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', T = 'orange', 
-            ht_oss = 'grey', nh3_ppb = 'indianred', nh3_ugm3 = 'indianred', 
-            li_co2ss = 'grey', h2o_mmolm3 = '#8FC1E6', co2_mmolm3 = 'seagreen4')
-        , plotting_covar_units = c(uxw = 'm2/s2', wxT = 'K*m/s', wxnh3_ppb = 'ppb*m/s', 
-            wxnh3_ugm3 = 'ug/m2/s', wxh2o_mmolm3 = 'mmol/m2/s', wxco2_mmolm3 = 'mmol/m2/s')
-        , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', wxnh3_ppb = 'indianred', 
-            wxnh3_ugm3 = 'indianred', wxh2o_mmolm3 = '#8FC1E6', wxco2_mmolm3 = 'seagreen4')
+        , plotting_var_units = c(u = 'm/s', v = 'm/s', w = 'm/s', 
+            T = 'K', ht_oss = '-', nh3_ppb = 'ppb', nh3_ugm3 = 'ug/m3', 
+            li_co2ss = '-', h2o_mmolm3 = 'mmol/m3', co2_mmolm3 = 'mmol/m3',
+            h2o_molfrac = 'mol/mol', ch4_molfrac = 'mol/mol', 
+            n2o_molfrac = 'mol/mol'
+        )
+        , plotting_var_colors = c(u = 'gray20', v = 'gray20', w = 'gray20', 
+            T = 'orange', ht_oss = 'grey', nh3_ppb = 'indianred', 
+            nh3_ugm3 = 'indianred', li_co2ss = 'grey', 
+            h2o_mmolm3 = '#8FC1E6', co2_mmolm3 = 'seagreen4',
+            h2o_molfrac = '#3A9BBB', ch4_molfrac = '#EBD400', 
+            n2o_molfrac = 'purple'
+        )
+        , plotting_covar_units = c(uxw = 'm2/s2', wxT = 'K*m/s', 
+            wxnh3_ppb = 'ppb*m/s', wxnh3_ugm3 = 'ug/m2/s', 
+            wxh2o_mmolm3 = 'mmol/m2/s', wxco2_mmolm3 = 'mmol/m2/s',
+            wxh2o_molfrac = 'mol/mol*m/s', wxch4_molfrac = 'mol/mol*m/s',
+            wxn2o_molfrac = 'mol/mol*m/s'
+        )
+        , plotting_covar_colors = c(uxw = 'gray70', wxT = 'orange', 
+            wxnh3_ppb = 'indianred', wxnh3_ugm3 = 'indianred', 
+            wxh2o_mmolm3 = '#8FC1E6', wxco2_mmolm3 = 'seagreen4',
+            wxh2o_molfrac = '#3A9BBB', wxch4_molfrac = '#EBD400',
+            wxn2o_molfrac = 'purple'
+        )
         , model_colors = c(cospec = '#F02E42', ogive = '#9A33DA')
 		, ogives_return = FALSE
         , as_ibts = TRUE
@@ -1389,8 +1449,11 @@ process_ec_fluxes <- function(
             if (any(grepl('nh3', names(sonic_directory)))) {
                 ht_directory <- 'data provided with sonic'
             }
-            if (any(grepl('h2o', names(sonic_directory)))) {
+            if (any(grepl('co2', names(sonic_directory)))) {
                 licor_directory <- 'data provided with sonic'
+            }
+            if (any(grepl('n2o', names(sonic_directory)))) {
+                miro_directory <- 'data provided with sonic'
             }
         }
 
@@ -1403,8 +1466,13 @@ process_ec_fluxes <- function(
         }
         # fix missing licor
         if (licor_null <- is.null(licor_directory)) {
-            scalars <- grep('h2o|co2', scalars, value = TRUE, invert = TRUE)
-            covariances <- grep('h2o|co2', covariances, value = TRUE, invert = TRUE)
+            scalars <- grep('mmolm3', scalars, value = TRUE, invert = TRUE)
+            covariances <- grep('mmolm3', covariances, value = TRUE, invert = TRUE)
+        }
+        # fix missing miro
+        if (miro_null <- is.null(miro_directory)) {
+            scalars <- grep('molfrac', scalars, value = TRUE, invert = TRUE)
+            covariances <- grep('molfrac', covariances, value = TRUE, invert = TRUE)
         }
 
         # prepare variables etc.
@@ -1685,6 +1753,52 @@ process_ec_fluxes <- function(
             # }
         }
 
+        # optional miro data
+        miro_with_sonic <- FALSE
+        if (miro_provided <- !is.null(miro_directory)) {
+            if (miro_has_data <- inherits(miro_directory, 'data.table')) {
+                cat('MIRO: raw data provided in input...\n')
+                miro_files <- NULL
+                setDT(miro_directory)
+                # set time zone to UTC
+                miro_directory[, Time := with_tz(Time, 'UTC')]
+            } else if (!(miro_with_sonic <- miro_directory == 'data provided with sonic')) {
+                cat('MIRO: data provided...\n')
+                miro_files <- dir(miro_directory, pattern = '^(py_)?fnf_.*_miro_.*')
+                if (length(miro_files) == 0) {
+                    stop('No miro data available in "', miro_directory, '"!')
+                }
+                # prioritize py_ files
+                # get py_
+                i_py <- grepl('^py_', miro_files)
+                # remove duplicated non-py
+                miro_files <- c(
+                    setdiff(miro_files[!i_py], sub('^py_', '', miro_files[i_py])),
+                    miro_files[i_py]
+                )
+                # prioritize gz files
+                i_gz <- grepl('\\.gz$', miro_files)
+                # remove duplicated non-py
+                miro_files <- c(
+                    setdiff(miro_files[!i_gz], sub('\\.gz$', '.csv', miro_files[i_gz])),
+                    miro_files[i_gz]
+                )
+                # get date
+                miro_dates <- sub('^(py_)?fnf_0\\d_miro_', '', miro_files)
+                # sort by date
+                miro_files <- miro_files[order(miro_dates)]
+                # get start & end
+                miro_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000',
+                    'UTC')
+            } else if (miro_with_sonic) {
+                cat('MIRO: raw data provided with sonic input...\n')
+            }
+        # } else {
+            # check if ht available
+            # if (!ht_provided) {
+            #     stop('neither ht8700 nor miro data or directory has been provided -> cannot process fluxes without concentration data!')
+            # }
+        }
         cat("************************************************************\n")
 
         # parse time diff
@@ -2173,6 +2287,57 @@ process_ec_fluxes <- function(
             cat('-> No LI-7500 data within time range.\n')
         }
 
+        # get miro data
+        if (miro_provided && miro_has_data) {
+            cat('Subsetting MIRO data - ')
+            # copy
+            miro <- miro_directory[Time >= start_time[1] & Time < tail(end_time, 1), ]
+            rm(miro_directory)
+            for (i in 1:10) gc()
+            cat('done\n')
+        } else if (miro_provided && !miro_with_sonic) {
+            cat('Reading MIRO files\n')
+            # select files
+            miro_selected <- miro_files[
+                sub('.*_(\\d{4}_\\d{2}_\\d{2})\\..*', '\\1', miro_files) %in% dates_formatted
+                ]
+            if (length(miro_selected)) {
+                # read new miro files
+                if (run_parallel) {
+                    miro <- rbindlist(
+                        .clusterApplyLB(
+                            cl,
+                            file.path(miro_directory, miro_selected), 
+                            read_miro
+                        )
+                    )
+                } else {
+                    miro <- rbindlist(lapply(
+                            file.path(miro_directory, miro_selected), 
+                            \(x) {
+                                cat('\tFile:', x, '- ')
+                                out <- read_miro(x)
+                                cat('done\n')
+                                out
+                            }
+                    ))
+                }
+            } else {
+                miro <- NULL
+            }
+            # no UTC conversion needed, since this case is excluded up to now
+            # # convert to UTC
+            # miro[, Time := with_tz(Time, 'UTC')]
+        } else {
+            # no miro data
+            miro <- NULL
+        }
+        # check miro
+        if (!is.null(miro) && nrow(miro) == 0) miro <- NULL
+        if (miro_provided && is.null(miro)) {
+            cat('-> No MIRO data within time range.\n')
+        }
+
         # get Hz/frequency etc.
         rec_Hz <- sonic_raw[, {
             d_t <- diff(as.numeric(Time))
@@ -2210,8 +2375,8 @@ process_ec_fluxes <- function(
         for (i in 1:10) gc()
 
         cat('Merging files - ')
-        daily_data <- merge_data(full_sonic, ht, licor)
-        rm(full_sonic, ht, licor)
+        daily_data <- merge_data(full_sonic, ht, licor, miro)
+        rm(full_sonic, ht, licor, miro)
         for (i in 1:10) gc()
         cat('done\n~~~\n')
 

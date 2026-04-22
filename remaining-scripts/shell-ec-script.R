@@ -31,6 +31,7 @@ SONIC_FILE                          (required) path to sonic file
 ARGS                                (optional) additional arguments passed to process_ec_fluxes() [default: NULL]
 -h, --help                          show this help text
 
+NOTE:
 Some defaults are changed compared to the original R function, namely subintervals=FALSE, create_graphs=FALSE and as_ibts=FALSE
 ')
 
@@ -63,11 +64,16 @@ if (opt$miro == 'NULL') {
     opt$miro <- NULL
 }
 
+# check time zone and set default UTC if unset
+if (!('tz_user' %in% names(ARGS))) {
+    ARGS$tz_user <- 'UTC'
+}
+
 # check start
 nw <- now()
 if (opt$start != 'first') {
     # try parsing
-    start <- try(parse_date_time3(opt$start))
+    start <- try(parse_date_time3(opt$start, tz = ARGS$tz_user))
     if (inherits(start, 'try-error') || is.na(start)) {
         start <- nw + parse_time_diff(opt$start)
     }
@@ -79,9 +85,14 @@ if (opt$start != 'first') {
 # check end
 if (opt$end %in% c('now', 'last')) {
     opt$end <- nw
+} else {
+    # try parsing
+    end <- try(parse_date_time3(opt$end, tz = ARGS$tz_user))
+    if (inherits(end, 'try-error') || is.na(end)) {
+        end <- nw + parse_time_diff(opt$end)
+    }
+    opt$end <- end
 }
-# check stop
-stopifnot(opt$end <= nw)
 
 # get arguments
 opt <- opt[c('SONIC_FILE', 'ht', 'licor', 'miro', 'start', 'end',
@@ -93,6 +104,17 @@ for (v in c('zsonic', 'canopy', 'north')) {
 # fix names
 names(opt) <- c('sonic_directory', 'ht_directory', 'licor_directory',
     'miro_directory', 'start_time', 'end_time', 'z_ec', 'z_canopy', 'dev_north')
+
+# get averaging time
+if ('avg_period' %in% names(ARGS)) {
+    opt$avg_period <- ARGS$avg_period
+    ARGS$avg_period <- NULL
+} else if (is.character(opt$start)) {
+    opt$avg_period <- '30mins'
+} else {
+    opt$avg_period <- as.numeric(opt$end - opt$start, units = 'secs')
+}
+
 
 # fix declination default
 if ('declination' %in% names(ARGS)) {

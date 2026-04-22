@@ -233,7 +233,8 @@ if (opt$help) {
         if (length(cols)) {
             out <- out[, .SD, .SDcols = unique(cols)]
         }
-        jsonlite::toJSON(as.data.frame(out), data.frame = 'columns')
+        jsonlite::toJSON(as.data.frame(out), data.frame = 'columns',
+            digits = NA)
     }
 
 }

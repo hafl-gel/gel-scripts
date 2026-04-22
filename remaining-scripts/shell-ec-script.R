@@ -9,13 +9,20 @@ suppressMessages(
         library(docopt)
     }
 )
+# get jsonlite
+suppressMessages(
+    if (!require(jsonlite)) {
+        install.packages('jsonlite', verbose = FALSE, quiet = TRUE)
+        library(jsonlite)
+    }
+)
 
 # load gel
 suppressMessages(library(gel))
 
 # build shell interface
 doc <- paste0('Usage: shell-ec-script.R',
-    ' SONIC_FILE [-H HT_FILE] [-L LICOR_FILE] [-M MIRO_FILE]',
+    ' SONIC_FILE [-df] [-H HT_FILE] [-L LICOR_FILE] [-M MIRO_FILE]',
     ' [-S START] [-E END] [-Z ZSONIC] [-C ZCANOPY] [-D DEVNORTH]',
     ' [ARGS...] [-h]
 
@@ -23,11 +30,13 @@ SONIC_FILE                          (required) path to sonic file
 -H HT_FILE --ht=HT_FILE             path to ht8700 file [default: NULL]
 -L LICOR_FILE --licor=LICOR_FILE    path to licor file [default: NULL]
 -M MIRO_FILE --miro=MIRO_FILE       path to miro file [default: NULL]
--S START --start=START             start datetime [default: -30mins]
--E END --end=END                   end datetime [default: now]
--Z ZSONIC --zsonic=ZSONIC          sonic height in m a.g.l [default: 2]
--C CANOPY --canopy=CANOPY          canopy height in m [default: 0.2]
--D DEVNORTH --north=DEVNORTH       sonic north deviation [default: 0]
+-S START --start=START              start datetime [default: -30mins]
+-E END --end=END                    end datetime [default: now]
+-Z ZSONIC --zsonic=ZSONIC           sonic height in m a.g.l [default: 2]
+-C CANOPY --canopy=CANOPY           canopy height in m [default: 0.2]
+-D DEVNORTH --north=DEVNORTH        sonic north deviation [default: 0]
+-d --dyn                            provide reduced output (turb. + dyn. fluxes, lag, damping)
+-f --fix                            provide reduced output (turb. + fix fluxes, lag, damping)
 ARGS                                (optional) additional arguments passed to process_ec_fluxes() [default: NULL]
 -h, --help                          show this help text
 
@@ -42,6 +51,11 @@ opt <- docopt(doc)
 if (opt$help) {
     invisible()
 } else {
+
+    # get dyn & fix
+    dyn <- opt$dyn
+    fix <- opt$fix
+    opt[c('dyn', 'fix')] <- NULL
 
     # check ARGS
     if (length(opt$ARGS) > 0) {
@@ -168,13 +182,41 @@ if (opt$help) {
     for (a in names(subf)) {
         all_args[[a]] <- eval(subf[[a]])
     }
-    
+
     # call flux processing function
     out <- try(do.call(process_ec_fluxes, all_args), silent = TRUE)
     if (inherits(out, 'try-error')) {
         attr(out, 'condition')$message
     } else {
-        print(out)
+        cols <- character(0)
+        if (dyn) {
+            cols <- c('st', 'et', 'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 
+                'sWu', 'U_sonic', 'T_sonic', 'Ra', 'Rb_nh3',
+                grep('^(phi|alpha|beta|w_bias)$', names(out), value = TRUE),
+                grep('^avg_', names(out), value = TRUE),
+                grep('^lag_dyn_', names(out), value = TRUE),
+                grep('^flux_dyn_', names(out), value = TRUE),
+                grep('^damping_dyn_pbreg_', names(out), value = TRUE)
+                # grep('^damping_dyn_deming_', names(out), value = TRUE)
+            )
+        }
+        if (fix) {
+            cols <- c(cols,
+                c('st', 'et', 'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 
+                    'sWu', 'U_sonic', 'T_sonic', 'Ra', 'Rb_nh3',
+                    grep('^(phi|alpha|beta|w_bias)$', names(out), value = TRUE),
+                    grep('^avg_', names(out), value = TRUE),
+                    grep('^lag_fix_', names(out), value = TRUE),
+                    grep('^flux_fix_', names(out), value = TRUE),
+                    grep('^damping_fix_pbreg_', names(out), value = TRUE)
+                    # grep('^damping_fix_deming_', names(out), value = TRUE)
+                )
+            )
+        }
+        if (length(cols)) {
+            out <- out[, .SD, .SDcols = unique(cols)]
+        }
+        jsonlite::toJSON(as.data.frame(out), data.frame = 'columns')
     }
 
 }

@@ -22,9 +22,9 @@ suppressMessages(library(gel))
 
 # build shell interface
 doc <- paste0('Usage: shell-ec-script.R',
-    ' SONIC_FILE [-dfv] [-H HT_FILE] [-L LICOR_FILE] [-M MIRO_FILE]',
+    ' SONIC_FILE [-dfsFvh] [-H HT_FILE] [-L LICOR_FILE] [-M MIRO_FILE]',
     ' [-S START] [-E END] [-Z ZSONIC] [-C ZCANOPY] [-D DEVNORTH]',
-    ' [ARGS...] [-h]
+    ' [ARGS...]
 
 SONIC_FILE                          (required) path to sonic file
 -H HT_FILE --ht=HT_FILE             path to ht8700 file [default: NULL]
@@ -37,6 +37,8 @@ SONIC_FILE                          (required) path to sonic file
 -D DEVNORTH --north=DEVNORTH        sonic north deviation [default: 0]
 -d --dyn                            provide reduced output (turb. + dyn. fluxes, lag, damping) [default: FALSE]
 -f --fix                            provide reduced output (turb. + fix fluxes, lag, damping) [default: FALSE]
+-s --subintervals                   should subintervals (default n = 5) be calculated [default: FALSE]
+-F --foken                          apply Foken-Wichura classification (implies -s) [default: FALSE]
 -v --verbose                        be verbose when running the main function [default: FALSE]
 ARGS                                (optional) additional arguments passed to process_ec_fluxes() [default: NULL]
 -h, --help                          show this help text
@@ -123,16 +125,22 @@ if (opt$help) {
         opt$end <- end
     }
 
+    # check foken
+    if (foken <- opt$foken) {
+        # we need subintervals
+        opt$subintervals <- TRUE
+    }
+
     # get arguments
     opt <- opt[c('SONIC_FILE', 'ht', 'licor', 'miro', 'start', 'end',
-        'zsonic', 'canopy', 'north')]
+        'zsonic', 'canopy', 'north', 'subintervals')]
     # fix numeric
     for (v in c('zsonic', 'canopy', 'north')) {
         opt[[v]] <- as.numeric(opt[[v]])
     }
     # fix names
     names(opt) <- c('sonic_directory', 'ht_directory', 'licor_directory',
-        'miro_directory', 'start_time', 'end_time', 'z_ec', 'z_canopy', 'dev_north')
+        'miro_directory', 'start_time', 'end_time', 'z_ec', 'z_canopy', 'dev_north', 'subintervals')
 
     # get averaging time
     if ('avg_period' %in% names(ARGS)) {
@@ -151,13 +159,6 @@ if (opt$help) {
         ARGS$declination <- NULL
     } else {
         opt$declination <- 0
-    }
-    # fix subintervals defaults
-    if ('subintervals' %in% names(ARGS)) {
-        opt$subintervals <- ARGS$subintervals
-        ARGS$subintervals <- NULL
-    } else {
-        opt$subintervals <- FALSE
     }
     # fix create_graphs defaults
     if ('create_graphs' %in% names(ARGS)) {
@@ -202,9 +203,15 @@ if (opt$help) {
     } else {
         suppressMessages(nirvana <- capture.output(out <- try(do.call(process_ec_fluxes, all_args), silent = TRUE)))
     }
+
+    # check output
     if (inherits(out, 'try-error')) {
         attr(out, 'condition')$message
     } else {
+        # run foken
+        if (foken) {
+            out <- foken_wichura(out)
+        }
         cols <- character(0)
         if (dyn) {
             cols <- c('st', 'et', 'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 
@@ -233,6 +240,9 @@ if (opt$help) {
         if (length(cols)) {
             out <- out[, .SD, .SDcols = unique(cols)]
         }
+        # add Linv
+        out[, Linv := 1 / L]
+        # convert to json
         jsonlite::toJSON(as.data.frame(out), data.frame = 'columns',
             digits = NA)
     }

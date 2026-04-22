@@ -904,12 +904,17 @@ plot.tseries <- function(dat,wind,scal,selection,color,units,st_sub=NULL){
 	msg <- paste(c(format(dat[1,1],"%d.%m.%Y")," - time series"),collapse="")
     # fix wind variables
 	dat[, c("u", "v", "w", "T")] <- dat[, paste0(c('u', 'v', 'w', 'T'), 'rot')]
-	# dat[, c("u", "v", "w", "T")] <- mapply("+", 
-        # wind[c("umrot", "vmrot", "wmrot", "Tmdet")], 
-        # wind[c("uprot", "vprot", "wprot", "Tdet")])
 	### get trends:
-	dat3 <- list2DF(wind[c("umrot","vmrot","wmrot","Tmdet")])
-	names(dat3) <- c("u","v","w","T")
+    tkey <- c(u = 'umrot', v = 'vmrot', w = 'wmrot', T = 'Tmdet')
+    dat3 <- dat[, names(tkey)]
+    for (v in names(tkey)) {
+        w <- wind[[tkey[v]]]
+        if (is.null(na.action(w))) {
+            dat3[, v] <- w
+        } else {
+            dat3[-na.action(w), v] <- w
+        }
+    }
 	if(!is.null(scal)){
         # fix scalars
         dat[, names(scal)] <- lapply(scal, \(x) {

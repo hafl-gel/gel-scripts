@@ -22,7 +22,7 @@ suppressMessages(library(gel))
 
 # build shell interface
 doc <- paste0('Usage: shell-ec-script.R',
-    ' SONIC_FILE [-df] [-H HT_FILE] [-L LICOR_FILE] [-M MIRO_FILE]',
+    ' SONIC_FILE [-dfv] [-H HT_FILE] [-L LICOR_FILE] [-M MIRO_FILE]',
     ' [-S START] [-E END] [-Z ZSONIC] [-C ZCANOPY] [-D DEVNORTH]',
     ' [ARGS...] [-h]
 
@@ -35,8 +35,9 @@ SONIC_FILE                          (required) path to sonic file
 -Z ZSONIC --zsonic=ZSONIC           sonic height in m a.g.l [default: 2]
 -C CANOPY --canopy=CANOPY           canopy height in m [default: 0.2]
 -D DEVNORTH --north=DEVNORTH        sonic north deviation [default: 0]
--d --dyn                            provide reduced output (turb. + dyn. fluxes, lag, damping)
--f --fix                            provide reduced output (turb. + fix fluxes, lag, damping)
+-d --dyn                            provide reduced output (turb. + dyn. fluxes, lag, damping) [default: FALSE]
+-f --fix                            provide reduced output (turb. + fix fluxes, lag, damping) [default: FALSE]
+-v --verbose                        be verbose when running the main function [default: FALSE]
 ARGS                                (optional) additional arguments passed to process_ec_fluxes() [default: NULL]
 -h, --help                          show this help text
 
@@ -52,6 +53,9 @@ if (opt$help) {
     invisible()
 } else {
 
+    # verbose mode?
+    verbose <- opt$verbose
+    
     # get dyn & fix
     dyn <- opt$dyn
     fix <- opt$fix
@@ -184,7 +188,11 @@ if (opt$help) {
     }
 
     # call flux processing function
-    out <- try(do.call(process_ec_fluxes, all_args), silent = TRUE)
+    if (verbose) {
+        out <- try(do.call(process_ec_fluxes, all_args), silent = TRUE)
+    } else {
+        suppressMessages(nirvana <- capture.output(out <- try(do.call(process_ec_fluxes, all_args), silent = TRUE)))
+    }
     if (inherits(out, 'try-error')) {
         attr(out, 'condition')$message
     } else {

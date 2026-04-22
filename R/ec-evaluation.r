@@ -1246,9 +1246,9 @@ process_ec_fluxes <- function(
 		, z_ec = NULL
 		, z_canopy = NULL
         , despike = c(u = FALSE, v = FALSE, w = FALSE, T = FALSE, 
-            nh3_ppb = TRUE, nh3_ugm3 = TRUE, h2o_mmolm3 = TRUE, 
-            co2_mmolm3 = TRUE, h2o_molfrac = TRUE, ch4_molfrac = TRUE,
-            n2o_molfrac = TRUE
+            nh3_ppb = FALSE, nh3_ugm3 = FALSE, h2o_mmolm3 = FALSE, 
+            co2_mmolm3 = FALSE, h2o_molfrac = FALSE, ch4_molfrac = FALSE,
+            n2o_molfrac = FALSE
         )
         , despike_baseline_width = c(u = 10, v = 10, w = 10, T = 10, 
             nh3_ppb = 10, nh3_ugm3 = 10, h2o_mmolm3 = 10, co2_mmolm3 = 10,

@@ -3489,6 +3489,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 dyn_lag_out <- dyn_lag_max["tau", ]
                 flux_fix_lag <- sapply(Ogive_fix, "[", 1)
                 flux_dyn_lag <- sapply(Ogive_dyn, "[", 1)
+                browser()
 
                 if (length(scalar_covariances_only)) {
                     if (!is.null(Damping_fix)) {

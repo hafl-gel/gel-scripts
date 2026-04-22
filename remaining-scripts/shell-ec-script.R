@@ -37,6 +37,9 @@ Some defaults are changed compared to the original R function, namely subinterva
 # process
 opt <- docopt(doc)
 
+# capture help
+help <- opt$help
+
 # check ARGS
 if (length(opt$ARGS) > 0) {
     # parse additional arguments
@@ -83,6 +86,10 @@ stopifnot(opt$end <= nw)
 # get arguments
 opt <- opt[c('SONIC_FILE', 'ht', 'licor', 'miro', 'start', 'end',
     'zsonic', 'canopy', 'north')]
+# fix numeric
+for (v in c('zsonic', 'canopy', 'north')) {
+    opt[[v]] <- as.numeric(opt[[v]])
+}
 # fix names
 names(opt) <- c('sonic_directory', 'ht_directory', 'licor_directory',
     'miro_directory', 'start_time', 'end_time', 'z_ec', 'z_canopy', 'dev_north')
@@ -116,7 +123,14 @@ if ('as_ibts' %in% names(ARGS)) {
     opt$as_ibts <- FALSE
 }
 
-# call flux processing function
-out <- do.call(process_ec_fluxes, c(opt, ARGS))
-
-out
+if (help) {
+    invisible()
+} else {
+    # call flux processing function
+    out <- try(do.call(process_ec_fluxes, c(opt, ARGS)), silent = TRUE)
+    if (inherits(out, 'try-error')) {
+        attr(out, 'condition')$message
+    } else {
+        out
+    }
+}

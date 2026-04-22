@@ -61,11 +61,20 @@ if (opt$help) {
     fix <- opt$fix
     opt[c('dyn', 'fix')] <- NULL
 
+    opt
+
     # check ARGS
     if (length(opt$ARGS) > 0) {
+        ARGS <- opt$ARGS
+        # fix strings
+        for (a in seq_along(ARGS)) {
+            if (grepl('/', ARGS[[a]])) {
+                ARGS[[a]] <- sub('^([^=]+=)(.*)$', '\\1\"\\2\"', ARGS[[a]])
+            }
+        }
         # parse additional arguments
         ARGS <- eval(parse(text = paste0(
-            'list(', paste(opt$ARGS, collapse = ','), ')'
+            'list(', paste(ARGS, collapse = ','), ')'
         )))
     } else {
         ARGS <- list()

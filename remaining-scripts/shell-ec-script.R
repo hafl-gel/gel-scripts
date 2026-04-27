@@ -24,7 +24,7 @@ suppressMessages(library(gel))
 doc <- paste0('Usage: shell-ec-script.R',
     ' SONIC_FILE [-dfsFvh] [-H HT_FILE] [-L LICOR_FILE] [-M MIRO_FILE]',
     ' [-S START] [-E END] [-Z ZSONIC] [-C ZCANOPY] [-D DEVNORTH]',
-    ' [ARGS...]
+    ' [-P PATTERN] [ARGS...]
 
 SONIC_FILE                          (required) path to sonic file
 -H HT_FILE --ht=HT_FILE             path to ht8700 file [default: NULL]
@@ -35,6 +35,7 @@ SONIC_FILE                          (required) path to sonic file
 -Z ZSONIC --zsonic=ZSONIC           sonic height in m a.g.l [default: 2]
 -C CANOPY --canopy=CANOPY           canopy height in m [default: 0.2]
 -D DEVNORTH --north=DEVNORTH        sonic north deviation [default: 0]
+-P PATTERN --pattern=PATTERN        pattern to match additional output [default: NULL]
 -d --dyn                            provide reduced output (turb. + dyn. fluxes, lag, damping) [default: FALSE]
 -f --fix                            provide reduced output (turb. + fix fluxes, lag, damping) [default: FALSE]
 -s --subintervals                   should subintervals (default n = 5) be calculated [default: FALSE]
@@ -61,9 +62,9 @@ if (opt$help) {
     # get dyn & fix
     dyn <- opt$dyn
     fix <- opt$fix
-    opt[c('dyn', 'fix')] <- NULL
 
-    opt
+    # get pattern
+    pattern <- opt$pattern
 
     # check ARGS
     if (length(opt$ARGS) > 0) {
@@ -208,40 +209,47 @@ if (opt$help) {
     if (inherits(out, 'try-error')) {
         attr(out, 'condition')$message
     } else {
+        # add Linv
+        out[, Linv := 1 / L]
         # run foken
+        cols <- c('st', 'et', 'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 
+                'sWu', 'Linv', 'U_sonic', 'T_sonic', 'Ra', 'Rb_nh3',
+                grep('^(phi|alpha|beta|w_bias)$', names(out), value = TRUE),
+                grep('^avg_', names(out), value = TRUE)
+        )
         if (foken) {
             out <- foken_wichura(out)
         }
-        cols <- character(0)
+        nc <- length(cols)
+        if (pattern != 'NULL') {
+            cols <- c(
+                cols,
+                grep(pattern, names(out), value = TRUE)
+            )
+        }
         if (dyn) {
-            cols <- c('st', 'et', 'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 
-                'sWu', 'U_sonic', 'T_sonic', 'Ra', 'Rb_nh3',
-                grep('^(phi|alpha|beta|w_bias)$', names(out), value = TRUE),
-                grep('^avg_', names(out), value = TRUE),
+            cols <- c(
+                cols,
                 grep('^lag_dyn_', names(out), value = TRUE),
                 grep('^flux_dyn_', names(out), value = TRUE),
-                grep('^damping_dyn_pbreg_', names(out), value = TRUE)
-                # grep('^damping_dyn_deming_', names(out), value = TRUE)
+                grep('^damping_dyn_pbreg_', names(out), value = TRUE),
+                # grep('^damping_dyn_deming_', names(out), value = TRUE),
+                grep('fwclass_(flux_fix|cov)(*SKIP)(*FAIL)|fwclass', names(out), value = TRUE, perl = TRUE)
             )
         }
         if (fix) {
-            cols <- c(cols,
-                c('st', 'et', 'WD', 'Ustar', 'L', 'Zo', 'sUu', 'sVu', 
-                    'sWu', 'U_sonic', 'T_sonic', 'Ra', 'Rb_nh3',
-                    grep('^(phi|alpha|beta|w_bias)$', names(out), value = TRUE),
-                    grep('^avg_', names(out), value = TRUE),
-                    grep('^lag_fix_', names(out), value = TRUE),
-                    grep('^flux_fix_', names(out), value = TRUE),
-                    grep('^damping_fix_pbreg_', names(out), value = TRUE)
-                    # grep('^damping_fix_deming_', names(out), value = TRUE)
-                )
+            cols <- c(
+                cols,
+                grep('^lag_fix_', names(out), value = TRUE),
+                grep('^flux_fix_', names(out), value = TRUE),
+                grep('^damping_fix_pbreg_', names(out), value = TRUE),
+                # grep('^damping_fix_deming_', names(out), value = TRUE),
+                grep('fwclass_(flux_dyn|cov)(*SKIP)(*FAIL)|fwclass', names(out), value = TRUE, perl = TRUE)
             )
         }
-        if (length(cols)) {
+        if (length(cols) > nc) {
             out <- out[, .SD, .SDcols = unique(cols)]
         }
-        # add Linv
-        out[, Linv := 1 / L]
         # convert to json
         jsonlite::toJSON(as.data.frame(out), data.frame = 'columns',
             digits = NA)

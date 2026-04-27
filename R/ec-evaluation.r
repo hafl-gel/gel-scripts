@@ -1682,33 +1682,35 @@ process_ec_fluxes <- function(
                 }
                 # check files available
                 if (length(ht_files) == 0) {
-                    stop('No ht8700 data available in "', ht_directory, '"!')
-                }
-                # prioritize py_ files
-                # get py_
-                i_py <- grepl('^py_', ht_files)
-                # remove duplicated non-py
-                ht_files <- c(
-                    setdiff(ht_files[!i_py], sub('^py_', '', ht_files[i_py])),
-                    ht_files[i_py]
-                )
-                # prioritize gz files
-                i_gz <- grepl('\\.gz$', ht_files)
-                # remove duplicated non-py
-                ht_files <- c(
-                    setdiff(ht_files[!i_gz], sub('\\.gz$', '.csv', ht_files[i_gz])),
-                    ht_files[i_gz]
-                )
-                # get date
-                ht_dates <- sub('^(py_)?fnf_0\\d_ht8700_', '', ht_files)
-                # sort by date
-                ht_files <- ht_files[order(ht_dates)]
-                # get start
-                if (ht_old_format) {
-                    ht_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', 'Etc/GMT-1', '\\1000000')
+                    warning('No ht8700 data available in "', ht_directory, '"!')
+                    ht_provided <- FALSE
                 } else {
-                    ht_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000', 'UTC')
-                    ht_pattern[4] <- ht_pattern[2]
+                    # prioritize py_ files
+                    # get py_
+                    i_py <- grepl('^py_', ht_files)
+                    # remove duplicated non-py
+                    ht_files <- c(
+                        setdiff(ht_files[!i_py], sub('^py_', '', ht_files[i_py])),
+                        ht_files[i_py]
+                    )
+                    # prioritize gz files
+                    i_gz <- grepl('\\.gz$', ht_files)
+                    # remove duplicated non-py
+                    ht_files <- c(
+                        setdiff(ht_files[!i_gz], sub('\\.gz$', '.csv', ht_files[i_gz])),
+                        ht_files[i_gz]
+                    )
+                    # get date
+                    ht_dates <- sub('^(py_)?fnf_0\\d_ht8700_', '', ht_files)
+                    # sort by date
+                    ht_files <- ht_files[order(ht_dates)]
+                    # get start
+                    if (ht_old_format) {
+                        ht_pattern <- c('.*_(\\d{8})_(\\d{6}).*', '\\1\\2', 'Etc/GMT-1', '\\1000000')
+                    } else {
+                        ht_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000', 'UTC')
+                        ht_pattern[4] <- ht_pattern[2]
+                    }
                 }
             } else if (ht_with_sonic) {
                 cat('HT8700: raw data provided with sonic input...\n')
@@ -1728,30 +1730,32 @@ process_ec_fluxes <- function(
                 cat('LI-7500: data provided...\n')
                 licor_files <- dir(licor_directory, pattern = '^(py_)?fnf_.*_licor_.*')
                 if (length(licor_files) == 0) {
-                    stop('No licor data available in "', licor_directory, '"!')
+                    warning('No licor data available in "', licor_directory, '"!')
+                    licor_provided <- FALSE
+                } else {
+                    # prioritize py_ files
+                    # get py_
+                    i_py <- grepl('^py_', licor_files)
+                    # remove duplicated non-py
+                    licor_files <- c(
+                        setdiff(licor_files[!i_py], sub('^py_', '', licor_files[i_py])),
+                        licor_files[i_py]
+                    )
+                    # prioritize gz files
+                    i_gz <- grepl('\\.gz$', licor_files)
+                    # remove duplicated non-py
+                    licor_files <- c(
+                        setdiff(licor_files[!i_gz], sub('\\.gz$', '.csv', licor_files[i_gz])),
+                        licor_files[i_gz]
+                    )
+                    # get date
+                    licor_dates <- sub('^(py_)?fnf_0\\d_licor_', '', licor_files)
+                    # sort by date
+                    licor_files <- licor_files[order(licor_dates)]
+                    # get start & end
+                    licor_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000',
+                        'UTC')
                 }
-                # prioritize py_ files
-                # get py_
-                i_py <- grepl('^py_', licor_files)
-                # remove duplicated non-py
-                licor_files <- c(
-                    setdiff(licor_files[!i_py], sub('^py_', '', licor_files[i_py])),
-                    licor_files[i_py]
-                )
-                # prioritize gz files
-                i_gz <- grepl('\\.gz$', licor_files)
-                # remove duplicated non-py
-                licor_files <- c(
-                    setdiff(licor_files[!i_gz], sub('\\.gz$', '.csv', licor_files[i_gz])),
-                    licor_files[i_gz]
-                )
-                # get date
-                licor_dates <- sub('^(py_)?fnf_0\\d_licor_', '', licor_files)
-                # sort by date
-                licor_files <- licor_files[order(licor_dates)]
-                # get start & end
-                licor_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000',
-                    'UTC')
             } else if (licor_with_sonic) {
                 cat('LI-7500: raw data provided with sonic input...\n')
             }
@@ -1775,30 +1779,32 @@ process_ec_fluxes <- function(
                 cat('MIRO: data provided...\n')
                 miro_files <- dir(miro_directory, pattern = '^(py_)?fnf_.*_miro_.*')
                 if (length(miro_files) == 0) {
-                    stop('No miro data available in "', miro_directory, '"!')
+                    warning('No miro data available in "', miro_directory, '"!')
+                    miro_provided <- FALSE
+                } else {
+                    # prioritize py_ files
+                    # get py_
+                    i_py <- grepl('^py_', miro_files)
+                    # remove duplicated non-py
+                    miro_files <- c(
+                        setdiff(miro_files[!i_py], sub('^py_', '', miro_files[i_py])),
+                        miro_files[i_py]
+                    )
+                    # prioritize gz files
+                    i_gz <- grepl('\\.gz$', miro_files)
+                    # remove duplicated non-py
+                    miro_files <- c(
+                        setdiff(miro_files[!i_gz], sub('\\.gz$', '.csv', miro_files[i_gz])),
+                        miro_files[i_gz]
+                    )
+                    # get date
+                    miro_dates <- sub('^(py_)?fnf_0\\d_miro_', '', miro_files)
+                    # sort by date
+                    miro_files <- miro_files[order(miro_dates)]
+                    # get start & end
+                    miro_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000',
+                        'UTC')
                 }
-                # prioritize py_ files
-                # get py_
-                i_py <- grepl('^py_', miro_files)
-                # remove duplicated non-py
-                miro_files <- c(
-                    setdiff(miro_files[!i_py], sub('^py_', '', miro_files[i_py])),
-                    miro_files[i_py]
-                )
-                # prioritize gz files
-                i_gz <- grepl('\\.gz$', miro_files)
-                # remove duplicated non-py
-                miro_files <- c(
-                    setdiff(miro_files[!i_gz], sub('\\.gz$', '.csv', miro_files[i_gz])),
-                    miro_files[i_gz]
-                )
-                # get date
-                miro_dates <- sub('^(py_)?fnf_0\\d_miro_', '', miro_files)
-                # sort by date
-                miro_files <- miro_files[order(miro_dates)]
-                # get start & end
-                miro_pattern <- c('.*_(\\d{4})_(\\d{2})_(\\d{2}).csv', '\\1\\2\\3000000',
-                    'UTC')
             } else if (miro_with_sonic) {
                 cat('MIRO: raw data provided with sonic input...\n')
             }

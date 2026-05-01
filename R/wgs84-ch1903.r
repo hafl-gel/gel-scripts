@@ -572,6 +572,8 @@ coord_transf <- function(x, crs_to,
         cx <- function(.x, ...) {
             if (inherits(.x, c('data.frame', 'matrix'))) {
                 cbind(.x, ...)
+            } else if (is.list(.x)) {
+                c(.x, list(...))
             } else {
                 c(.x, ...)
             }
@@ -579,8 +581,8 @@ coord_transf <- function(x, crs_to,
         if (is_wgs(crs_from)) {
             if (any(c('x', 'y') %in% names(out))) {
                 out <- cx(x_in,
-                    xnew = getElement(out, x_column),
-                    ynew = getElement(out, y_column)
+                    ch_x = getElement(out, x_column),
+                    ch_y = getElement(out, y_column)
                 )
             } else {
                 out <- cx(x_in,

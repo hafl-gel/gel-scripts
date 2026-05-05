@@ -1197,6 +1197,12 @@ evalOffline <- function(
         }
     }
 
+    ## check arguments
+    if (is.null(path.length) || !(is.finite(path.length) && path.length > 0)) {
+        stop('argument "path.length" is invalid!')
+    }
+    # TODO: more checks
+
     ### read raw data:
     if (is.null(RawData)) {
         ### prepare time range:

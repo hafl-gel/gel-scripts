@@ -1426,17 +1426,28 @@ evalOffline <- function(
         # prepare xreg
         xreg <- Cal.dc$Xreg[DOAS.win$pixel_dc, ]
 
+        # define max dead pixel (20 pixels is arbitrary)
+        n_dead <- length(DOAS.win$filt) + 40
+
         # loop over files
         out <- lapply(seq.int(n_files), function(i) {
             # verbose
             cat("\r", i, "/", n_files)
-            # check if light
-            if (isTRUE(median(DiffSpec$diffspec[[i]], na.rm = TRUE) > -5)) {
+            # check if enough light (-5 is arbitrary)
+            if (light_ok <- isTRUE(median(DiffSpec$diffspec[[i]], na.rm = TRUE) > -5)) {
+                # highpass filter
+                dhpf <- highpass.filter2(DiffSpec$diffspec[[i]], DOAS.win$filt)
+            }
+            # check if enough light (20 dead pixels & -5 are arbitrary)
+            if (
+                light_ok &&
+                sum(!is.finite(dhpf)) < n_dead
+            ) {
                 # highpass filter and fit curve to calibration
                 fitcurve(
-                    highpass.filter2(DiffSpec$diffspec[[i]], DOAS.win$filt), 
-                    DOAS.win$pixel_dc, xreg, DOAS.win$tau.shift, path.length, 
-                    return_resid = !lite)
+                    dhpf, DOAS.win$pixel_dc, xreg, DOAS.win$tau.shift, 
+                    path.length, return_resid = !lite
+                )
             } else {
                 # return NAs if too few light
                 out <- as.list(c(

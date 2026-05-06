@@ -3096,7 +3096,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
             # detrend sonic data (T, u, v + w)
             # ---------------------------------------------------------------------- 
-            cat("~~~\ndeterending sonic data...\n")
+            cat("~~~\ndetrending sonic data...\n")
             wind <- detrend_sonic_data(SD, detrending, rec_Hz)
 
             # calculate wind statistics: turbulence values and MOST parameters
@@ -3104,7 +3104,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             if (zc_isfu) {
                 z_c <- z_canopy(interval_start)
             } else {
-                z_c <- z_canopy
+                z_c <- z_canopy[[1]]
             }
             wind_stats <- wind_statistics(wind, z_c, z_ec[[1]], 
                 ustar_method = ustar_method)

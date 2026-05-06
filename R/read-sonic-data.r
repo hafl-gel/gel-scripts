@@ -152,9 +152,10 @@ read_windmaster_ascii <- function(file_path){
         return(NULL)
     }
     # be verbose and print sonic names:
-    sonic_label <- out[, sub('^[^A-Z]*', '', unique(V2))]
+    sonic_label <- out[, gsub('^[^A-Z]*([A-Z])?.*', '\\1', 
+        iconv(unique(V2), 'UTF-8', 'UTF-8', sub = '')
+    )]
     sonic_label <- unique(sonic_label[!(sonic_label == '')])
-    if (length(sonic_label) == 0) stop('sonic label not available!')
     if (length(sonic_label) > 1) stop('more than one unique sonic label!')
     cat(paste0("data recorded by sonic-", tolower(sonic_label), "\n"))
     if (!(loggerbox <- grepl('^py_fnf_0', bn))) {

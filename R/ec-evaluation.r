@@ -1497,9 +1497,13 @@ process_ec_fluxes <- function(
         if (length(z_ec) > 1) {
             stop('argument "z_ec" has length > 1!')
         }
-        if (is.null(z_canopy) || !is.numeric(z_canopy)) {
-            stop('argument "z_canopy" must be provided as numeric value ',
-                '(height of canopy in meters)!')
+        if (is.null(z_canopy) || !((zc_isfu <- is.function(z_canopy)) || is.numeric(z_canopy))) {
+            stop('argument "z_canopy" must be provided as a numeric value',
+                ' (height of canopy in meters)!',
+                ' optionally, a function can be provided accepting one',
+                ' argument (datetime) and returning the a single numeric',
+                ' value'
+            )
         }
         if (length(z_canopy) > 1) {
             stop('argument "z_canopy" has length > 1 which is not yet accepted!')
@@ -1867,6 +1871,20 @@ process_ec_fluxes <- function(
             # "fix" end_time not included
             start_time <- seq(start_time, end_time - 1e-4, by = avg_secs)
             end_time <- start_time + avg_secs
+        }
+
+        # validate z_canopy function
+        if (zc_isfu) {
+            # check first and last datetime
+            zc1 <- try(z_canopy(start_time[1]), silent = TRUE)
+            zcN <- try(z_canopy(start_time[length(start_time)]), silent = TRUE)
+            if (inherits(zc1, 'try-error') || inherits(zcN, 'try-error')
+                || !(is.finite(zc1) && length(zc1) == 1)
+                || !(is.finite(zcN) && length(zcN) == 1)
+            ) {
+                stop('"z_canopy" function fails to convert a datetime from the',
+                    ' specified timerange to a numeric value!')
+            }
         }
 
         # prepare dates
@@ -3083,7 +3101,12 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
 
             # calculate wind statistics: turbulence values and MOST parameters
             # ---------------------------------------------------------------------- 
-            wind_stats <- wind_statistics(wind, z_canopy[[1]], z_ec[[1]], 
+            if (zc_isfu) {
+                z_c <- z_canopy(interval_start)
+            } else {
+                z_c <- z_canopy
+            }
+            wind_stats <- wind_statistics(wind, z_c, z_ec[[1]], 
                 ustar_method = ustar_method)
 
             # get dyn & fix lag

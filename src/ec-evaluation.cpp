@@ -16,7 +16,7 @@ Rcpp::List find_window(NumericVector x, NumericVector y1, NumericVector y2,
     int j;
     Rcout << "[";
 	for (int i = 0; i < leny; i++) {
-        if ((i % mody) < 1) Rcout << "=";
+        if (mody > 0 && (i % mody) < 1) Rcout << "=";
         // pass previous position to runner
         run = run_next;
 		if (x[lenx - 1] < y1[i] || x[run] > y2[i]) {

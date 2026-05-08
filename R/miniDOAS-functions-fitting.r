@@ -100,7 +100,7 @@ fit.curves.rob.fast <- function(meas.doascurve, ind_fit, X_prep, tau.shift,
     # Extract response
     y <- as.numeric(meas.doascurve[ind_fit + tau.best])
     # --- Step 2: Robust fit with KS2014 ---
-    res <- try(.C("R_lmrob_fast_p4",
+    res <- try(lmrob_fast_p4(
         X = as.double(X),
         y = as.double(y),
         n = X_prep$n,
@@ -116,12 +116,11 @@ fit.curves.rob.fast <- function(meas.doascurve, ind_fit, X_prep, tau.shift,
         scale = double(1),
         ses = double(3),
         converged = integer(1),
-        work = as.double(X_prep$work),
-        PACKAGE = "gel"
+        work = as.double(X_prep$work)
     ), silent = TRUE)
     # --- Step 3: Fallback to KS2011 if needed ---
     if (inherits(res, "try-error") || !res$converged) {
-        res <- .C("R_lmrob_fast_p4",
+        try(res <- lmrob_fast_p4(
             X = as.double(X),
             y = as.double(y),
             n = X_prep$n,
@@ -137,9 +136,8 @@ fit.curves.rob.fast <- function(meas.doascurve, ind_fit, X_prep, tau.shift,
             scale = double(1),
             ses = double(3),
             converged = integer(1),
-            work = as.double(X_prep$work),
-            PACKAGE = "gel"
-        )
+            work = as.double(X_prep$work)
+        ), silent = TRUE)
     }
     # --- Step 4: Format output ---
     if (inherits(res, "try-error") || !res$converged) {

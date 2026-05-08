@@ -1364,13 +1364,6 @@ evalOffline <- function(
     # get calibration doascurves:
     Cal.dc <- getCalCurves(DiffSpec, DOAS.win, CalRefSpecs, ...)
 
-    # get fitting function:
-    if (use.robust) {
-        fitcurve <- fit.curves.rob
-    } else {
-        fitcurve <- fit.curves
-    }
-
     # create a 'lighter' highpass filter
     winFUN <- getOption('md.filter.function.list')[[DOAS.win$filter.type]]
     DOAS.win$filt <- winFUN(DOAS.win$filter.strength,...)
@@ -1426,6 +1419,18 @@ evalOffline <- function(
         # prepare xreg
         xreg <- Cal.dc$Xreg[DOAS.win$pixel_dc, ]
 
+        # get fitting function:
+        if (use.robust) {
+            # # old way
+            # fitcurve <- fit.curves.rob
+            fitcurve <- fit.curves.rob.fast
+            xreg_prep <- prep_robust_fit(xreg)
+        } else {
+            fitcurve <- fit.curves
+            xreg_prep <- xreg
+        }
+
+
         # define max dead pixel (20 pixels is arbitrary)
         n_dead <- length(DOAS.win$filt) + 40
 
@@ -1445,7 +1450,7 @@ evalOffline <- function(
             ) {
                 # highpass filter and fit curve to calibration
                 fitcurve(
-                    dhpf, DOAS.win$pixel_dc, xreg, DOAS.win$tau.shift, 
+                    dhpf, DOAS.win$pixel_dc, xreg_prep, DOAS.win$tau.shift, 
                     path.length, return_resid = !lite
                 )
             } else {
@@ -1535,9 +1540,13 @@ highpass.filter2 <- function(dat, filt) {
 fit_parallel <- function(ds_list, doas_win, path_length, xreg, robust) {
     # get fitting function:
     if (robust) {
-        fitcurve <- fit.curves.rob
+        # # old way
+        # fitcurve <- fit.curves.rob
+        fitcurve <- fit.curves.rob.fast
+        xreg_prep <- prep_robust_fit(xreg)
     } else {
         fitcurve <- fit.curves
+        xreg_prep <- xreg
     }
     # loop over diff specs
     lapply(ds_list, function(diff_spec) {
@@ -1546,7 +1555,7 @@ fit_parallel <- function(ds_list, doas_win, path_length, xreg, robust) {
             # highpass filter and fit curve to calibration
             fitcurve(
                 highpass.filter2(diff_spec, doas_win$filt), 
-                doas_win$pixel_dc, xreg, doas_win$tau.shift, path_length)
+                doas_win$pixel_dc, xreg_prep, doas_win$tau.shift, path_length)
         } else {
             # return NAs if too few light
             as.list(c(

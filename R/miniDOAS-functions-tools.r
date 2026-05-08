@@ -2053,7 +2053,10 @@ fit_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
     }
     xreg <- cbind(nh3 = dcnh3[['cnt']], no = dcno[['cnt']], so2 = dcso2[['cnt']])[wins[['pixel_dc']], ]
     if (robust) {
-        out <- fit.curves.rob(x[['cnt']], wins[['pixel_dc']], xreg, tau.shift, path.length, all_coefs = TRUE)
+        # # old way
+        # out <- fit.curves.rob(x[['cnt']], wins[['pixel_dc']], xreg, tau.shift, path.length, all_coefs = TRUE)
+        xreg_prep <- prep_robust_fit(xreg)
+        out <- fit.curves.rob.fast(x[['cnt']], wins[['pixel_dc']], xreg_prep, tau.shift, path.length, all_coefs = TRUE)
     } else {
         out <- fit.curves(x[['cnt']], wins[['pixel_dc']], xreg, tau.shift, path.length, all_coefs = TRUE)
     }

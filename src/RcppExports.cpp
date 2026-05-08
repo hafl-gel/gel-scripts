@@ -194,9 +194,33 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// lmrob_fast_p4
+List lmrob_fast_p4(NumericVector X, NumericVector y, int n, NumericVector settings, int nResample, int k_fast, int best_r, double tol, double scale_tol, int maxit_scale, NumericVector R_chol, NumericVector work);
+RcppExport SEXP _gel_lmrob_fast_p4(SEXP XSEXP, SEXP ySEXP, SEXP nSEXP, SEXP settingsSEXP, SEXP nResampleSEXP, SEXP k_fastSEXP, SEXP best_rSEXP, SEXP tolSEXP, SEXP scale_tolSEXP, SEXP maxit_scaleSEXP, SEXP R_cholSEXP, SEXP workSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type X(XSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type settings(settingsSEXP);
+    Rcpp::traits::input_parameter< int >::type nResample(nResampleSEXP);
+    Rcpp::traits::input_parameter< int >::type k_fast(k_fastSEXP);
+    Rcpp::traits::input_parameter< int >::type best_r(best_rSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< double >::type scale_tol(scale_tolSEXP);
+    Rcpp::traits::input_parameter< int >::type maxit_scale(maxit_scaleSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type R_chol(R_cholSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type work(workSEXP);
+    rcpp_result_gen = Rcpp::wrap(lmrob_fast_p4(X, y, n, settings, nResample, k_fast, best_r, tol, scale_tol, maxit_scale, R_chol, work));
+    return rcpp_result_gen;
+END_RCPP
+}
+
+RcppExport SEXP C_cfilter(SEXP, SEXP, SEXP, SEXP);
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_gel_find_window", (DL_FUNC) &_gel_find_window, 3},
+    {"_gel_find_window", (DL_FUNC) &_gel_find_window, 4},
     {"_gel_fit_ogive", (DL_FUNC) &_gel_fit_ogive, 5},
     {"_gel_ht8700_read_cpp", (DL_FUNC) &_gel_ht8700_read_cpp, 1},
     {"_gel_ht8700_read_cpp_gzip", (DL_FUNC) &_gel_ht8700_read_cpp_gzip, 1},
@@ -211,6 +235,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_gel_nakai_correction_2012", (DL_FUNC) &_gel_nakai_correction_2012, 3},
     {"_gel_hs_read_cpp", (DL_FUNC) &_gel_hs_read_cpp, 1},
     {"_gel_hs_read_cpp_gzip", (DL_FUNC) &_gel_hs_read_cpp_gzip, 1},
+    {"_gel_lmrob_fast_p4", (DL_FUNC) &_gel_lmrob_fast_p4, 12},
+    {"C_cfilter", (DL_FUNC) &C_cfilter, 4},
     {NULL, NULL, 0}
 };
 

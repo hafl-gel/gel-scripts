@@ -61,3 +61,7 @@ hs_read_cpp_gzip <- function(filename) {
     .Call(`_gel_hs_read_cpp_gzip`, filename)
 }
 
+lmrob_fast_p4 <- function(X, y, n, settings, nResample, k_fast, best_r, tol, scale_tol, maxit_scale, R_chol, work) {
+    .Call(`_gel_lmrob_fast_p4`, X, y, n, settings, nResample, k_fast, best_r, tol, scale_tol, maxit_scale, R_chol, work)
+}
+

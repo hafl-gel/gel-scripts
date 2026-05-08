@@ -12,6 +12,6 @@ Imports: Rcpp (>= 1.0.12), lubridate, digest, fields, deming, reshape2, lattice,
 Suggests: oce, openxlsx, sf, robustbase
 LinkingTo: Rcpp
 LazyData: true
-RoxygenNote: 7.3.2
 Remotes: ChHaeni/ibts
 StagedInstall: no
+Config/roxygen2/version: 8.0.0

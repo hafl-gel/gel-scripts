@@ -78,7 +78,7 @@ prep_robust_fit <- function(Xreg) {
 }
 
 fit.curves.rob.fast <- function(meas.doascurve, ind_fit, X_prep, tau.shift, 
-                                path.length, return_resid = FALSE) {
+                                path.length, all_coefs = FALSE, return_resid = FALSE) {
     # X_prep: output from prep_robust_fit()
     n <- X_prep$n
     X <- X_prep$X
@@ -112,10 +112,6 @@ fit.curves.rob.fast <- function(meas.doascurve, ind_fit, X_prep, tau.shift,
         scale_tol = as.double(X_prep$KS2014$scale_tol),
         maxit_scale = as.integer(X_prep$KS2014$maxit_scale),
         R_chol = as.double(X_prep$R_chol),
-        coeffs = double(4),
-        scale = double(1),
-        ses = double(3),
-        converged = integer(1),
         work = as.double(X_prep$work)
     ), silent = TRUE)
     # --- Step 3: Fallback to KS2011 if needed ---
@@ -132,10 +128,6 @@ fit.curves.rob.fast <- function(meas.doascurve, ind_fit, X_prep, tau.shift,
             scale_tol = as.double(X_prep$KS2011$scale_tol),
             maxit_scale = as.integer(X_prep$KS2011$maxit_scale),
             R_chol = as.double(X_prep$R_chol),
-            coeffs = double(4),
-            scale = double(1),
-            ses = double(3),
-            converged = integer(1),
             work = as.double(X_prep$work)
         ), silent = TRUE)
     }
@@ -162,7 +154,7 @@ fit.curves.rob.fast <- function(meas.doascurve, ind_fit, X_prep, tau.shift,
         coef = res$coeffs[2:4] / path.length,    # 3 slopes only
         se = res$ses / path.length,              # Corresponding SEs
         tau = tau.best,
-        intercept = res$coeffs[1],
+        if (all_coefs) intercept = res$coeffs[1],
         scale = res$scale
     )
     if (return_resid) {

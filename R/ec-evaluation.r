@@ -4525,7 +4525,7 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
 
     # Unit root test based upon Breitung's variance ratio -> stationary ts???
     stat <- egcm_bvr.test(set[, 1])$p.val < 0.01 && egcm_bvr.test(set[, 2])$p.val < 0.01
-    if (is.na(stat)) {
+    if (is.na(stat) || any(diag(var(set)) == 0)) {
         # return all NA
         return(
             list(

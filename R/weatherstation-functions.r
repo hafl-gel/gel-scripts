@@ -256,7 +256,10 @@ read_ws700 <- function(folder, from = NULL, to = NULL,
         ws10[, recorded.e4 := NULL]
     }
     if (is.null(from)) {
-        from <- ws1[, Time[1] - 60]
+        from <- min(
+            ws1[, Time[1] - 60],
+            ws10[, Time[1] - 600]
+        )
     }
     if (is.null(to)) {
         to <- ws1[, Time[.N]]

@@ -10,6 +10,14 @@ export(merge_data)
 # remove these?
 export(write_hashed)
 export(read_hashed)
+export(hashed_qdsave)
+export(hashed_qssave)
+export(hashed_fstwrite)
+export(hashed_parquetwrite)
+export(hashed_qdread)
+export(hashed_qsread)
+export(hashed_fstread)
+export(hashed_parquetread)
 # ~~~ licor
 export(read_licor)
 # ~~~ miro

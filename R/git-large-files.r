@@ -187,3 +187,25 @@ gitignore_file <- function(file_path) {
     }
     invisible(NULL)
 }
+
+# convenience functions
+hashed_qdsave <- function(x, ...) write_hashed(x, ...)
+hashed_qssave <- function(x, ...) write_hashed(x, ..., write_fun = qs_save)
+hashed_fstwrite <- function(x, ...) {
+    require(fst)
+    write_hashed(x, ..., write_fun = write_fst)
+}
+hashed_parquetwrite <- function(x, ...) {
+    require(arrow)
+    write_hashed(x, ..., write_fun = write_parquet)
+}
+hashed_qdread <- function(x, ...) read_hashed(x, ...)
+hashed_qsread <- function(x, ...) read_hashed(x, ..., read_fun = qs_read)
+hashed_fstread <- function(x, ...) {
+    require(fst)
+    read_hashed(x, ..., read_fun = read_fst)
+}
+hashed_parquetread <- function(x, ...) {
+    require(arrow)
+    read_hashed(x, ..., read_fun = read_parquet)
+}

@@ -3878,7 +3878,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
             ##### figures
             # -----------------------------------------------------------------------
 
-            if (create_graphs) {
+            if (create_graphs && any(plot_timeseries)) {
                 if (!dir.exists(path_folder)) {
                     dir.create(path_folder, recursive = FALSE)
                 }

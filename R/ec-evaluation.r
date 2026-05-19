@@ -1527,9 +1527,16 @@ process_ec_fluxes <- function(
         }
 
         # fix input (vectors of default values)
+        frmls <- formals(process_ec_fluxes)
+        # check dots
+        fdots <- list(...)
+        if (!all(ok <- names(fdots) %in% names(frmls))) {
+            stop('unused arguments ', sub('list', '', deparse(fdots[!ok])))
+        }
+        rm(fdots)
         rotation_method <- match.arg(rotation_method, c('two axis', 'planar fit'))
         rot_args <- rotation_args
-        rotation_args <- eval(formals(process_ec_fluxes)$rotation_args)
+        rotation_args <- eval(frmls$rotation_args)
         rotation_args[names(rot_args)] <- rot_args
         rm(rot_args)
         detrending <- fix_defaults(detrending, variables)
@@ -1578,7 +1585,7 @@ process_ec_fluxes <- function(
         plotting_var_units <- fix_defaults(plotting_var_units, ts_vars)[names(plot_timeseries)]
         plotting_covar_units <- fix_defaults(plotting_covar_units, covariances)
         plotting_covar_colors <- fix_defaults(plotting_covar_colors, covariances)
-        model_color_names <- names(formals(process_ec_fluxes)$model_colors)
+        model_color_names <- names(frmls$model_colors)
         if (is.null(names(model_colors)) && 
             length(model_colors) == length(model_color_names)) {
             names(model_colors) <- model_color_names
@@ -1599,7 +1606,7 @@ process_ec_fluxes <- function(
         # ------------------------------------------------------------------------------
 
         cat("\n************************************************************\n")
-        cat("HT8700/LI-COR EC flux processing\n")
+        cat("EC flux processing\n")
 
         # mandatory sonic data
         if (sonic_has_data <- inherits(sonic_directory, 'data.table')) {
@@ -2471,7 +2478,7 @@ process_ec_fluxes <- function(
                     resid_value <- as.numeric(x[is_resid])
                 } else {
                     # get default from arguments
-                    resid_value <- eval(formals(process_ec_fluxes)$lag_fix)[nx]
+                    resid_value <- eval(frmls$lag_fix)[nx]
                 }
                 # subset
                 rgs_sub <- rgs[!is_resid]

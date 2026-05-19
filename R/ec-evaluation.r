@@ -2866,7 +2866,7 @@ process_ec_fluxes <- function(
                     # create covariances figure
                     fn_covars <- paste0(path_folder, '/dailygraphs-covariances-', 
                         flux, '-', day, '.png')
-                    png(fn_covars, width = 14, height = 14, units = 'in', res = res, ...)
+                    png(fn_covars, width = 14, height = 14, units = 'in', res = res)
                     # x11(width = 14, height = 14)
                     par(mfrow = c(8, 6), mar = c(2, 4, 2, 2))
                     # loop over intervals
@@ -2884,7 +2884,7 @@ process_ec_fluxes <- function(
                     # cospec & ogive (dyn)
                     fn_dynco <- paste0(path_folder, '/dailygraphs-ogives-dyn-', 
                         flux, '-', day, '.png')
-                    png(fn_dynco, width = 14, height = 14, units = 'in', res = res, ...)
+                    png(fn_dynco, width = 14, height = 14, units = 'in', res = res)
                     par(mfrow = c(8, 6), mar = c(2, 4, 2, 2))
                     # loop over intervals
                     for (i in idate[[day]]) {
@@ -2915,7 +2915,7 @@ process_ec_fluxes <- function(
                     # cospec & ogive (fix)
                     fn_fixco <- paste0(path_folder, '/dailygraphs-ogives-fix-', 
                         flux, '-', day, '.png')
-                    png(fn_fixco, width = 14, height = 14, units = 'in', res = res, ...)
+                    png(fn_fixco, width = 14, height = 14, units = 'in', res = res)
                     par(mfrow = c(8, 6), mar = c(2, 4, 2, 2))
                     # loop over intervals
                     for (i in idate[[day]]) {

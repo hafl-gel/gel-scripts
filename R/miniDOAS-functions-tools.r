@@ -308,13 +308,13 @@ print.single_spec <- function(x, lo = 200, hi = 230, ...) {
     cat('\t linearity corrected:', attr(x, 'linearity.corrected'), '\n')
     cat(sprintf('   I (%i to %i nm) min/avg/max: %1.0f/%1.0f/%1.0f\n***\n', lo, hi, min(xi, na.rm = TRUE), mean(xi, na.rm = TRUE), max(xi, na.rm = TRUE)))
 }
-plot.single_spec <- function(x, y, ylab = 'counts', xlab = 'nm', xlim = c(190, 230), ...) {
+plot.single_spec <- function(x, y, ylab = 'counts', xlab = 'nm', xlim = c(190, 230), type = 'l', ...) {
     if(is.null(xlim)) xlim <- range(get_wl(x))
     x <- cut_wl(x, xlim[1], xlim[2])
     y <- x
     class(y) <- 'numeric'
     x <- get_wl(x)
-    plot(x, y, xlab = xlab, ylab = ylab, ...)
+    plot(x, y, xlab = xlab, ylab = ylab, type = type, ...)
 }
 lines.single_spec <- function(x, ...) {
     y <- x

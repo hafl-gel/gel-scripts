@@ -2104,10 +2104,10 @@ resid_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
         list(
             wl = x$wl,
             cnt = shift_tau(x[['cnt']], tau.shift) - 
-                fitted[['nh3']] * attr(fitted, 'dc_nh3')[['cnt']] -
-                fitted[['no']] * attr(fitted, 'dc_no')[['cnt']] -
-                fitted[['so2']] * attr(fitted, 'dc_so2')[['cnt']] - 
-                fitted[['intercept']]
+                (fitted[['nh3']] * attr(fitted, 'dc_nh3')[['cnt']] +
+                fitted[['no']] * attr(fitted, 'dc_no')[['cnt']] +
+                fitted[['so2']] * attr(fitted, 'dc_so2')[['cnt']]) * 
+                path.length - fitted[['intercept']]
             ),
         fit = fitted,
         class = 'dc_resid')

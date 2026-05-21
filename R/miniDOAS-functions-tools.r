@@ -2029,6 +2029,9 @@ get_wins <- function(x) {
 #### fit calibration spectra to measured single spectrum
 fit_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
     dcnh3 = NULL, dcno = NULL, dcso2 = NULL, corNH3 = 1.16, robust = TRUE) {
+    if (!inherits(x, 'dc')) {
+        stop('arguments x must be of class "dc"')
+    }
     wins <- get_wins(x)
     if (!is.null(calrefspecs)) {
         # get doascurves from calibration spectra

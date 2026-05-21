@@ -2199,6 +2199,15 @@ print.doas.fit <- function(x, ...) {
     }
     invisible(NULL)
 }
+# OD -> ugm3
+# molar_masses <- c(nh3 = 17, so2 = 64, no = 30)
+od_ugm3 <- function(path, molar_mass = 17) {
+    100 ^ 2 / path / 6.02214076e23 * molar_mass * 1e6
+}
+# OD <- ugm3
+ugm3_od <- function(path, molar_mass = 17) {
+    1 / (100 ^ 2 / path / 6.02214076e23 * molar_mass * 1e6)
+}
 
 get_fixpattern <- function(x, granularity = '1days', ref.time = colnames(x)[1], fun = NULL, ...) {
     # parse ref time

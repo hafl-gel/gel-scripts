@@ -2186,8 +2186,10 @@ Ops.dc <- function(e1, e2) {
 
 
 #### plot method for dc_resid
-plot.dc_resid <- function(x, type = 'l', xlab = 'nm', ylab = 'doascurve', ...) {
-    plot(x$wl, x$cnt, type = type, xlab = xlab, ylab = ylab, ...)
+plot.dc_resid <- function(x, type = 'l', xlab = 'nm', ylab = 'doascurve',
+    panel.first = abline(h = 0, col = 'darkgrey'), ...) {
+    plot(x$wl, x$cnt, type = type, xlab = xlab, ylab = ylab, 
+        panel.first = panel.first, ...)
 }
 lines.dc_resid <- function(x, ...) {
     lines(x$wl, x$cnt, ...)
@@ -2571,6 +2573,71 @@ plot_cal <- function(x, rev = if (length(unique(x[['revolver']])) == 1) x[['revo
     plot(x[, 'so2'], gap.size.max = '1hours', ylim = range(x[x$revolver %in% rev, 'so2']), ...)
     plot(x[, 'i_max'], gap.size.max = '1hours', ylim = range(x[x$revolver %in% rev, 'i_max']), ...)
 }
+
+# plot all important figures until fit results
+plot_overview <- function(rawdata, calref, at, path_length) {
+    # get cal specs
+    dark <- read_cal(calref, is_dark = TRUE, spec = 'dat.ref.dark')
+    ref <- read_cal(calref, is_dark = FALSE, spec = 'dat.ref', dark = dark)
+    nh3 <- read_cal(calref, is_dark = FALSE, spec = 'dat.NH3', dark = dark)
+    nh3_ref <- read_cal(calref, is_dark = FALSE, spec = 'dat.N2.NH3', dark = dark)
+    no <- read_cal(calref, is_dark = FALSE, spec = 'dat.NO', dark = dark)
+    no_ref <- read_cal(calref, is_dark = FALSE, spec = 'dat.N2.NO', dark = dark)
+    so2 <- read_cal(calref, is_dark = FALSE, spec = 'dat.SO2', dark = dark)
+    so2_ref <- read_cal(calref, is_dark = FALSE, spec = 'dat.N2.SO2', dark = dark)
+    nh3_dc <- calc_dc(nh3, nh3_ref)
+    no_dc <- calc_dc(no, no_ref)
+    so2_dc <- calc_dc(so2, so2_ref)
+    # get spectrum from raw data
+    spec <- single_specs(rawdata, at = at, dark = dark)
+    # plot(spec)
+    # get doascurve
+    spec_dc <- calc_dc(spec, ref)
+    # plot(spec_dc)
+    # get fit
+    fit <- fit_dc(spec_dc, dcnh3 = nh3_dc, dcno = no_dc, dcso2 = so2_dc,
+        tau.shift = 3, path.length = path_length)
+    fit_ug <- fit2ug(fit, path_length)
+    # get residues
+    res <- resid_dc(fit)
+    dc1 <- so2_dc * fit$so2 * path_length
+    dc2 <- (so2_dc * fit$so2 + no_dc * fit$no) * path_length
+    dc3 <- (so2_dc * fit$so2 + no_dc * fit$no + nh3_dc * fit$nh3) * path_length
+    # get fit range
+    wins <- get_wins(spec_dc)
+    par(mfrow = c(4, 1), mar = c(4, 4, 1, 2) + 0.1, oma = c(0, 0, 2, 0))
+    # meas. + ref
+    plot(cut_wl(spec, lo = wins$filter.window[1], hi = wins$filter.window[2]),
+        type = 'n', log = 'y', xlab = '')
+    lines(ref, col = 'grey')
+    lines(spec)
+    legend('bottomright', c('I.meas', 'I.ref'), col = c('black', 'grey'), 
+        lty = 1, bty = 'n')
+    # diffspec
+    ds <- attr(spec_dc, 'ds')[wins$pixel_filter]
+    wl_ds <- get_wl(spec_dc)[wins$pixel_filter]
+    dl <- ds - spec_dc
+    plot(wl_ds, ds, type = 'l', ylab = 'log(I.meas/I.ref)', xlab = '')
+    lines(dl, col = 'red')
+    legend('bottomright', c('unfiltered', 'lowpass filt.'), 
+        col = c('black', 'red'), lty = 1, bty = 'n')
+    # dc + fit
+    plot(spec_dc, tau = 3, xlab = '')
+    lines(dc1, col = 'blue')
+    lines(dc2, col = 'green')
+    lines(dc3, col = 'red')
+    legend('bottomright', c('meas.', 'SO2', 'SO2 + NO', 'SO2 + NO + NH3'), 
+        col = c('black', 'blue', 'green', 'red'), lty = 1, bty = 'n')
+    legend('bottom', paste(sprintf('%s: %1.1f +/- %1.1f μg/m3', names(fit_ug)[1:3],
+        fit_ug[1:3], fit_ug[4:6]), collapse = '   '), bty = 'n', horiz = TRUE)
+    # text()
+    # residues -> units?
+    plot(res, ylab = 'residuals')
+    # title
+    title(deparse_timerange(get_timerange(spec_dc), tz = 'UTC', sep = ' to ',
+            usetz = TRUE), outer = TRUE)
+}
+
 
 
 

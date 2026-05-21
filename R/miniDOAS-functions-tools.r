@@ -2575,7 +2575,8 @@ plot_cal <- function(x, rev = if (length(unique(x[['revolver']])) == 1) x[['revo
 }
 
 # plot all important figures until fit results
-plot_overview <- function(rawdata, calref, at, path_length) {
+plot_overview <- function(rawdata, calref, at, path_length,
+    robust = TRUE, corNH3 = 1.16) {
     # get cal specs
     dark <- read_cal(calref, is_dark = TRUE, spec = 'dat.ref.dark')
     ref <- read_cal(calref, is_dark = FALSE, spec = 'dat.ref', dark = dark)
@@ -2596,7 +2597,9 @@ plot_overview <- function(rawdata, calref, at, path_length) {
     # plot(spec_dc)
     # get fit
     fit <- fit_dc(spec_dc, dcnh3 = nh3_dc, dcno = no_dc, dcso2 = so2_dc,
-        tau.shift = 3, path.length = path_length)
+        tau.shift = 3, path.length = path_length, robust = robust, 
+        corNH3 = corNH3
+    )
     fit_ug <- fit2ug(fit, path_length)
     # get residues
     res <- resid_dc(fit)
@@ -2612,24 +2615,27 @@ plot_overview <- function(rawdata, calref, at, path_length) {
     lines(ref, col = 'grey')
     lines(spec)
     legend('bottomright', c('I.meas', 'I.ref'), col = c('black', 'grey'), 
-        lty = 1, bty = 'n')
+        lty = 1, bty = 'n', cex = 0.8)
     # diffspec
     ds <- attr(spec_dc, 'ds')[wins$pixel_filter]
     wl_ds <- get_wl(spec_dc)[wins$pixel_filter]
     dl <- ds - spec_dc
     plot(wl_ds, ds, type = 'l', ylab = 'log(I.meas/I.ref)', xlab = '')
-    lines(dl, col = 'red')
+    lines(dl, col = 'orange')
     legend('bottomright', c('unfiltered', 'lowpass filt.'), 
-        col = c('black', 'red'), lty = 1, bty = 'n')
+        col = c('black', 'orange'), lty = 1, bty = 'n', cex = 0.8)
     # dc + fit
     plot(spec_dc, tau = 3, xlab = '')
     lines(dc1, col = 'blue')
     lines(dc2, col = 'green')
     lines(dc3, col = 'red')
     legend('bottomright', c('meas.', 'SO2', 'SO2 + NO', 'SO2 + NO + NH3'), 
-        col = c('black', 'blue', 'green', 'red'), lty = 1, bty = 'n')
-    legend('bottom', paste(sprintf('%s: %1.1f +/- %1.1f μg/m3', names(fit_ug)[1:3],
-        fit_ug[1:3], fit_ug[4:6]), collapse = '   '), bty = 'n', horiz = TRUE)
+        col = c('black', 'blue', 'green', 'red'), lty = 1, bty = 'n',
+        cex = 0.8
+    )
+    legend('bottom', paste(sprintf('%s: %1.1f +/- %1.1f μg/m3', 
+        names(fit_ug)[1:3], fit_ug[1:3], fit_ug[4:6]), collapse = '   '), 
+        bty = 'n', horiz = TRUE, cex = 0.8)
     # text()
     # residues -> units?
     plot(res, ylab = 'residuals')

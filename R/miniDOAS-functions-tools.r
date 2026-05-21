@@ -2575,7 +2575,7 @@ plot_cal <- function(x, rev = if (length(unique(x[['revolver']])) == 1) x[['revo
 }
 
 # plot all important figures until fit results
-plot_overview <- function(rawdata, calref, at, path_length,
+plot_overview <- function(rawdata, calref, at, path_length, tau.shift = 0,
     robust = TRUE, corNH3 = 1.16) {
     # get cal specs
     dark <- read_cal(calref, is_dark = TRUE, spec = 'dat.ref.dark')
@@ -2597,7 +2597,7 @@ plot_overview <- function(rawdata, calref, at, path_length,
     # plot(spec_dc)
     # get fit
     fit <- fit_dc(spec_dc, dcnh3 = nh3_dc, dcno = no_dc, dcso2 = so2_dc,
-        tau.shift = 3, path.length = path_length, robust = robust, 
+        tau.shift = tau.shift, path.length = path_length, robust = robust, 
         corNH3 = corNH3
     )
     fit_ug <- fit2ug(fit, path_length)
@@ -2625,7 +2625,7 @@ plot_overview <- function(rawdata, calref, at, path_length,
     legend('bottomright', c('unfiltered', 'lowpass filt.'), 
         col = c('black', 'orange'), lty = 1, bty = 'n', cex = 0.8)
     # dc + fit
-    plot(spec_dc, tau = 3, xlab = '')
+    plot(spec_dc, tau = tau.shift, xlab = '')
     lines(dc1, col = 'blue')
     lines(dc2, col = 'green')
     lines(dc3, col = 'red')

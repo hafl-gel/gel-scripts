@@ -2576,7 +2576,18 @@ plot_cal <- function(x, rev = if (length(unique(x[['revolver']])) == 1) x[['revo
 
 # plot all important figures until fit results
 plot_overview <- function(rawdata, calref, at, path_length, tau.shift = 0,
-    robust = TRUE, corNH3 = 1.16) {
+    robust = TRUE, corNH3 = 1.16, 
+    cols = c(lowpass = 'orange', nh3 = 'indianred', so2 = 'dodgerblue3', no = 'seagreen4')) {
+    # fix colors
+    if (!missing(cols)) {
+        default_colors <- formals(gel::plot_overview)$cols
+        for (nm in names(default_colors)) {
+            if (nm %in% names(cols)) {
+                default_colors[nm] <- cols[nm]
+            }
+        }
+        cols <- default_colors
+    }
     # get cal specs
     dark <- read_cal(calref, is_dark = TRUE, spec = 'dat.ref.dark')
     ref <- read_cal(calref, is_dark = FALSE, spec = 'dat.ref', dark = dark)
@@ -2621,16 +2632,16 @@ plot_overview <- function(rawdata, calref, at, path_length, tau.shift = 0,
     wl_ds <- get_wl(spec_dc)[wins$pixel_filter]
     dl <- ds - spec_dc
     plot(wl_ds, ds, type = 'l', ylab = 'log(I.meas/I.ref)', xlab = '')
-    lines(dl, col = 'orange')
+    lines(dl, col = cols['lowpass'])
     legend('bottomright', c('unfiltered', 'lowpass filt.'), 
-        col = c('black', 'orange'), lty = 1, bty = 'n', cex = 0.8)
+        col = c('black', cols['lowpass']), lty = 1, bty = 'n', cex = 0.8)
     # dc + fit
     plot(spec_dc, tau = tau.shift, xlab = '')
-    lines(dc1, col = 'blue')
-    lines(dc2, col = 'green')
-    lines(dc3, col = 'red')
+    lines(dc1, col = cols['so2'])
+    lines(dc2, col = cols['no'])
+    lines(dc3, col = cols['nh3'])
     legend('bottomright', c('meas.', 'SO2', 'SO2 + NO', 'SO2 + NO + NH3'), 
-        col = c('black', 'blue', 'green', 'red'), lty = 1, bty = 'n',
+        col = c('black', cols[c('so2', 'no', 'nh3')]), lty = 1, bty = 'n',
         cex = 0.8
     )
     legend('bottom', paste(sprintf('%s: %1.1f +/- %1.1f μg/m3', 

@@ -2631,7 +2631,13 @@ plot_overview <- function(rawdata, calref, at, path_length, tau.shift = 0,
     ds <- attr(spec_dc, 'ds')[wins$pixel_filter]
     wl_ds <- get_wl(spec_dc)[wins$pixel_filter]
     dl <- ds - spec_dc
-    plot(wl_ds, ds, type = 'l', ylab = 'log(I.meas/I.ref)', xlab = '')
+    ylim <- range(dl$cnt, ds[wins$pixel_dc], na.rm = TRUE)
+    if (!all(is.finite(ylim))) {
+        ylim <- NULL
+    } else {
+        ylim <- mean(ylim) + diff(ylim) / 2 * 1.5 * c(-1, 1)
+    }
+    plot(wl_ds, ds, type = 'l', ylab = 'log(I.meas/I.ref)', xlab = '', ylim = ylim)
     lines(dl, col = cols['lowpass'])
     legend('bottomright', c('unfiltered', 'lowpass filt.'), 
         col = c('black', cols['lowpass']), lty = 1, bty = 'n', cex = 0.8)

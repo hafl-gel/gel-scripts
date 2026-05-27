@@ -1199,12 +1199,12 @@ process_turbulence <- function(
     , na_limits_window = c(pass = '10secs', replace = '5mins')
     , covariances = c('uxw', 'wxT')
     , create_graphs = FALSE
-    , ogive_out = FALSE
+    , ogives_return = FALSE
     , ...
     ) {
     # remove covar/cospec/ogive calculation if graphs are not created and ogives are not
     #   included in output
-    if (!create_graphs && !ogive_out) {
+    if (!create_graphs && !ogives_return) {
         covariances <- NULL
     }
     process_ec_fluxes(
@@ -1225,7 +1225,7 @@ process_turbulence <- function(
         , na_limits_method = na_limits_method
         , covariances = covariances
         , create_graphs = create_graphs
-        , ogive_out = ogive_out
+        , ogives_return = ogives_return
         , ustar_method = ustar_method
         , ...
     )

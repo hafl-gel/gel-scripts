@@ -380,10 +380,10 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
             } else if (sub('_\\d+$', '', method) %in% names(filter_list)) {
                 win <- round(as.numeric(sub(".*_", "", method)) * Hz_ts)
                 if (win >= (length(y) + length(na.action(y)))) {
-                    stop('(detrending) filter window ist larger than averaging time!')
+                    stop('(detrending) filter window is larger than averaging time!')
                 }
                 if (win >= n) {
-                    warning('(detrending) filter window ist larger than available data')
+                    warning('(detrending) filter window is larger than available data')
                     resid <- y - fitted
                     attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
                     return(

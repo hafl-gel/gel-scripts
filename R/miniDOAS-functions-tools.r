@@ -36,7 +36,7 @@ print.rawdat <- function(x, ...){
     cat('\t', x$DOASinfo$DOASmodel, '/', x$DOASinfo$Spectrometer$Serial, '- raw data\n')
     cat('\t', nc, 'entries\n')
     cat('\t', min(wl), 'to', max(wl), 'nm', sprintf('(%s pixel)\n', length(wl)))
-    cat('\t recorded between', format(x$Header$st[1]),'and', format(x$Header$et[nc]),'\n')
+    cat('\t recorded between', format(x$Header$st[1], usetz = TRUE),'and', format(x$Header$et[nc], usetz = TRUE),'\n')
     cat('~~~~\n')
 }
 

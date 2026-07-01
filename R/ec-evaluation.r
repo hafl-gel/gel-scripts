@@ -3455,15 +3455,17 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 # get Albrecht's ogive bias
                 ogive_bias_fix <- sapply(Cospec_fix, \(x) {
                     x[is.na(x)] <- 0
-                    ms <- median(sign(x))
+                    # ms <- median(sign(x))
                     o <- sum(x)
-                    (ms * sum(abs(x)) - o) / o
+                    abs(o) / sum(abs(x))
+                    # (ms * sum(abs(x)) - o) / o
                 })
                 ogive_bias_dyn <- sapply(Cospec_dyn, \(x) {
                     x[is.na(x)] <- 0
-                    ms <- median(sign(x))
+                    # ms <- median(sign(x))
                     o <- sum(x)
-                    (ms * sum(abs(x)) - o) / o
+                    abs(o) / sum(abs(x))
+                    # (ms * sum(abs(x)) - o) / o
                 })
 
                 # fix matrix to vector for output

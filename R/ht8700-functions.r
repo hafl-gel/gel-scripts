@@ -167,3 +167,110 @@ add_alarms <- function(x, simple = FALSE) {
     invisible(x)
 }
 
+# old main function to read HT8700 raw data
+read_ht8700_old <- function(FilePath, tz = "Etc/GMT-1"){
+    # be verbose
+    cat("File:", path.expand(FilePath), "- ")
+	# get file name
+	bn <- basename(FilePath)
+    # check file name
+    if (is_old_structure <- grepl('^ht8700_', bn)) {
+        # old data structure on sonic boxes
+        data_pattern <- '^\\d{2}[0-9.:]+,([ A-Z0-9.+-]+,){18}[[ 0-9.+-]+$'
+        # possibly gzipped files -> need R.utils package
+        if (!any(grepl('R.utils', installed.packages()[, 'Package']))) {
+            stop('package "R.utils" must be installed to process gz files!')
+        }
+        # set data time zone
+        tz_data <- 'Etc/GMT-1'
+    } else if (grepl('^(py_)?fnf_0\\d_ht8700', bn)) {
+        # new data structure on loggerbox
+        data_pattern <- '^\\d{4}-\\d{2}-\\d{2}T\\d{2}[0-9.:]+Z,([ A-Z0-9.+-]+,){18}[[ 0-9.+-]+$'
+        # set data time zone
+        tz_data <- 'UTC'
+    } else {
+        # wrong file name
+        stop('data filename not valid')
+    }
+	### read File
+    raw <- readLines(FilePath, warn = FALSE)
+    # filter out erroneous multibyte strings
+    raw <- raw[grepl(data_pattern, raw, useBytes = TRUE)]
+    # fix one single line
+    if (length(raw) == 1) {
+        raw <- c(raw, '')
+    }
+    # read from string
+    out <- fread(text = raw, blank.lines.skip = TRUE,
+        header = FALSE, na.strings = '999.99', showProgress = FALSE,
+    )
+    # check empty
+    if (nrow(out) == 0) {
+        cat('no valid data!\n')
+        return(NULL)
+    }
+    # fix time column
+    if (is_old_structure) {
+        # get date
+        Date <- gsub("^ht8700_.*_([0-9]{8})_.*", "\\1", bn)
+        # fix time
+        out[, Time := fast_strptime(paste(Date, V1), lt = FALSE, 
+            format = "%Y%m%d %H:%M:%OS", tz = tz_data)]
+    } else if (out[, is.character(V1)]) {
+        # V1 was not converted to POSIXct by fread() call
+        out[, Time := fast_strptime(V1, '%Y-%m-%dT%H:%M:%OSZ', lt = FALSE, tz = tz_data)]
+    } else {
+        # V1 should be POSIXct from fread() call
+        out[, Time := V1]
+    }
+    # convert column types
+    char_cols <- paste0('V', c(2, 17, 18, 20))
+    num_cols <- paste0('V', 3:16)
+    suppressWarnings(out[, (char_cols) := lapply(.SD, as.character), .SDcols = char_cols])
+    suppressWarnings(out[, (num_cols) := lapply(.SD, as.numeric), .SDcols = num_cols])
+    suppressWarnings(out[, V19 := as.integer(V19)])
+    # lower bits
+    suppressWarnings(out[, V17 := as.character(V17)])
+    # upper bits
+    suppressWarnings(out[, V18 := as.character(V18)])
+    # remove NA lines that come from conversion
+    out <- na.omit(out)
+    # check if empty again
+    if (out[, .N == 0]) {
+        cat('file empty\n')
+        return(NULL)
+    }
+    # remove V1
+    out[, V1 := NULL]
+    # fix column names
+    setnames(out,
+        c(
+            'sn', # column 2
+            'nh3_ppb', # column 3
+            'nh3_ugm3', # column 4
+            'rh_int', # column 5
+            'temp_int', # column 6
+            'temp_amb', # column 7
+            'press_amb', # column 8
+            'oss', # column 9
+            'peak_pos', # column 10
+            'temp_leaser_chip', # column 11
+            'temp_leaser_housing', # column 12
+            'temp_mct', # column 13
+            'temp_mct_housing', # column 14
+            'laser_current', # column 15
+            'ref_road_2f', # column 16
+            'alarm_lower_bit', # column 17
+            'alarm_upper_bit', # column 18
+            'cleaning_flag', # column 19
+            'notused', # column 20
+            'Time' # column 21
+        )
+    )
+    # place Time column first
+    setcolorder(out, 'Time')
+    cat('done\n')
+    # return
+    out
+}
+

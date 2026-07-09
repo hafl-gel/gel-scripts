@@ -462,7 +462,7 @@ avgSpec <- function(rawdat,type=c("raw","cal","ref","dark"),tracer=c("ambient","
             if (is.na(cuvetteConc_mg))stop(
                 "Calibration concentration must be specified!\n",
                 "Cuvette revolver suisse 1-6:\n",
-                "   NH3: 193.4095 mg/m3 (not corrected with 1.16 Edinburgh correction)\n",
+                "   NH3: 193.4095 mg/m3 (no factor applied)\n",
                 "   NO:  593.9938 mg/m3\n",
                 "   SO2: 76.29128 mg/m3\n"
             )
@@ -1177,7 +1177,7 @@ evalOffline <- function(
     add.name="",
     RawData = NULL,
     CalRefSpecs = NULL,
-    Edinburgh_correction = FALSE,
+    nh3_factor = getOption('md.nh3-factor'),
     Serial = NULL,
     ...
     ) {
@@ -1481,12 +1481,10 @@ evalOffline <- function(
     setnames(out, c('nh3', 'so2', 'no', 'nh3_se', 'so2_se', 'no_se', 'tau'))
 
     # correct NH3 calibration with Edinburgh correction?
-    if (Edinburgh_correction) {
-        out[, ':='(
-            nh3 = nh3 * 1.16,
-            nh3_se = nh3_se * 1.16
-            )]
-    }
+    out[, ':='(
+        nh3 = nh3 * nh3_factor,
+        nh3_se = nh3_se * nh3_factor
+        )]
 
     # gather residual results
     results <- cbind(
@@ -1871,7 +1869,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
     filter.type = NULL, fit.type = "OLS", robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
     filter.strength = NULL, tau.shift = NULL, correct.dark = TRUE, correct.linearity = TRUE, 
     correct.straylight = c("avg", "linear", "none"), use.ref = TRUE,
-    Edinburgh_correction = FALSE) {
+    nh3_factor = getOption('md.nh3-factor')) {
 
     require(shiny)
     require(shinyWidgets)
@@ -2173,9 +2171,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         lines(wavelength,Cal.dc$Xreg[,2],lwd=2,col="green")
                         lines(wavelength,Cal.dc$Xreg[,1],lwd=2,col="blue")
 
-                        if (Edinburgh_correction) {
-                            fit[[1]] <- fit[[1]] * 1.16
-                        }
+                        fit[[1]] <- fit[[1]] * nh3_factor
 
                         msg1 <- sprintf("index %i/%i:  %s  --  NH3: %1.1f +/- %1.1f  --  SO2: %1.1f +/- %1.1f  --  NO: %1.1f +/- %1.1f",
                             i,index.max,format(rawdat$Header[i,"st"]),

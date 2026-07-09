@@ -1,6 +1,7 @@
 .onLoad <- function(libname, pkgname) {
     ### neue Filter Funktionen:
     options(
+        'md.nh3-factor' = 1.1,
         md.filter.function.list = list(
             # Blackman-Harris:
             "BmHarris" = function(n, ...){

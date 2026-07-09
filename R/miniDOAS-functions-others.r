@@ -1177,7 +1177,7 @@ evalOffline <- function(
     add.name="",
     RawData = NULL,
     CalRefSpecs = NULL,
-    Edinburgh_correction = TRUE,
+    Edinburgh_correction = FALSE,
     Serial = NULL,
     ...
     ) {
@@ -1871,7 +1871,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
     filter.type = NULL, fit.type = "OLS", robust = TRUE, straylight.window = NULL, filter.window = NULL, fit.window = NULL, 
     filter.strength = NULL, tau.shift = NULL, correct.dark = TRUE, correct.linearity = TRUE, 
     correct.straylight = c("avg", "linear", "none"), use.ref = TRUE,
-    Edinburgh_correction = TRUE) {
+    Edinburgh_correction = FALSE) {
 
     require(shiny)
     require(shinyWidgets)

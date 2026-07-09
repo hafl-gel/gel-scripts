@@ -1592,7 +1592,7 @@ literature2dc <- function(literature, ref, mgm3 = NULL, shift = 0, filter = TRUE
     pseudo_meas$data <- copy(ref$data)
     pseudo_cal <- ref$data[, exp(log(cnt) - cal_ref)]
     pseudo_meas$data[, cnt := pseudo_cal]
-    # add filter
+    # add smoothing filter
     if (filter) {
         pseudo_meas$data[, cnt := lowpass.filter(cnt, ftype, fstrength, ...)]
         ref$data[, cnt := lowpass.filter(cnt, ftype, fstrength, ...)]
@@ -2078,7 +2078,7 @@ get_wins <- function(x) {
 
 #### fit calibration spectra to measured single spectrum
 fit_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
-    dcnh3 = NULL, dcno = NULL, dcso2 = NULL, corNH3 = 1.16, robust = TRUE) {
+    dcnh3 = NULL, dcno = NULL, dcso2 = NULL, corNH3 = getOption('md.nh3-factor'), robust = TRUE) {
     if (!inherits(x, 'dc')) {
         stop('arguments x must be of class "dc"')
     }
@@ -2140,7 +2140,7 @@ fit2ug <- function(fit, path.length = 1) {
 
 #### get residues
 resid_dc <- function(x, calrefspecs = NULL, tau.shift = 0, path.length = 1,
-    dcnh3 = NULL, dcno = NULL, dcso2 = NULL, corNH3 = 1.16) {
+    dcnh3 = NULL, dcno = NULL, dcso2 = NULL, corNH3 = getOption('md.nh3-factor')) {
     if (inherits(x, 'doas.fit')) {
         tau.shift <- attr(x, 'tau')
         path.length <- attr(x, 'path')
@@ -2626,7 +2626,7 @@ plot_cal <- function(x, rev = if (length(unique(x[['revolver']])) == 1) x[['revo
 
 # plot all important figures until fit results
 plot_overview <- function(rawdata, calref, at, path_length, tau.shift = 0,
-    robust = TRUE, corNH3 = 1.16, 
+    robust = TRUE, corNH3 = getOption('md.nh3-factor'), 
     cols = c(lowpass = 'orange', nh3 = 'indianred', so2 = 'dodgerblue3', no = 'seagreen4')) {
     # fix colors
     if (!missing(cols)) {

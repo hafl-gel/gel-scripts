@@ -31,7 +31,7 @@ highpass.filter <- function(dat, DOAS.win, ...){
 }
 
 # complementary lowpass filter function
-lowpass.filter <- function(dat, filter.type = 'Rect', filter.strength = 5, ...){
+lowpass.filter <- function(dat, filter.type = getOption('md.filter.type'), filter.strength = getOption('md.filter.strength'), ...){
     C_cfilter <- getFromNamespace('C_cfilter', 'stats')
     filt <- getOption('md.filter.function.list')[[filter.type]](filter.strength, ...)
     (

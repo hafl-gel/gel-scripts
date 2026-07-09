@@ -478,7 +478,7 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     )
 }
 
-plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '', save.path = NULL, robust = FALSE,
+plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '', save.path = NULL, robust = FALSE, cheng2006 = TRUE,
     scale_literature = 1, ylim = c('fix', 'free')[1], dc_grid = TRUE, ...) {
     # save figure?
     if (!is.null(save.path)) {
@@ -527,7 +527,7 @@ plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '',
                 stop('NH3 calibration concentration is not specified!\n',
                     'Most likely, the calibration was done without the cuvette revolver being installed!')
             }
-            literature <- find_literature(x[['nh3']][['dc']], show = FALSE, return.literature.dc = TRUE, robust = robust)
+            literature <- find_literature(x[['nh3']][['dc']], show = FALSE, return.literature.dc = TRUE, robust = robust, cheng2006 = cheng2006)
             s_literature <- dc2sigma(literature$literature, copy = TRUE)
             # scale literature
             s_literature$cnt <- s_literature$cnt * scale_literature
@@ -929,6 +929,7 @@ correct_linearity <- function(x) {
 #### get Cheng 2006 or Chen 1999 cross-section
 get_literature <- function(cheng2006 = TRUE) {
     if (cheng2006) {
+        # Cheng 2006
         structure(
             list(
                 data = gel::cheng2006_data
@@ -1723,10 +1724,10 @@ find_literature <- function(dc, show = FALSE, interval = c(-1, 1),
     ms <- median(lmm - lmc)
     # optimize
     par <- optimize(function(x) {
-        literature_factor(dc, x, mgm3 = mgm3, robust = robust)$rmse
+        literature_factor(dc, x, mgm3 = mgm3, robust = robust, cheng2006 = cheng2006)$rmse
         }, interval = interval + ms)
     c(
-        literature_factor(dc, par$minimum, show = show, mgm3 = mgm3, robust = robust),
+        literature_factor(dc, par$minimum, show = show, mgm3 = mgm3, robust = robust, cheng2006 = cheng2006),
         shift = par$minimum,
         # return shifted literature spectrum
         literature = if (return.literature.dc) list(literature2dc(get_literature(cheng2006 = cheng2006), attr(dc, 'ref'), 
@@ -1734,7 +1735,7 @@ find_literature <- function(dc, show = FALSE, interval = c(-1, 1),
         )
 }
 
-get_cal_infos <- function(dc, compact = TRUE, show = !compact, robust = FALSE) {
+get_cal_infos <- function(dc, compact = TRUE, show = !compact, robust = FALSE, cheng2006 = TRUE) {
     # local minima
     loc_min <- local_minima(dc[['nh3']][['dc']])#, show = TRUE)
     # -> Imax? Iavg(fit) Imin(fit) Imax(fit)
@@ -1744,7 +1745,7 @@ get_cal_infos <- function(dc, compact = TRUE, show = !compact, robust = FALSE) {
     if (cinfo$dark.corrected) dark <- dark + mean(cinfo$dark.spec, na.rm = TRUE)
     if (cinfo$straylight.corrected) dark <- dark + cinfo$straylight.value
     # literature factor
-    literature <- find_literature(dc[['nh3']][['dc']], show, robust = robust)
+    literature <- find_literature(dc[['nh3']][['dc']], show, robust = robust, cheng2006 = cheng2006)
     out <- c(
         loc_min,
         list(

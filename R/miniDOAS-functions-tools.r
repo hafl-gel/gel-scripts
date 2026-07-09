@@ -478,8 +478,8 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     )
 }
 
-plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save.path = NULL, robust = FALSE,
-    scale_cheng = 1, ylim = c('fix', 'free')[1], dc_grid = TRUE, ...) {
+plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '', save.path = NULL, robust = FALSE,
+    scale_literature = 1, ylim = c('fix', 'free')[1], dc_grid = TRUE, ...) {
     # save figure?
     if (!is.null(save.path)) {
         # derive figure name
@@ -495,7 +495,7 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
         cat('saving figure to', file.path(save.path, name), '\n')
         height <- 480 * 1.5
         jpeg(file.path(save.path, name), width = height * 1.4, height = height)
-            plot(x, add_cheng = add_cheng, per_molecule = per_molecule, log = log, save.path = NULL, ...)
+            plot(x, add_literature = add_literature, per_molecule = per_molecule, log = log, save.path = NULL, ...)
         dev.off()
     }
     if (dc_grid) {
@@ -522,21 +522,21 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
                 names(x)[i], ' ref spec, measured between:\n',
                 deparse_timerange(get_timerange(x[[i]][['ref_spec']]), sep = ' and ')) )
         # plot dc
-        if (add_cheng && names(x)[i] == 'nh3') {
+        if (add_literature && names(x)[i] == 'nh3') {
             if (is.na(x[['nh3']][['cal_spec']]$Calinfo$cuvette.conc)) {
                 stop('NH3 calibration concentration is not specified!\n',
                     'Most likely, the calibration was done without the cuvette revolver being installed!')
             }
-            cheng <- find_cheng(x[['nh3']][['dc']], show = FALSE, return.cheng.dc = TRUE, robust = robust)
-            s_cheng <- dc2sigma(cheng$cheng, copy = TRUE)
-            # scale cheng
-            s_cheng$cnt <- s_cheng$cnt * scale_cheng
+            literature <- find_literature(x[['nh3']][['dc']], show = FALSE, return.literature.dc = TRUE, robust = robust)
+            s_literature <- dc2sigma(literature$literature, copy = TRUE)
+            # scale literature
+            s_literature$cnt <- s_literature$cnt * scale_literature
             s_dc <- dc2sigma(x[['nh3']][['dc']], copy = TRUE)
             if (isTRUE(is.character(ylim[1]))) {
                 ylim <- switch(ylim_arg[1]
                     , free = 
                     , range = {
-                        range(c(s_cheng$cnt, s_dc$cnt), na.rm = TRUE)
+                        range(c(s_literature$cnt, s_dc$cnt), na.rm = TRUE)
                     }
                     , fix = 
                     , fixed = 
@@ -546,14 +546,14 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
                     , stop('argument ylim is not valid!')
                 )
             } else if (is.null(ylim_arg)) {
-                ylim <- range(c(s_cheng$cnt, s_dc$cnt), na.rm = TRUE)
+                ylim <- range(c(s_literature$cnt, s_dc$cnt), na.rm = TRUE)
             }
             plot(x[[i]][['dc']], per_molecule = per_molecule, type = 'n', ylim = ylim, 
                 panel.first = panel_dc(), ...)
-            lines(cheng$cheng, fctr = scale_cheng, col = 'indianred', per_molecule = per_molecule)
+            lines(literature$literature, fctr = scale_literature, col = 'indianred', per_molecule = per_molecule)
             lines(x[[i]][['dc']], per_molecule = per_molecule, col = 'black')
             legend('bottomright', legend = sprintf('span = %1.3f (+/- %1.3f)\nshift = %1.2f', 
-                    cheng$coefs[2], cheng$se[2], cheng$shift), bty = 'n', inset = 0.05)
+                    literature$coefs[2], literature$se[2], literature$shift), bty = 'n', inset = 0.05)
         } else {
             if (isTRUE(is.character(ylim_arg[1]))) {
                 ylim <- switch(ylim_arg[1]
@@ -822,7 +822,7 @@ cut_wl <- function(x, lo = 190, hi = 230) {
         out <- x[ind]
         attr(out, 'RawData') <- cut_wl(attr(x, 'RawData'), lo, hi)
         class(out) <- 'single_spec'
-    } else if (inherits(x, 'caldat') || inherits(x, 'chen')) {
+    } else if (inherits(x, 'caldat') || inherits(x, 'literature')) {
         out <- x
         out$data <- x$data[ind, ]
         stop('fix caldat method')
@@ -836,7 +836,7 @@ get_wl <- function(x) {
         x$DOASinfo$Spectrometer$wavelength
     } else if (inherits(x, 'avgdat') || inherits(x, 'single_spec')) {
         attr(x, 'RawData')$DOASinfo$Spectrometer$wavelength
-    } else if (inherits(x, 'caldat') || inherits(x, 'chen')) {
+    } else if (inherits(x, 'caldat') || inherits(x, 'literature')) {
         x$data[, wl]
     } else if (inherits(x, 'dc')) {
         attr(x, 'meas')$DOASinfo$Spectrometer$wavelength
@@ -926,14 +926,24 @@ correct_linearity <- function(x) {
 }
 
 
-#### get Cheng 2006 cross-section
-get_Cheng <- function() {
-    structure(
-        list(
-            data = gel::cheng_data
-        ),
-        class = 'chen'
-    )
+#### get Cheng 2006 or Chen 1999 cross-section
+get_literature <- function(cheng2006 = TRUE) {
+    if (cheng2006) {
+        structure(
+            list(
+                data = gel::cheng2006_data
+            ),
+            class = 'literature'
+        )
+    } else {
+        # Chen 1999
+        structure(
+            list(
+                data = gel::chen1999_data
+            ),
+            class = 'literature'
+        )
+    }
 }
 
 #### read calibration spectrum
@@ -1337,7 +1347,7 @@ convert2mg <- function(s, tracer) {
 get_cnt <- function(x) {
     if (inherits(x, 'avgdat')) {
         as.numeric(x)
-    } else if (inherits(x, 'caldat') || inherits(x, 'chen')) {
+    } else if (inherits(x, 'caldat') || inherits(x, 'literature')) {
         x$data[, cnt]
     } else if (inherits(x, 'rawdat')){
         if (NCOL(x) > 1) {
@@ -1406,12 +1416,12 @@ calc_dc <- function(meas, ref, ftype = NULL, fstrength = NULL, fwin = NULL,
     fitwin = NULL, shift = NULL, correct.straylight = TRUE, correct.linearity = TRUE,
     lin_before_dark = FALSE, do_lowpass_filtering = FALSE, lp.type = 'Rect', lp.strength = 5) {
     if (is.character(meas)) {
-        # file path or chen
-        if (tolower(meas) == 'chen') {
-            # call cheng2dc
+        # file path or literature
+        if (tolower(meas) == 'literature') {
+            # call literature2dc
             cat('Fix arguments!!!\n')
             browser()
-            return(cheng2dc(meas, ref, meas$Calinfo$cuvette.conc, ftype, fstrength, fwin, fitwin, shift))
+            return(literature2dc(meas, ref, meas$Calinfo$cuvette.conc, ftype, fstrength, fwin, fitwin, shift))
         } else {
             meas <- read_cal(meas, correct.straylight = correct.straylight, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
         }
@@ -1533,12 +1543,12 @@ get_pixel <- function(x) {
     x$DOASinfo$Spectrometer$pixel
 }
 
-# new version of old_cheng2dc (argh!!!)
-cheng2dc <- function(cheng, ref, mgm3 = NULL, shift = 0, filter = TRUE, fstrength = 5, ftype = 'Rect', ...) {
-    # copy cheng data.table
-    dta <- copy(cheng$data)
+# new version of old_literature2dc (argh!!!)
+literature2dc <- function(literature, ref, mgm3 = NULL, shift = 0, filter = TRUE, fstrength = 5, ftype = 'Rect', ...) {
+    # copy literature data.table
+    dta <- copy(literature$data)
     # create synthetic cal spec
-    # -> log(ref) - 193 * cheng2mg_m3 (T = exp(-sum(t)), t = sigma_i * c_i)
+    # -> log(ref) - 193 * literature2mg_m3 (T = exp(-sum(t)), t = sigma_i * c_i)
     # get/add 'straylight'
     if (inherits(ref, 'avgdat')) {
         old <- ref
@@ -1564,13 +1574,13 @@ cheng2dc <- function(cheng, ref, mgm3 = NULL, shift = 0, filter = TRUE, fstrengt
         # stray <- 2400
         ref$data[, cnt := cnt - stray]
     }
-    # cheng (sigma in cm2 / molecule) to m2 / ug
+    # literature (sigma in cm2 / molecule) to m2 / ug
     if (is.null(mgm3)) {
-        cat('check missing mgm3 in cheng2dc()!\n')
+        cat('check missing mgm3 in literature2dc()!\n')
         browser()
     }
     dta[, cal := sigma2dc(cnt, mgm3)]
-    # add cheng to ref spec
+    # add literature to ref spec
     pseudo_meas <- ref
     pseudo_meas[['Calinfo']][['info']] <- data.table(val = 'Cheng 2006')
     pseudo_meas[['Calinfo']][['cuvette.gas']] <- 'NH3'
@@ -1589,7 +1599,7 @@ cheng2dc <- function(cheng, ref, mgm3 = NULL, shift = 0, filter = TRUE, fstrengt
     # calc dc
     calc_dc(pseudo_meas, ref)
 }
-# cheng (sigma in cm2 / molecule) to m2 / ug -> dann mit cuvetten pfad integr. conc mult
+# literature (sigma in cm2 / molecule) to m2 / ug -> dann mit cuvetten pfad integr. conc mult
 # dc werden jeweils durch cuvetten pfad conc in ug / m3 * m geteilt!
 sigma2dc <- function(sigma, mgm3 = 193.4095) {
     # cm2 -> m2
@@ -1621,43 +1631,43 @@ cnt2wl <- function(wl_from, wl_to, cnt, shift_nm = 0) {
 }
 
 # get Cheng factor
-cheng_factor <- function(dc, shift_cheng = 0, show = FALSE, mgm3 = NULL, robust = FALSE) {
-    # S5 cheng dc
+literature_factor <- function(dc, shift_literature = 0, show = FALSE, mgm3 = NULL, robust = FALSE, cheng2006 = TRUE) {
+    # S5 literature dc
     if (is.null(mgm3)) {
         mgm3 <- attr(dc, 'meas')$Calinfo$cuvette.conc
     }
     if (is.null(mgm3)) {
-        cat('Fix missing cuvette conc in cheng_factor()!\n')
+        cat('Fix missing cuvette conc in literature_factor()!\n')
         browser()
     }
-    cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref'),
-        mgm3 = mgm3, shift = shift_cheng))
+    literature <- suppressWarnings(literature2dc(get_literature(cheng2006 = cheng2006), attr(dc, 'ref'),
+        mgm3 = mgm3, shift = shift_literature))
     # # get sigmas
     # dc <- dc2sigma(dc, copy = TRUE, mgm3 = mgm3, molar_mass = 17)
-    # cheng <- dc2sigma(cheng, copy = TRUE, mgm3 = mgm3, molar_mass = 17)
+    # literature <- dc2sigma(literature, copy = TRUE, mgm3 = mgm3, molar_mass = 17)
     # fit
     if (robust) {
-        mod <- try(robustbase::lmrob(dc$cnt ~ cheng$cnt, setting = "KS2014", model = FALSE), silent = TRUE)
+        mod <- try(robustbase::lmrob(dc$cnt ~ literature$cnt, setting = "KS2014", model = FALSE), silent = TRUE)
         if(inherits(mod,"try-error") || !mod$converged){
-            mod <- try(robustbase::lmrob(dc$cnt ~ cheng$cnt, setting = "KS2011", model = FALSE), silent = TRUE)
+            mod <- try(robustbase::lmrob(dc$cnt ~ literature$cnt, setting = "KS2011", model = FALSE), silent = TRUE)
         }
         if(inherits(mod,"try-error") || !mod$converged){
-            mod <- try(rlm(dc$cnt ~ cheng$cnt, method = "MM", model = FALSE), silent = TRUE)
+            mod <- try(rlm(dc$cnt ~ literature$cnt, method = "MM", model = FALSE), silent = TRUE)
         }
         if(inherits(mod,"try-error") || !mod$converged){
-            mod <- try(rlm(dc$cnt ~ cheng$cnt, model = FALSE), silent = TRUE)
+            mod <- try(rlm(dc$cnt ~ literature$cnt, model = FALSE), silent = TRUE)
         }
     } else {
-        mod <- lm(dc$cnt ~ cheng$cnt)
+        mod <- lm(dc$cnt ~ literature$cnt)
     }
     # show?
     if (show) {
         par(mfrow = c(2, 1))
         plot(dc, lwd = 2)
-        lines(cheng, col = 'indianred')
+        lines(literature, col = 'indianred')
         legend('bottomright', bty = 'n', legend = c('meas', 'Cheng2006'), 
             lwd = c(2, 1), col = c('black', 'indianred'))
-        plot(cheng$cnt, dc$cnt, xlab = 'Cheng2006', ylab = 'meas')
+        plot(literature$cnt, dc$cnt, xlab = 'Cheng2006', ylab = 'meas')
         legend('bottomright', bty = 'n', legend = sprintf('span = %1.2f', 
                 coef(mod)[2]))
         abline(0, 1)
@@ -1671,19 +1681,19 @@ cheng_factor <- function(dc, shift_cheng = 0, show = FALSE, mgm3 = NULL, robust 
         )
 }
 
-find_cheng <- function(dc, show = FALSE, interval = c(-1, 1), 
-    return.cheng.dc = FALSE, mgm3 = NULL, robust = FALSE) {
-    # S5 cheng dc
+find_literature <- function(dc, show = FALSE, interval = c(-1, 1), 
+    return.literature.dc = FALSE, mgm3 = NULL, robust = FALSE, cheng2006 = TRUE) {
+    # S5 literature dc
     if (is.null(mgm3)) {
         mgm3 <- attr(dc, 'meas')$Calinfo$cuvette.conc
     }
     if (is.null(mgm3)) {
-        cat('fix missing cuvette conc in find_cheng()!\n')
+        cat('fix missing cuvette conc in find_literature()!\n')
         browser()
     }
-    cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref'),
+    literature <- suppressWarnings(literature2dc(get_literature(cheng2006 = cheng2006), attr(dc, 'ref'),
         mgm3 = mgm3))
-    lmc <- local_minima(cheng)$wl_exact
+    lmc <- local_minima(literature)$wl_exact
     lmm <- local_minima(dc)$wl_exact
     dl <- length(lmm) - length(lmc)
     if (dl != 0) {
@@ -1713,13 +1723,13 @@ find_cheng <- function(dc, show = FALSE, interval = c(-1, 1),
     ms <- median(lmm - lmc)
     # optimize
     par <- optimize(function(x) {
-        cheng_factor(dc, x, mgm3 = mgm3, robust = robust)$rmse
+        literature_factor(dc, x, mgm3 = mgm3, robust = robust)$rmse
         }, interval = interval + ms)
     c(
-        cheng_factor(dc, par$minimum, show = show, mgm3 = mgm3, robust = robust),
+        literature_factor(dc, par$minimum, show = show, mgm3 = mgm3, robust = robust),
         shift = par$minimum,
-        # return shifted cheng spectrum
-        cheng = if (return.cheng.dc) list(cheng2dc(get_Cheng(), attr(dc, 'ref'), 
+        # return shifted literature spectrum
+        literature = if (return.literature.dc) list(literature2dc(get_literature(cheng2006 = cheng2006), attr(dc, 'ref'), 
             mgm3 = mgm3, shift = par$minimum))
         )
 }
@@ -1733,8 +1743,8 @@ get_cal_infos <- function(dc, compact = TRUE, show = !compact, robust = FALSE) {
     dark <- 0
     if (cinfo$dark.corrected) dark <- dark + mean(cinfo$dark.spec, na.rm = TRUE)
     if (cinfo$straylight.corrected) dark <- dark + cinfo$straylight.value
-    # cheng factor
-    cheng <- find_cheng(dc[['nh3']][['dc']], show, robust = robust)
+    # literature factor
+    literature <- find_literature(dc[['nh3']][['dc']], show, robust = robust)
     out <- c(
         loc_min,
         list(
@@ -1744,11 +1754,11 @@ get_cal_infos <- function(dc, compact = TRUE, show = !compact, robust = FALSE) {
             light_peaks = cinfo$raw.spec[loc_min$pixel_minima],
             light_dark = dark
         ),
-        cheng
+        literature
         )
     if (compact) {
         list(
-            cheng = unlist(cheng)[c(2, 4, 5, 6)],
+            literature = unlist(literature)[c(2, 4, 5, 6)],
             light = unlist(out[c(6, 7, 9, 10)]),
             spec = unlist(out[c(2, 5)])
                 )
@@ -1759,8 +1769,8 @@ get_cal_infos <- function(dc, compact = TRUE, show = !compact, robust = FALSE) {
 
 
 
-#### average cheng to reference doas
-cheng2doas <- function(cheng, ref, wvlim = NULL) {
+#### average literature to reference doas
+literature2doas <- function(literature, ref, wvlim = NULL) {
     stopifnot(!is.null(ref$DOASinfo))
     if (!is.null(wvlim)) ref <- cut_wl(ref, wvlim[1], wvlim[2])
     # pixel starten erst bei 5...
@@ -1768,8 +1778,8 @@ cheng2doas <- function(cheng, ref, wvlim = NULL) {
     wlo <- calc_wl(ref, c(pix[1] - 1, pix, pix[length(pix)] + 1))
     wd <- diff(wlo)
     brks <- wlo[-1] - wd / 2
-    wlc <- get_wl(cheng)
-    cnt <- get_cnt(cheng)
+    wlc <- get_wl(literature)
+    cnt <- get_cnt(literature)
     # hier umrechnung auf m2/ug 
     cnt <- convertCS(cnt)
     as.numeric(tapply(cnt, cut(wlc, brks), mean))
@@ -1783,16 +1793,16 @@ convertCS <- function(x) {
 }
 
 
-#### convert cheng to dc
-old_cheng2dc <- function(dc, cheng = NULL, shift = FALSE) {
+#### convert literature to dc
+old_literature2dc <- function(dc, literature = NULL, shift = FALSE, cheng2006 = TRUE) {
     stopifnot(!is.null(attr(dc, 'meas')$DOASinfo))
-    if (is.null(cheng)) cheng <- get_Cheng()
+    if (is.null(literature)) literature <- get_literature(cheng2006 = cheng2006)
     if (shift) {
         # recursive call optim
         # return result
     }
-    # average cheng to ref
-    cdoas <- cheng2doas(cheng, attr(dc, 'meas'))
+    # average literature to ref
+    cdoas <- literature2doas(literature, attr(dc, 'meas'))
     # calc dc
     highpass.filter(-cdoas, attr(dc, 'win'))
 }
@@ -1914,8 +1924,8 @@ dc2sigma <- function(dc, mgm3 = NULL, molar_mass = NULL, copy = FALSE) {
     invisible(dc)
 }
 
-#### plot chen
-plot.chen <- function(x, xlim = c(190, 230), type = 'l', ...) {
+#### plot literature
+plot.literature <- function(x, xlim = c(190, 230), type = 'l', ...) {
     x$data[, plot(wl, cnt, type = type, xlim = xlim, ...)]
 }
 

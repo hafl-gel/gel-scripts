@@ -478,7 +478,7 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     )
 }
 
-plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save.path = NULL, 
+plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save.path = NULL, robust = FALSE,
     scale_cheng = 1, ylim = c('fix', 'free')[1], dc_grid = TRUE, ...) {
     # save figure?
     if (!is.null(save.path)) {
@@ -527,7 +527,7 @@ plot.calref <- function(x, add_cheng = TRUE, per_molecule = TRUE, log = '', save
                 stop('NH3 calibration concentration is not specified!\n',
                     'Most likely, the calibration was done without the cuvette revolver being installed!')
             }
-            cheng <- find_cheng(x[['nh3']][['dc']], show = FALSE, return.cheng.dc = TRUE, mgm3 = x[['nh3']][['cal_spec']]$Calinfo$cuvette.conc)
+            cheng <- find_cheng(x[['nh3']][['dc']], show = FALSE, return.cheng.dc = TRUE, robust = robust)
             s_cheng <- dc2sigma(cheng$cheng, copy = TRUE)
             # scale cheng
             s_cheng$cnt <- s_cheng$cnt * scale_cheng
@@ -1411,7 +1411,7 @@ calc_dc <- function(meas, ref, ftype = NULL, fstrength = NULL, fwin = NULL,
             # call cheng2dc
             cat('Fix arguments!!!\n')
             browser()
-            return(cheng2dc(meas, ref, ftype, fstrength, fwin, fitwin, shift))
+            return(cheng2dc(meas, ref, meas$Calinfo$cuvette.conc, ftype, fstrength, fwin, fitwin, shift))
         } else {
             meas <- read_cal(meas, correct.straylight = correct.straylight, correct.linearity = correct.linearity, lin_before_dark = lin_before_dark)
         }
@@ -1452,7 +1452,12 @@ calc_dc <- function(meas, ref, ftype = NULL, fstrength = NULL, fwin = NULL,
 # get local minima values for dc
 local_minima <- function(dc, zero_value = -0.2e-20, wl_range = c(203, 219), show = FALSE) {
     # convert to sigma
-    dc <- dc2sigma(dc, mgm3 = 193.4095, molar_mass = 17, copy = TRUE)
+    mgm3 <- attr(dc, 'meas')$Calinfo$cuvette.conc
+    if (is.null(mgm3)) {
+        cat('fix missing cuvette.conc in local_minima()!\n')
+        browser()
+    }
+    dc <- dc2sigma(dc, mgm3 = mgm3, molar_mass = 17, copy = TRUE)
     if (show) dc_orig <- dc
     # select wl range
     dc$cnt[dc$wl <= wl_range[1] | dc$wl >= wl_range[2]] <- NA
@@ -1529,7 +1534,7 @@ get_pixel <- function(x) {
 }
 
 # new version of old_cheng2dc (argh!!!)
-cheng2dc <- function(cheng, ref, shift = 0, filter = TRUE, fstrength = 5, ftype = 'Rect', ...) {
+cheng2dc <- function(cheng, ref, mgm3 = NULL, shift = 0, filter = TRUE, fstrength = 5, ftype = 'Rect', ...) {
     # copy cheng data.table
     dta <- copy(cheng$data)
     # create synthetic cal spec
@@ -1560,12 +1565,16 @@ cheng2dc <- function(cheng, ref, shift = 0, filter = TRUE, fstrength = 5, ftype 
         ref$data[, cnt := cnt - stray]
     }
     # cheng (sigma in cm2 / molecule) to m2 / ug
-    dta[, cal := sigma2dc(cnt)]
+    if (is.null(mgm3)) {
+        cat('check missing mgm3 in cheng2dc()!\n')
+        browser()
+    }
+    dta[, cal := sigma2dc(cnt, mgm3)]
     # add cheng to ref spec
     pseudo_meas <- ref
     pseudo_meas[['Calinfo']][['info']] <- data.table(val = 'Cheng 2006')
     pseudo_meas[['Calinfo']][['cuvette.gas']] <- 'NH3'
-    pseudo_meas[['Calinfo']][['cuvette.conc']] <- 193.4095
+    pseudo_meas[['Calinfo']][['cuvette.conc']] <- mgm3
     pseudo_meas[['Calinfo']][['dark.corrected']] <- TRUE
     # map cal to ref wl
     cal_ref <- cnt2wl(dta[, wl], ref$data[, wl], dta[, cal], shift = shift)
@@ -1582,14 +1591,14 @@ cheng2dc <- function(cheng, ref, shift = 0, filter = TRUE, fstrength = 5, ftype 
 }
 # cheng (sigma in cm2 / molecule) to m2 / ug -> dann mit cuvetten pfad integr. conc mult
 # dc werden jeweils durch cuvetten pfad conc in ug / m3 * m geteilt!
-sigma2dc <- function(sigma) {
+sigma2dc <- function(sigma, mgm3 = 193.4095) {
     # cm2 -> m2
     sigma * 1e-4 *
     # 1 / molecule -> 1 / mol
     6.02214076e23 *
     # 1 / mol -> mult mit cuvetten conc in mol / m3 * m
     # cuvetten conc (pfad int.: mol / m3 * m)
-    193.4095 / 17e3 * 0.075
+    mgm3 / 17e3 * 0.075
 }
 # map cnt to different wl
 cnt2wl <- function(wl_from, wl_to, cnt, shift_nm = 0) {
@@ -1612,14 +1621,35 @@ cnt2wl <- function(wl_from, wl_to, cnt, shift_nm = 0) {
 }
 
 # get Cheng factor
-cheng_factor <- function(dc, shift_cheng = 0, show = FALSE, mgm3 = 193.4095) {
+cheng_factor <- function(dc, shift_cheng = 0, show = FALSE, mgm3 = NULL, robust = FALSE) {
     # S5 cheng dc
-    cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref'), shift = shift_cheng))
-    # get sigmas
-    dc2sigma(cheng)
-    dc <- dc2sigma(dc, copy = TRUE, mgm3 = mgm3, molar_mass = 17)
+    if (is.null(mgm3)) {
+        mgm3 <- attr(dc, 'meas')$Calinfo$cuvette.conc
+    }
+    if (is.null(mgm3)) {
+        cat('Fix missing cuvette conc in cheng_factor()!\n')
+        browser()
+    }
+    cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref'),
+        mgm3 = mgm3, shift = shift_cheng))
+    # # get sigmas
+    # dc <- dc2sigma(dc, copy = TRUE, mgm3 = mgm3, molar_mass = 17)
+    # cheng <- dc2sigma(cheng, copy = TRUE, mgm3 = mgm3, molar_mass = 17)
     # fit
-    mod <- lm(dc$cnt ~ cheng$cnt)
+    if (robust) {
+        mod <- try(robustbase::lmrob(dc$cnt ~ cheng$cnt, setting = "KS2014", model = FALSE), silent = TRUE)
+        if(inherits(mod,"try-error") || !mod$converged){
+            mod <- try(robustbase::lmrob(dc$cnt ~ cheng$cnt, setting = "KS2011", model = FALSE), silent = TRUE)
+        }
+        if(inherits(mod,"try-error") || !mod$converged){
+            mod <- try(rlm(dc$cnt ~ cheng$cnt, method = "MM", model = FALSE), silent = TRUE)
+        }
+        if(inherits(mod,"try-error") || !mod$converged){
+            mod <- try(rlm(dc$cnt ~ cheng$cnt, model = FALSE), silent = TRUE)
+        }
+    } else {
+        mod <- lm(dc$cnt ~ cheng$cnt)
+    }
     # show?
     if (show) {
         par(mfrow = c(2, 1))
@@ -1642,9 +1672,17 @@ cheng_factor <- function(dc, shift_cheng = 0, show = FALSE, mgm3 = 193.4095) {
 }
 
 find_cheng <- function(dc, show = FALSE, interval = c(-1, 1), 
-    return.cheng.dc = FALSE, mgm3 = 193.4095) {
+    return.cheng.dc = FALSE, mgm3 = NULL, robust = FALSE) {
     # S5 cheng dc
-    cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref')))
+    if (is.null(mgm3)) {
+        mgm3 <- attr(dc, 'meas')$Calinfo$cuvette.conc
+    }
+    if (is.null(mgm3)) {
+        cat('fix missing cuvette conc in find_cheng()!\n')
+        browser()
+    }
+    cheng <- suppressWarnings(cheng2dc(get_Cheng(), attr(dc, 'ref'),
+        mgm3 = mgm3))
     lmc <- local_minima(cheng)$wl_exact
     lmm <- local_minima(dc)$wl_exact
     dl <- length(lmm) - length(lmc)
@@ -1675,17 +1713,18 @@ find_cheng <- function(dc, show = FALSE, interval = c(-1, 1),
     ms <- median(lmm - lmc)
     # optimize
     par <- optimize(function(x) {
-        cheng_factor(dc, x, mgm3 = mgm3)$rmse
+        cheng_factor(dc, x, mgm3 = mgm3, robust = robust)$rmse
         }, interval = interval + ms)
     c(
-        cheng_factor(dc, par$minimum, show = show, mgm3 = mgm3),
+        cheng_factor(dc, par$minimum, show = show, mgm3 = mgm3, robust = robust),
         shift = par$minimum,
         # return shifted cheng spectrum
-        cheng = if (return.cheng.dc) list(cheng2dc(get_Cheng(), attr(dc, 'ref'), shift = par$minimum))
+        cheng = if (return.cheng.dc) list(cheng2dc(get_Cheng(), attr(dc, 'ref'), 
+            mgm3 = mgm3, shift = par$minimum))
         )
 }
 
-get_cal_infos <- function(dc, compact = TRUE, show = !compact) {
+get_cal_infos <- function(dc, compact = TRUE, show = !compact, robust = FALSE) {
     # local minima
     loc_min <- local_minima(dc[['nh3']][['dc']])#, show = TRUE)
     # -> Imax? Iavg(fit) Imin(fit) Imax(fit)
@@ -1695,7 +1734,7 @@ get_cal_infos <- function(dc, compact = TRUE, show = !compact) {
     if (cinfo$dark.corrected) dark <- dark + mean(cinfo$dark.spec, na.rm = TRUE)
     if (cinfo$straylight.corrected) dark <- dark + cinfo$straylight.value
     # cheng factor
-    cheng <- find_cheng(dc[['nh3']][['dc']], show)
+    cheng <- find_cheng(dc[['nh3']][['dc']], show, robust = robust)
     out <- c(
         loc_min,
         list(

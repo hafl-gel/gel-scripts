@@ -479,7 +479,7 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
 }
 
 plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '', save.path = NULL, robust = FALSE, cheng2006 = TRUE,
-    scale_literature = 1, ylim = c('fix', 'free')[1], dc_grid = TRUE, ...) {
+    scale_cuvette = 1, ylim = c('fix', 'free')[1], dc_grid = TRUE, ...) {
     # save figure?
     if (!is.null(save.path)) {
         # derive figure name
@@ -507,6 +507,9 @@ plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '',
         panel_dc <- function() NULL
     }
     ylim_arg <- ylim
+    # get & scale cuvette concentration
+    cuvette_conc_mgm3 <- attr(x[['nh3']][['dc']], 'meas')$Calinfo$cuvette.conc * scale_cuvette
+    attr(x[['nh3']][['dc']], 'meas')$Calinfo$cuvette.conc <- cuvette_conc_mgm3
     par(mfrow = c(3, 3))
     for (i in seq_along(x)) {
         # plot cal spec
@@ -521,6 +524,8 @@ plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '',
         legend('topleft', bty = 'n', legend = paste0(
                 names(x)[i], ' ref spec, measured between:\n',
                 deparse_timerange(get_timerange(x[[i]][['ref_spec']]), sep = ' and ')) )
+        # get s_dc - is this really necessary?
+        s_dc <- dc2sigma(x[[names(x)[i]]][['dc']], copy = TRUE)
         # plot dc
         if (add_literature && names(x)[i] == 'nh3') {
             if (is.na(x[['nh3']][['cal_spec']]$Calinfo$cuvette.conc)) {
@@ -529,9 +534,6 @@ plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '',
             }
             literature <- find_literature(x[['nh3']][['dc']], show = FALSE, return.literature.dc = TRUE, robust = robust, cheng2006 = cheng2006)
             s_literature <- dc2sigma(literature$literature, copy = TRUE)
-            # scale literature
-            s_literature$cnt <- s_literature$cnt * scale_literature
-            s_dc <- dc2sigma(x[['nh3']][['dc']], copy = TRUE)
             if (isTRUE(is.character(ylim[1]))) {
                 ylim <- switch(ylim_arg[1]
                     , free = 
@@ -550,7 +552,7 @@ plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '',
             }
             plot(x[[i]][['dc']], per_molecule = per_molecule, type = 'n', ylim = ylim, 
                 panel.first = panel_dc(), ...)
-            lines(literature$literature, fctr = scale_literature, col = 'indianred', per_molecule = per_molecule)
+            lines(literature$literature, col = 'indianred', per_molecule = per_molecule)
             lines(x[[i]][['dc']], per_molecule = per_molecule, col = 'black')
             legend('bottomright', legend = sprintf('span = %1.3f (+/- %1.3f)\nshift = %1.2f', 
                     literature$coefs[2], literature$se[2], literature$shift), bty = 'n', inset = 0.05)
@@ -577,6 +579,16 @@ plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '',
             plot(x[[i]][['dc']], per_molecule = per_molecule, ylim = ylim, 
                 panel.first = panel_dc(), ...)
         }
+        if (names(x)[i] == 'nh3') {
+            legend('topright', legend = sprintf('cuvette conc. = %1.1f mg/m3', cuvette_conc_mgm3),
+                bty = 'n')
+        }
+    }
+    # return literature if existing
+    if (add_literature) {
+        invisible(literature)
+    } else {
+        invisible()
     }
 }
 

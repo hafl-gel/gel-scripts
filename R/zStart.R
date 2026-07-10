@@ -1,7 +1,7 @@
 .onLoad <- function(libname, pkgname) {
     ### neue Filter Funktionen:
     options(
-        'md.nh3-factor' = 1.1,
+        'md.nh3-factor' = 1.056, # Vergleich zu Airyx im Mai 2026
         md.filter.function.list = list(
             # Blackman-Harris:
             "BmHarris" = function(n, ...){

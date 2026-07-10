@@ -2172,6 +2172,7 @@ inspectEvaluation <- function(rawdat,CalRefSpecs, path.length, index = 1,
                         lines(wavelength,Cal.dc$Xreg[,1],lwd=2,col="blue")
 
                         fit[[1]] <- fit[[1]] * nh3_factor
+                        cat('Fix nh3 factor!!!\n')
 
                         msg1 <- sprintf("index %i/%i:  %s  --  NH3: %1.1f +/- %1.1f  --  SO2: %1.1f +/- %1.1f  --  NO: %1.1f +/- %1.1f",
                             i,index.max,format(rawdat$Header[i,"st"]),

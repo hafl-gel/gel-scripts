@@ -478,7 +478,7 @@ process_callist <- function(callist, all = 1, nh3 = all, no = all, so2 = all,
     )
 }
 
-plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '', save.path = NULL, robust = FALSE, cheng2006 = TRUE,
+plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '', save.path = NULL, robust = FALSE, cheng2006 = TRUE, smooth = TRUE, smooth.filter = 'Rect', smooth.strength = 5,
     scale_cuvette = 1, ylim = c('fix', 'free')[1], dc_grid = TRUE, ...) {
     # save figure?
     if (!is.null(save.path)) {
@@ -532,7 +532,7 @@ plot.calref <- function(x, add_literature = TRUE, per_molecule = TRUE, log = '',
                 stop('NH3 calibration concentration is not specified!\n',
                     'Most likely, the calibration was done without the cuvette revolver being installed!')
             }
-            literature <- find_literature(x[['nh3']][['dc']], show = FALSE, return.literature.dc = TRUE, robust = robust, cheng2006 = cheng2006)
+            literature <- find_literature(x[['nh3']][['dc']], show = FALSE, return.literature.dc = TRUE, robust = robust, cheng2006 = cheng2006, smooth = smooth, smooth.filter = smooth.filter, smooth.strength = smooth.strength)
             s_literature <- dc2sigma(literature$literature, copy = TRUE)
             if (isTRUE(is.character(ylim[1]))) {
                 ylim <- switch(ylim_arg[1]
@@ -1644,7 +1644,7 @@ cnt2wl <- function(wl_from, wl_to, cnt, shift_nm = 0) {
 }
 
 # get Cheng factor
-literature_factor <- function(dc, shift_literature = 0, show = FALSE, mgm3 = NULL, robust = FALSE, cheng2006 = TRUE) {
+literature_factor <- function(dc, shift_literature = 0, show = FALSE, mgm3 = NULL, robust = FALSE, cheng2006 = TRUE, smooth = TRUE, smooth.filter = 'Rect', smooth.strength = 5) {
     # S5 literature dc
     if (is.null(mgm3)) {
         mgm3 <- attr(dc, 'meas')$Calinfo$cuvette.conc
@@ -1653,8 +1653,11 @@ literature_factor <- function(dc, shift_literature = 0, show = FALSE, mgm3 = NUL
         cat('Fix missing cuvette conc in literature_factor()!\n')
         browser()
     }
-    literature <- suppressWarnings(literature2dc(get_literature(cheng2006 = cheng2006), attr(dc, 'ref'),
-        mgm3 = mgm3, shift = shift_literature))
+    literature <- suppressWarnings(literature2dc(
+            get_literature(cheng2006 = cheng2006), attr(dc, 'ref'),
+            filter = smooth, fstrength = smooth.strength, 
+            ftype = smooth.filter, mgm3 = mgm3, shift = shift_literature
+            ))
     # # get sigmas
     # dc <- dc2sigma(dc, copy = TRUE, mgm3 = mgm3, molar_mass = 17)
     # literature <- dc2sigma(literature, copy = TRUE, mgm3 = mgm3, molar_mass = 17)
@@ -1695,7 +1698,7 @@ literature_factor <- function(dc, shift_literature = 0, show = FALSE, mgm3 = NUL
 }
 
 find_literature <- function(dc, show = FALSE, interval = c(-1, 1), 
-    return.literature.dc = FALSE, mgm3 = NULL, robust = FALSE, cheng2006 = TRUE) {
+    return.literature.dc = FALSE, mgm3 = NULL, robust = FALSE, cheng2006 = TRUE, smooth = TRUE, smooth.filter = 'Rect', smooth.strength = 5) {
     # S5 literature dc
     if (is.null(mgm3)) {
         mgm3 <- attr(dc, 'meas')$Calinfo$cuvette.conc
@@ -1704,8 +1707,11 @@ find_literature <- function(dc, show = FALSE, interval = c(-1, 1),
         cat('fix missing cuvette conc in find_literature()!\n')
         browser()
     }
-    literature <- suppressWarnings(literature2dc(get_literature(cheng2006 = cheng2006), attr(dc, 'ref'),
-        mgm3 = mgm3))
+    literature <- suppressWarnings(literature2dc(
+            get_literature(cheng2006 = cheng2006), attr(dc, 'ref'),
+            filter = smooth, fstrength = smooth.strength, 
+            ftype = smooth.filter, mgm3 = mgm3
+            ))
     lmc <- local_minima(literature)$wl_exact
     lmm <- local_minima(dc)$wl_exact
     dl <- length(lmm) - length(lmc)
@@ -1736,18 +1742,23 @@ find_literature <- function(dc, show = FALSE, interval = c(-1, 1),
     ms <- median(lmm - lmc)
     # optimize
     par <- optimize(function(x) {
-        literature_factor(dc, x, mgm3 = mgm3, robust = robust, cheng2006 = cheng2006)$rmse
+        literature_factor(dc, x, mgm3 = mgm3, robust = robust, cheng2006 = cheng2006, smooth = smooth, smooth.filter = smooth.filter, smooth.strength = smooth.strength)$rmse
         }, interval = interval + ms)
     c(
-        literature_factor(dc, par$minimum, show = show, mgm3 = mgm3, robust = robust, cheng2006 = cheng2006),
+        literature_factor(dc, par$minimum, show = show, mgm3 = mgm3, robust = robust, cheng2006 = cheng2006, smooth = smooth, smooth.filter = smooth.filter, smooth.strength = smooth.strength),
         shift = par$minimum,
         # return shifted literature spectrum
-        literature = if (return.literature.dc) list(literature2dc(get_literature(cheng2006 = cheng2006), attr(dc, 'ref'), 
-            mgm3 = mgm3, shift = par$minimum))
+        literature = if (return.literature.dc) list(
+            literature2dc(
+                get_literature(cheng2006 = cheng2006), attr(dc, 'ref'), 
+                filter = smooth, fstrength = smooth.strength, 
+                ftype = smooth.filter, mgm3 = mgm3, shift = par$minimum
+            )
         )
+    )
 }
 
-get_cal_infos <- function(dc, compact = TRUE, show = !compact, robust = FALSE, cheng2006 = TRUE) {
+get_cal_infos <- function(dc, compact = TRUE, show = !compact, robust = FALSE, cheng2006 = TRUE, smooth = TRUE, smooth.filter = 'Rect', smooth.strength = 5) {
     # local minima
     loc_min <- local_minima(dc[['nh3']][['dc']])#, show = TRUE)
     # -> Imax? Iavg(fit) Imin(fit) Imax(fit)
@@ -1757,7 +1768,7 @@ get_cal_infos <- function(dc, compact = TRUE, show = !compact, robust = FALSE, c
     if (cinfo$dark.corrected) dark <- dark + mean(cinfo$dark.spec, na.rm = TRUE)
     if (cinfo$straylight.corrected) dark <- dark + cinfo$straylight.value
     # literature factor
-    literature <- find_literature(dc[['nh3']][['dc']], show, robust = robust, cheng2006 = cheng2006)
+    literature <- find_literature(dc[['nh3']][['dc']], show, robust = robust, cheng2006 = cheng2006, smooth = smooth, smooth.filter = smooth.filter, smooth.strength = smooth.strength)
     out <- c(
         loc_min,
         list(

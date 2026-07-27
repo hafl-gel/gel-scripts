@@ -1,7 +1,6 @@
 .onLoad <- function(libname, pkgname) {
     ### neue Filter Funktionen:
     options(
-        'md.nh3-factor' = 1.056, # Vergleich zu Airyx im Mai 2026
         md.filter.function.list = list(
             # Blackman-Harris:
             "BmHarris" = function(n, ...){
@@ -60,6 +59,10 @@
     )
     # set minidoas options (except filter functions)
     options(
+        # default nh3 factor for miniDOAS evaluation
+        # 'md.nh3-factor' = 1.056, # Vergleich zu Airyx im Mai 2026, Cheng2006
+        # 'md.nh3-factor' = 1.114, # Vergleich zu Airyx im Mai 2026, Chen1999
+        'md.nh3-factor' = 1.085, # Vergleich zu Airyx Average
         # # old evaluation (using BmHarris)
         # md.filter.type = 'BmHarris',
         # md.filter.strength = 25,

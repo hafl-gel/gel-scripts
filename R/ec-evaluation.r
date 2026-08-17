@@ -3979,7 +3979,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         sig_add2 <- ifelse(is_below, '!', '')
                         re_ratio <- round(tab_vals[1:2] / tab_vals[5], 1)
                         sig_digs <- max(0, ceiling(-log10(abs(tab_vals[1:2]))))
-                        tab_vals <- round(tab_vals, sig_digs + 2)
+                        tab_vals <- signif(round(tab_vals, sig_digs + 2), 3)
                         # tab_vals <- round(tab_vals, 4)
                         isdyn <- grepl('_dyn', names(tab_vals))
                         isre <- grepl('re_rmse', names(tab_vals))

@@ -3978,12 +3978,15 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         tab_vals <- unlist(out[grepl(i, names(out))])
                         is_below <- abs(tab_vals[1:2]) <= (tab_vals[5] * 1.96)
                         sig_add <- ifelse(is_below, '*', '')
+                        sig_add2 <- ifelse(is_below, '!', '')
+                        re_ratio <- round(tab_vals[1:2] / tab_vals[5], 1)
                         sig_digs <- max(0, ceiling(-log10(abs(tab_vals[1:2]))))
                         tab_vals <- round(tab_vals, sig_digs + 2)
                         # tab_vals <- round(tab_vals, 4)
                         isdyn <- grepl('_dyn', names(tab_vals))
                         isre <- grepl('re_rmse', names(tab_vals))
-                        names(tab_vals) <- sub(paste0('(_fix|_dyn)?_[^_]+$'), '', names(tab_vals))
+                        names(tab_vals) <- sub(sprintf('_%s$', i), '', names(tab_vals))
+                        names(tab_vals) <- sub('_(dyn|fix)', '', names(tab_vals))
                         flux_ind <- grepl('(flux|lag|re_rmse)', names(tab_vals))
                         flux_vals <- tab_vals[flux_ind]
                         dyn_ind <- (isdyn | isre)[flux_ind]
@@ -4002,7 +4005,9 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                             xaxt = 'n', yaxt = 'n', xlab = '', ylab = '')
                         plotrix::addtable2plot('center',, rbind(
                             flux = paste0(flux_tab[1, ], sig_add),
-                            flux_tab[-1, ],
+                            re_rmse = paste0(flux_tab[3, ], sig_add2),
+                            'flux / re_rmse' = paste0(re_ratio, sig_add2),
+                            flux_tab[-c(1, 3), ],
                             quality_tab
                         ), display.rownames = TRUE, 
                             xpad = 0.3, ypad = 0.8, cex = 1.25

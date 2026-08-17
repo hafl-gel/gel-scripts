@@ -3970,7 +3970,39 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                             plot_damping(Damping_dyn[[i]], freq, ylab = 
                                 paste0("ogive (dyn lag) of ", i), cx = 1.5, 
                             col = plotting_covar_colors[i])
+                        } else {
+                            plot(1, 1, type = 'n', bty = 'n', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '')
+                            plot(1, 1, type = 'n', bty = 'n', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '')
                         }
+                        # ---------------- quality assessment table ----------------
+                        tab_vals <- unlist(out[grepl(i, names(out))])
+                        sig_digs <- max(0, ceiling(-log10(abs(tab_vals[1:2]))))
+                        tab_vals <- round(tab_vals, sig_digs + 2)
+                        # tab_vals <- round(tab_vals, 4)
+                        isdyn <- grepl('_dyn', names(tab_vals))
+                        names(tab_vals) <- sub(paste0('(_fix|_dyn)?_[^_]+$'), '', names(tab_vals))
+                        flux_vals <- tab_vals[1:5]
+                        flux_tab <- data.frame(
+                            fix = flux_vals[c(1, 3, 5)],
+                            dyn = flux_vals[c(2, 4, 5)]
+                        )
+                        quality_vals <- tab_vals[-(1:5)]
+                        quality_vals[-(5:6)] <- round(quality_vals[-(5:6)], 2)
+                        quality_dyn <- isdyn[-(1:5)]
+                        quality_tab <- data.frame(
+                            fix = quality_vals[!quality_dyn],
+                            dyn = quality_vals[quality_dyn]
+                        )
+                        # "plot"
+                        plot(1, 1, type = 'n',  bty = 'n', 
+                            xaxt = 'n', yaxt = 'n', xlab = '', ylab = '')
+                        plotrix::addtable2plot('center',, rbind(
+                            flux_tab,
+                            quality_tab
+                        ), display.rownames = TRUE, 
+                            xpad = 0.3, ypad = 0.8, cex = 1.25
+                        )
+                        # ---------------- title ----------------
                         title(paste0(ylab, " flux ", 
                             format(soi_user, format = "(%H:%M:%S"), " - ", 
                             format(eoi_user, format = "%H:%M:%S)"), 

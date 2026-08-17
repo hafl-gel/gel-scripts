@@ -1919,11 +1919,9 @@ process_ec_fluxes <- function(
         } else {					
             # tstamp <- format(Sys.time(), "%Y%m%d_%H%M")
             if (add_name != "") {
-                # folder <- paste0("ec-fluxes-", add_name, "-eval", tstamp, "-avg", avg_period)
                 folder <- paste0("ec-fluxes-", add_name, "-avg", avg_period)
             } else {
-                # folder <- paste0("ec_fluxes-eval", tstamp, "-avg", avg_period)
-                folder <- paste0("ec_fluxes-avg", avg_period)
+                folder <- paste0("ec-fluxes-avg", avg_period)
             }
             path_folder <- file.path(graphs_directory, folder)
         }

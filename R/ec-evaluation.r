@@ -3976,6 +3976,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         }
                         # ---------------- quality assessment table ----------------
                         tab_vals <- unlist(out[grepl(i, names(out))])
+                        is_below <- abs(tab_vals[1:2]) <= (tab_vals[5] * 1.96)
+                        sig_add <- ifelse(is_below, '*', '')
                         sig_digs <- max(0, ceiling(-log10(abs(tab_vals[1:2]))))
                         tab_vals <- round(tab_vals, sig_digs + 2)
                         # tab_vals <- round(tab_vals, 4)
@@ -3997,7 +3999,8 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         plot(1, 1, type = 'n',  bty = 'n', 
                             xaxt = 'n', yaxt = 'n', xlab = '', ylab = '')
                         plotrix::addtable2plot('center',, rbind(
-                            flux_tab,
+                            flux = paste0(flux_tab[1, ], sig_add),
+                            flux_tab[-1, ],
                             quality_tab
                         ), display.rownames = TRUE, 
                             xpad = 0.3, ypad = 0.8, cex = 1.25

@@ -3982,15 +3982,17 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         tab_vals <- round(tab_vals, sig_digs + 2)
                         # tab_vals <- round(tab_vals, 4)
                         isdyn <- grepl('_dyn', names(tab_vals))
+                        isre <- grepl('re_rmse', names(tab_vals))
                         names(tab_vals) <- sub(paste0('(_fix|_dyn)?_[^_]+$'), '', names(tab_vals))
-                        flux_vals <- tab_vals[1:5]
+                        flux_ind <- grepl('(flux|lag|re_rmse)', names(tab_vals))
+                        flux_vals <- tab_vals[flux_ind]
+                        dyn_ind <- (isdyn | isre)[flux_ind]
                         flux_tab <- data.frame(
-                            fix = flux_vals[c(1, 3, 5)],
-                            dyn = flux_vals[c(2, 4, 5)]
+                            fix = flux_vals[!isdyn[flux_ind]],
+                            dyn = flux_vals[dyn_ind]
                         )
-                        quality_vals <- tab_vals[-(1:5)]
-                        quality_vals[-(5:6)] <- round(quality_vals[-(5:6)], 2)
-                        quality_dyn <- isdyn[-(1:5)]
+                        quality_vals <- round(tab_vals[!flux_ind], 2)
+                        quality_dyn <- isdyn[!flux_ind]
                         quality_tab <- data.frame(
                             fix = quality_vals[!quality_dyn],
                             dyn = quality_vals[quality_dyn]

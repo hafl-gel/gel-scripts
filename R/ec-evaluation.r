@@ -3453,14 +3453,14 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 })
                 
                 # get Albrecht's ogive bias
-                ogive_bias_fix <- sapply(Cospec_fix, \(x) {
+                ogive_ratio_fix <- sapply(Cospec_fix, \(x) {
                     x[is.na(x)] <- 0
                     # ms <- median(sign(x))
                     o <- sum(x)
                     abs(o) / sum(abs(x))
                     # (ms * sum(abs(x)) - o) / o
                 })
-                ogive_bias_dyn <- sapply(Cospec_dyn, \(x) {
+                ogive_ratio_dyn <- sapply(Cospec_dyn, \(x) {
                     x[is.na(x)] <- 0
                     # ms <- median(sign(x))
                     o <- sum(x)
@@ -3707,12 +3707,12 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                                 paste0('base_quality_dyn_', input_covariances)
                             )
                             , setNames(
-                                ogive_bias_fix[input_covariances],
-                                paste0('ogive_bias_fix_', input_covariances)
+                                ogive_ratio_fix[input_covariances],
+                                paste0('ogive_ratio_fix_', input_covariances)
                             )
                             , setNames(
-                                ogive_bias_dyn[input_covariances],
-                                paste0('ogive_bias_dyn_', input_covariances)
+                                ogive_ratio_dyn[input_covariances],
+                                paste0('ogive_ratio_dyn_', input_covariances)
                             )
                             , if (length(scalar_covariances_only) > 0) {
                                 c(

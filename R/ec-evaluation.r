@@ -4010,7 +4010,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                             flux_tab[-c(1, 3), ],
                             quality_tab
                         ), display.rownames = TRUE, 
-                            xpad = 0.3, ypad = 0.8, cex = 1.25
+                            xpad = 0.5, ypad = 1, cex = 1.75
                         )
                         # ---------------- title ----------------
                         title(paste0(ylab, " flux ", 

@@ -4709,13 +4709,13 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
     # smooth
     ccfs_cs <- zoo::na.locf(
         zoo::na.locf(
-            data.table::frollapply(ccf_cs, N = wdt, FUN = smooth_fun, 
+            data.table::frollapply(ccf_cs, n = wdt, FUN = smooth_fun, 
                 align = 'center', fill = NA), na.rm = FALSE
         ), fromLast = TRUE
     )
     ccfs_sc <- zoo::na.locf(
         zoo::na.locf(
-            data.table::frollapply(ccf_sc, N = wdt, FUN = smooth_fun, 
+            data.table::frollapply(ccf_sc, n = wdt, FUN = smooth_fun, 
                 align = 'center', fill = NA), na.rm = FALSE
         ), fromLast = TRUE
     )
@@ -4723,7 +4723,7 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
         which.max(
             abs(zoo::na.locf(
             zoo::na.locf(
-                data.table::frollapply(x, N = wdt, FUN = smooth_fun, 
+                data.table::frollapply(x, n = wdt, FUN = smooth_fun, 
                 align = 'center', fill = NA),
             na.rm = FALSE), fromLast = TRUE)[lag_win])
         ) + LAG.MAX + lws
@@ -4732,7 +4732,7 @@ tlag_detection <- function (dat, mfreq = 10, wdt = 5,
         which.max(
             abs(zoo::na.locf(
             zoo::na.locf(
-                data.table::frollapply(x, N = wdt, FUN = smooth_fun, 
+                data.table::frollapply(x, n = wdt, FUN = smooth_fun, 
                 align = 'center', fill = NA),
             na.rm = FALSE), fromLast = TRUE)[lag_win])
         ) + LAG.MAX + lws
@@ -4914,12 +4914,12 @@ despike_timeseries <- function(dat, scalar, filter_width = 10,
             }
             # filter 1
             # cat('-> apply filter 1\n')
-            ma0 <- frollapply(c_ext <- scal[ext], N = n, 
+            ma0 <- frollapply(c_ext <- scal[ext], n = n, 
                 FUN = despike_filter1, align = 'center', flt = filt
             )
             # filter 2
             # cat('-> apply filter 2\n')
-            mq <- frollapply(seq_along(ma0), N = n_filt2, FUN = despike_filter2, 
+            mq <- frollapply(seq_along(ma0), n = n_filt2, FUN = despike_filter2, 
                 align = 'center', ma = ma0, c_orig = c_ext, quant = 0.75)
             c1 <- scal[ind]
             ma <- ma0[ind2]

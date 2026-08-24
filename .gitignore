@@ -1,1 +1,4 @@
 .test-data
+# ignore temporary compiled code
+src/*.so
+src/*.o

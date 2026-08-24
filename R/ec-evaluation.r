@@ -3985,30 +3985,52 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                         isre <- grepl('re_rmse', names(tab_vals))
                         names(tab_vals) <- sub(sprintf('_%s$', i), '', names(tab_vals))
                         names(tab_vals) <- sub('_(dyn|fix)', '', names(tab_vals))
-                        flux_ind <- grepl('(flux|lag|re_rmse)', names(tab_vals))
+                        flux_ind <- grepl('(flux|^lag$|re_rmse)', names(tab_vals))
                         flux_vals <- tab_vals[flux_ind]
                         dyn_ind <- (isdyn | isre)[flux_ind]
                         flux_tab <- data.frame(
                             fix = flux_vals[!isdyn[flux_ind]],
                             dyn = flux_vals[dyn_ind]
                         )
-                        quality_vals <- round(tab_vals[!flux_ind], 2)
-                        quality_dyn <- isdyn[!flux_ind]
+                        # fix dyn_lag_pw
+                        is_pw <- grepl('dyn_lag', names(tab_vals))
+                        quality_vals <- round(tab_vals[!flux_ind & !is_pw], 2)
+                        quality_dyn <- isdyn[!flux_ind & !is_pw]
                         quality_tab <- data.frame(
                             fix = quality_vals[!quality_dyn],
                             dyn = quality_vals[quality_dyn]
                         )
-                        # "plot"
-                        plot(1, 1, type = 'n',  bty = 'n', 
-                            xaxt = 'n', yaxt = 'n', xlab = '', ylab = '')
-                        plotrix::addtable2plot('center',, rbind(
+                        # add dyn_lag_pw
+                        switch(lag_dyn_method
+                            , 'raw-cov' = 
+                            , 'simple-pw' = 
+                            pw_tab <- NULL
+                            , 'boot-pw' = {
+                                pw_vals <- tab_vals[grepl('pwb_', names(tab_vals))]
+                                names(pw_vals) <- c('lag (bci-lo)', 'lag (bci-hi)')
+                                pw_tab <- data.frame(
+                                    fix = c(NA_character_, NA_character_),
+                                    dyn = pw_vals / 10
+                                )
+                            }
+                            , stop('lag_dyn_method not recognized')
+                        )
+                        # bind together
+                        qtab <- rbind(
                             flux = paste0(flux_tab[1, ], sig_add),
                             re_rmse = paste0(flux_tab[3, ], sig_add2),
                             'flux / re_rmse' = paste0(re_ratio, sig_add2),
-                            flux_tab[-c(1, 3), ],
+                            'lag (secs)' = flux_tab[2, ],
+                            pw_tab,
+                            'flux modelled' = flux_tab[4, ],
                             quality_tab
-                        ), display.rownames = TRUE, 
-                            xpad = 0.5, ypad = 1, cex = 1.75
+                        )
+                        # "plot"
+                        plot(1, 1, type = 'n',  bty = 'n', 
+                            xaxt = 'n', yaxt = 'n', xlab = '', ylab = '')
+                        plotrix::addtable2plot('center',, qtab, 
+                            display.rownames = TRUE, xpad = 0.5, ypad = 1, 
+                            cex = 1.75
                         )
                         # ---------------- title ----------------
                         title(paste0(ylab, " flux ", 

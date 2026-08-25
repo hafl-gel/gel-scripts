@@ -27,6 +27,7 @@ export(read_miro)
 # ~~~ ec-evaluation
 export(process_ec_fluxes)
 export(rotate_twoaxis)
+export(detrend)
 export(planar_fit)
 export(plot_covfunc)
 export(plot_cospec_ogive)

@@ -313,25 +313,26 @@ filter_list <- list(
 )
 
 # detrending time series
-trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360"), Hz_ts = 10) {
+detrend <- function(y, 
+    method = c("blockAVG", "linear", "linear_robust", "ma_360", "BmNuttall_300"), 
+    Hz_ts = 10) {
     if (is.null(naa <- na.action(y))) {
         y <- na.omit(y)
         naa <- na.action(y)
     }
     yfin <- y
     n <- length(y)
-    fitted <- rep(NA_real_, length(y))
+    trend <- rep(NA_real_, length(y))
 	method <- method[1]
 	switch(method, 
 		"blockAVG" = {
 			my <- mean(y, na.rm = TRUE)
-			fitted <- rep(my, n) 
-            resid <- y - fitted
-            attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
+			trend <- rep(my, n) 
+            detrended <- y - trend
+            attr(detrended, 'na.action') <- attr(trend, 'na.action') <- naa
 			list(
-				coefficients = c(intercept = my, slope = 0)
-				, fitted = fitted
-				, residuals = resid
+				trend = trend
+				, detrended = detrended
 				) 
 		}
 		, "linear" = {
@@ -340,42 +341,36 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
 			xstr <- (x <- seq.int(n)) - mx
 			b <- sum(xstr * (yfin - my)) / (n - 1) / (sum(xstr ^ 2) / (n - 1))
 			a <- my - mx * b
-			fitted <- a + b * x
-            resid <- y - fitted
-            attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
+			trend <- a + b * x
+            detrended <- y - trend
+            attr(detrended, 'na.action') <- attr(trend, 'na.action') <- naa
 			list(
-				coefficients = c(intercept = a, slope = b)
-				, fitted = fitted
-				, residuals = resid
+				trend = trend
+				, detrended = detrended
 				) 
 		}
 		, "linear_robust" = {
 			mod <- MASS::rlm(yfin ~ seq.int(n))
-			cfs <- mod$coefficients
-			a <- cfs[1]
-			b <- cfs[2]
-			fitted <- mod$fitted
-            resid <- y - fitted
-            attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
+			trend <- mod$fitted
+            detrended <- y - trend
+            attr(detrended, 'na.action') <- attr(trend, 'na.action') <- naa
 			if (!mod$converged) {
 				stop("robust linear regression did not converge!")
 			}
 			list(
-				coefficients = c(intercept = a, slope = b)
-				, fitted = fitted
-				, residuals = resid
+				trend = trend
+				, detrended = detrended
 				) 
 		}
 		,{
             if (grepl('^ma_', method)) {
                 ma <- round(as.numeric(sub("ma_", "", method)) * Hz_ts)
-                fitted <- caTools::runmean(yfin, ma, "C", "mean")
-                resid <- y - fitted
-                attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
+                trend <- caTools::runmean(yfin, ma, "C", "mean")
+                detrended <- y - trend
+                attr(detrended, 'na.action') <- attr(trend, 'na.action') <- naa
                 list(
-                    coefficients = c(intercept = NA, slope = NA)
-                    , fitted = fitted
-                    , residuals = resid
+                    trend = trend
+                    , detrended = detrended
                 ) 
             } else if (sub('_\\d+$', '', method) %in% names(filter_list)) {
                 win <- round(as.numeric(sub(".*_", "", method)) * Hz_ts)
@@ -384,13 +379,12 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
                 }
                 if (win >= n) {
                     warning('(detrending) filter window is larger than available data')
-                    resid <- y - fitted
-                    attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
+                    detrended <- y - trend
+                    attr(detrended, 'na.action') <- attr(trend, 'na.action') <- naa
                     return(
                         list(
-                            coefficients = c(intercept = NA, slope = NA)
-                            , fitted = fitted
-                            , residuals = resid
+                            trend = trend
+                            , detrended = detrended
                         )
                     )
                 }
@@ -403,14 +397,13 @@ trend <- function(y, method = c("blockAVG", "linear", "linear_robust", "ma_360")
                 ym <- yfin - (yh2 - yh1)
                 yp <- yfin - (yh1 - yh2)
                 z <- c(ym[n + 1 - ihalf], yfin, yp[ihalf])
-                fitted <- stats::filter(z, filt, 'convolution', 2, 
+                trend <- stats::filter(z, filt, 'convolution', 2, 
                     circular = FALSE)[1:n + ihalf[length(ihalf)]]
-                resid <- y - fitted
-                attr(resid, 'na.action') <- attr(fitted, 'na.action') <- naa
+                detrended <- y - trend
+                attr(detrended, 'na.action') <- attr(trend, 'na.action') <- naa
                 list(
-                    coefficients = c(intercept = NA, slope = NA)
-                    , fitted = fitted
-                    , residuals = resid
+                    trend = trend
+                    , detrended = detrended
                 )
             } else {
                 stop(
@@ -699,19 +692,19 @@ damp_hac5 <- function(ogive, freq, freq.limits, ogive_ref){
 # helper function for ec_main
 detrend_sonic_data <- function(x, detr, rhz) {
     wind <- x[, {
-        ud <- trend(urot, detr["u"], rhz)
-        vd <- trend(vrot, detr["v"], rhz)
-        wd <- trend(wrot, detr["w"], rhz)
-        Td <- trend(T, detr["T"], rhz)
+        ud <- detrend(urot, detr["u"], rhz)
+        vd <- detrend(vrot, detr["v"], rhz)
+        wd <- detrend(wrot, detr["w"], rhz)
+        Td <- detrend(T, detr["T"], rhz)
         I(list(
-            uprot = ud$residuals
-            , vprot = vd$residuals
-            , wprot = wd$residuals
-            , Tdet = Td$residuals
-            , umrot = ud$fitted
-            , vmrot = vd$fitted
-            , wmrot = wd$fitted
-            , Tmdet = Td$fitted
+            uprot = ud$detrended
+            , vprot = vd$detrended
+            , wprot = wd$detrended
+            , Tdet = Td$detrended
+            , umrot = ud$trend
+            , vmrot = vd$trend
+            , wmrot = wd$trend
+            , Tmdet = Td$trend
         ))
     }]
     # keep T for plotting
@@ -918,21 +911,21 @@ plot.tseries <- function(dat,wind,scal,selection,color,units,st_sub=NULL){
 	if(!is.null(scal)){
         # fix scalars
         dat[, names(scal)] <- lapply(scal, \(x) {
-            if (is.null(isna <- na.action(x$fitted))) {
-                x$fitted + x$residuals
+            if (is.null(isna <- na.action(x$trend))) {
+                x$trend + x$detrended
             } else {
                 out <- rep(NA_real_, nrow(dat))
-                out[-isna] <- x$fitted + x$residuals
+                out[-isna] <- x$trend + x$detrended
                 out
             }
         })
         # add scalars
 		dat3 <- cbind(dat3, lapply(scal, \(x) {
-                if (is.null(isna <- na.action(x$fitted))) {
-                    x$fitted
+                if (is.null(isna <- na.action(x$trend))) {
+                    x$trend
                 } else {
                     out <- rep(NA_real_, nrow(dat3))
-                    out[-isna] <- x$fitted
+                    out[-isna] <- x$trend
                     out
                 }
             })
@@ -3172,7 +3165,7 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 # detrend scalars
                 # ------------------------------------------------------------------ 
                 cat("~~~\ndetrending scalars...\n")
-                detrended_scalars <- mapply(trend, y = scalar_list, method = 
+                detrended_scalars <- mapply(detrend, y = scalar_list, method = 
                     detrending[scalars], MoreArgs = list(Hz_ts = rec_Hz), 
                     SIMPLIFY = FALSE
                 )
@@ -3185,11 +3178,11 @@ ogive_model <- function(fx, m, mu, A0, f = freq) {
                 SD[, (scalars) := lapply(names(detrended_scalars), \(nms) {
                     if (!is.null(isna <- na.action(scalar_list[[nms]]))) {
                         out <- rep(NA_real_, .N)
-                        x <- detrended_scalars[[nms]]$residuals
+                        x <- detrended_scalars[[nms]]$detrended
                         out[-isna] <- x
                         out
                     } else {
-                        detrended_scalars[[nms]]$residuals
+                        detrended_scalars[[nms]]$detrended
                     }
                     })]
             }

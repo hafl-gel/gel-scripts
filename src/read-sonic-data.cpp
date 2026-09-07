@@ -24,15 +24,15 @@ Rcpp::List hs_read_cpp(String filename) {
     NumericVector col6_w(max_lines, NA_REAL);
     NumericVector col7_T(max_lines, NA_REAL);
     int cline = 0;
-    int n_fields = 10 - 1;
+    int n_fields = 7; // we're not interested in the fields after field with index 6
     int field = 0;
-    std::vector<std::string> line(n_fields + 1);
+    std::vector<std::string> line(n_fields);
     // loop over lines
     char c;
     std::string s;
     while (input.get(c)) {
         // check for comma
-        if (c == ',') {
+        if (c == ',' && field < n_fields) {
             // add s to current line vector
             line[field] = s;
             // increase field counter
@@ -40,12 +40,10 @@ Rcpp::List hs_read_cpp(String filename) {
             // reset s
             s.clear();
         } else if (c == '\n') {
-        // check for newline -> newline
-            // add s to current line vector
-            line[field] = s;
-            // check field counter
+        // check for newline
+            // check field counter ok?
             if (field == n_fields) {
-                // line ok
+                // line ok (field 6 ends with comma)
                 // assign to vectors
                 col1_time[cline] = line[0];
                 col4_u[cline] = std::stod(line[3]);
@@ -60,15 +58,11 @@ Rcpp::List hs_read_cpp(String filename) {
             s.clear();
             // increase line counter
             cline += 1;
-        } else if (field < 7 && field != 1 && field != 2) {
+        } else if (field < n_fields && field != 1 && field != 2) {
             // append to string or new line
             s += c;
-        } else if (field > n_fields) {
-            // scan to newline without consuming newline
-            // this might fail
-            char sp[256];
-            input.get(sp, 256, '\n');
         }
+        // else ignore all characters up to newline
     }
     return Rcpp::List::create(
 		_["time_string"] = col1_time,
@@ -97,9 +91,9 @@ Rcpp::List hs_read_cpp_gzip(Rcpp::String filename) {
     NumericVector col6_w(max_lines, NA_REAL);
     NumericVector col7_T(max_lines, NA_REAL);
     int cline = 0;
-    int n_fields = 10 - 1;
+    int n_fields = 7;
     int field = 0;
-    std::vector<std::string> line(n_fields + 1);
+    std::vector<std::string> line(n_fields);
     // loop over lines
     char c;
     std::string s;
@@ -108,9 +102,7 @@ Rcpp::List hs_read_cpp_gzip(Rcpp::String filename) {
         // check for newline -> newline
             // check field counter
             if (field == n_fields) {
-                // add s to current line vector
-                line[field] = s;
-                // line ok
+                // line ok (field 6 ends with comma)
                 // assign to vectors
                 col1_time[cline] = line[0];
                 col4_u[cline] = std::stod(line[3]);
@@ -125,19 +117,17 @@ Rcpp::List hs_read_cpp_gzip(Rcpp::String filename) {
             s.clear();
             // increase line counter
             cline += 1;
-        } else if (field <= n_fields) {
-            // check for comma
-            if (c == ',') {
+        // check for comma
+        } else if (c == ',' && field < n_fields) {
                 // add s to current line vector
                 line[field] = s;
                 // increase field counter
                 field += 1;
                 // reset s
                 s.clear();
-            } else if (field < 7 && field != 1 && field != 2) {
-                // append to string or new line
-                s += c;
-            }
+        } else if (field < n_fields && field != 1 && field != 2) {
+            // append to string or new line
+            s += c;
         }
         // else ignore all characters up to newline
     }

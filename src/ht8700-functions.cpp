@@ -46,7 +46,7 @@ Rcpp::List ht8700_read_cpp(String filename) {
     std::string s;
     while (input.get(c)) {
         if (field < n_fields) {
-            if (c == ',' && field < n_fields) {
+            if (c == ',') {
                 // comma => increment field
                 // add s to current line vector
                 line[field] = s;
@@ -166,7 +166,7 @@ Rcpp::List ht8700_read_cpp_gzip(Rcpp::String filename) {
     std::string s;
     while (gzread(input, &c, 1) > 0) {
         if (field < n_fields) {
-            if (c == ',' && field < n_fields) {
+            if (c == ',') {
                 // comma => increment field
                 // add s to current line vector
                 line[field] = s;

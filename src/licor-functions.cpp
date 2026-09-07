@@ -30,56 +30,67 @@ Rcpp::List licor_read_cpp(String filename) {
     NumericVector col14_CO2SS(max_lines, NA_REAL);
     IntegerVector col15_CO2AWO(max_lines, NA_INTEGER);
     int cline = 0;
-    int n_fields = 17 - 1;
+    int n_fields = 15; // we're not interested in fields > 15
     int field = 0;
-    std::vector<std::string> line(n_fields + 1);
+    std::vector<std::string> line(n_fields);
     // loop over lines
     char c;
     std::string s;
     bool append = true;
     while (input.get(c)) {
-        // check for comma (first col)
-        if (c == ',') {
-            // add s to current line vector
-            line[field] = s;
-            // increase field counter
-            field += 1;
-            // stop appending
-            append = false;
-        } else if (c == ')') {
-        // match end of field
-            // add s to current line vector
-            line[field] = s;
-            // stop appending
-            append = false;
-        } else if (c == ' ') {
-        // match start of field
-            // increase field counter
-            field += 1;
-            // start appending
-            append = true;
-            // reset s
-            s.clear();
-        } else if (c == '\n') {
-        // check for newline -> newline
-            // check field counter
-            if (field == n_fields) {
-                // line ok
-                // assign to vectors
-                col1_time[cline] = line[0];
-                col4_DiagVal[cline] = std::stoi(line[3]);
-                col6_CO2D[cline] = std::stod(line[5]);
-                col7_H2OD[cline] = std::stod(line[6]);
-                col8_Temp[cline] = std::stod(line[7]);
-                col9_Pres[cline] = std::stod(line[8]);
-                col10_Cooler[cline] = std::stod(line[9]);
-                col11_SFVin[cline] = std::stod(line[10]);
-                col12_H2OMF[cline] = std::stod(line[11]);
-                col13_DewPt[cline] = std::stod(line[12]);
-                col14_CO2SS[cline] = std::stod(line[13]);
-                col15_CO2AWO[cline] = std::stoi(line[14]);
-                // else drop readings
+        if (field < n_fields) {
+            // check for comma (first col)
+            if (c == ',') {
+                // add s to current line vector
+                line[field] = s;
+                // increase field counter
+                field += 1;
+                // stop appending
+                append = false;
+            } else if (c == ')') {
+            // match end of field
+                // add s to current line vector
+                line[field] = s;
+                // stop appending
+                append = false;
+            } else if (c == ' ') {
+            // match start of field
+                // increase field counter
+                field += 1;
+                // start appending
+                append = true;
+                // reset s
+                s.clear();
+            } else if (c == '\n') {
+                // premature newline
+                // reset field counter
+                field = 0;
+                // reset s
+                s.clear();
+                // start appending for first column
+                append = true;
+                // increase line counter
+                cline += 1;
+            } else if (append) {
+                // append to string
+                s += c;
             }
+            // else ignore all characters until start of new field
+        } else if (c == '\n') {
+            // newline => line ok (field 15 ended with comma)
+            // assign to vectors
+            col1_time[cline] = line[0];
+            col4_DiagVal[cline] = std::stoi(line[3]);
+            col6_CO2D[cline] = std::stod(line[5]);
+            col7_H2OD[cline] = std::stod(line[6]);
+            col8_Temp[cline] = std::stod(line[7]);
+            col9_Pres[cline] = std::stod(line[8]);
+            col10_Cooler[cline] = std::stod(line[9]);
+            col11_SFVin[cline] = std::stod(line[10]);
+            col12_H2OMF[cline] = std::stod(line[11]);
+            col13_DewPt[cline] = std::stod(line[12]);
+            col14_CO2SS[cline] = std::stod(line[13]);
+            col15_CO2AWO[cline] = std::stoi(line[14]);
             // reset field counter
             field = 0;
             // reset s
@@ -88,15 +99,8 @@ Rcpp::List licor_read_cpp(String filename) {
             append = true;
             // increase line counter
             cline += 1;
-        } else if (field > n_fields) {
-            // scan to newline without consuming newline
-            // this might fail
-            char sp[256];
-            input.get(sp, 256, '\n');
-        } else if (append) {
-            // append to string or new line
-            s += c;
         }
+        // else ignore all characters up to newline
     }
     return Rcpp::List::create(
 		_["time_string"] = col1_time,
@@ -146,35 +150,7 @@ Rcpp::List licor_read_cpp_gzip(Rcpp::String filename) {
     std::string s;
     bool append = true;
     while (gzread(input, &c, 1) > 0) {
-        if (c == '\n') {
-        // check for newline -> newline
-            // check field counter
-            if (field == n_fields) {
-                // line ok
-                // assign to vectors
-                col1_time[cline] = line[0];
-                col4_DiagVal[cline] = std::stoi(line[3]);
-                col6_CO2D[cline] = std::stod(line[5]);
-                col7_H2OD[cline] = std::stod(line[6]);
-                col8_Temp[cline] = std::stod(line[7]);
-                col9_Pres[cline] = std::stod(line[8]);
-                col10_Cooler[cline] = std::stod(line[9]);
-                col11_SFVin[cline] = std::stod(line[10]);
-                col12_H2OMF[cline] = std::stod(line[11]);
-                col13_DewPt[cline] = std::stod(line[12]);
-                col14_CO2SS[cline] = std::stod(line[13]);
-                col15_CO2AWO[cline] = std::stoi(line[14]);
-                // else drop readings
-            }
-            // reset field counter
-            field = 0;
-            // reset s
-            s.clear();
-            // start appending for first column
-            append = true;
-            // increase line counter
-            cline += 1;
-        } else if (field <= n_fields) {
+        if (field < n_fields) {
             // check for comma (first col)
             if (c == ',') {
                 // add s to current line vector
@@ -197,10 +173,44 @@ Rcpp::List licor_read_cpp_gzip(Rcpp::String filename) {
                 append = true;
                 // reset s
                 s.clear();
+            } else if (c == '\n') {
+                // premature newline
+                // reset field counter
+                field = 0;
+                // reset s
+                s.clear();
+                // start appending for first column
+                append = true;
+                // increase line counter
+                cline += 1;
             } else if (append) {
-                // append to string or new line
+                // append to string
                 s += c;
             }
+            // else ignore all characters until start of new field
+        } else if (c == '\n') {
+            // newline => line ok (field 15 ended with comma)
+            // assign to vectors
+            col1_time[cline] = line[0];
+            col4_DiagVal[cline] = std::stoi(line[3]);
+            col6_CO2D[cline] = std::stod(line[5]);
+            col7_H2OD[cline] = std::stod(line[6]);
+            col8_Temp[cline] = std::stod(line[7]);
+            col9_Pres[cline] = std::stod(line[8]);
+            col10_Cooler[cline] = std::stod(line[9]);
+            col11_SFVin[cline] = std::stod(line[10]);
+            col12_H2OMF[cline] = std::stod(line[11]);
+            col13_DewPt[cline] = std::stod(line[12]);
+            col14_CO2SS[cline] = std::stod(line[13]);
+            col15_CO2AWO[cline] = std::stoi(line[14]);
+            // reset field counter
+            field = 0;
+            // reset s
+            s.clear();
+            // start appending for first column
+            append = true;
+            // increase line counter
+            cline += 1;
         }
         // else ignore all characters up to newline
     }

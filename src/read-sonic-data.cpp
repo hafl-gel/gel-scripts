@@ -31,36 +31,42 @@ Rcpp::List hs_read_cpp(String filename) {
     char c;
     std::string s;
     while (input.get(c)) {
-        // check for comma
-        if (c == ',' && field < n_fields) {
-            // add s to current line vector
-            line[field] = s;
-            // increase field counter
-            field += 1;
-            // reset s
-            s.clear();
-        } else if (c == '\n') {
-        // check for newline
-            // check field counter ok?
-            if (field == n_fields) {
-                // line ok (field 6 ends with comma)
-                // assign to vectors
-                col1_time[cline] = line[0];
-                col4_u[cline] = std::stod(line[3]);
-                col5_v[cline] = std::stod(line[4]);
-                col6_w[cline] = std::stod(line[5]);
-                col7_T[cline] = std::stod(line[6]);
-                // else drop readings
+        // check for field
+        if (field < n_fields) {
+            if (c == ',') {
+                // comma => increment field
+                // add s to current line vector
+                line[field] = s;
+                // increase field counter
+                field += 1;
+                // reset s
+                s.clear();
+            } else if (c == '\n') {
+                // premature newline
+                // reset field counter
+                field = 0;
+                // reset s
+                s.clear();
+                // increase line counter
+                cline += 1;
+            } else {
+                // append to string
+                s += c;
             }
+        } else if (c == '\n') {
+            // newline => line ok (field 7 ended with comma)
+            // assign to vectors
+            col1_time[cline] = line[0];
+            col4_u[cline] = std::stod(line[3]);
+            col5_v[cline] = std::stod(line[4]);
+            col6_w[cline] = std::stod(line[5]);
+            col7_T[cline] = std::stod(line[6]);
             // reset field counter
             field = 0;
             // reset s
             s.clear();
             // increase line counter
             cline += 1;
-        } else if (field < n_fields && field != 1 && field != 2) {
-            // append to string or new line
-            s += c;
         }
         // else ignore all characters up to newline
     }
@@ -91,43 +97,49 @@ Rcpp::List hs_read_cpp_gzip(Rcpp::String filename) {
     NumericVector col6_w(max_lines, NA_REAL);
     NumericVector col7_T(max_lines, NA_REAL);
     int cline = 0;
-    int n_fields = 7;
+    int n_fields = 7; // we're not interested in the fields after field with index 6
     int field = 0;
     std::vector<std::string> line(n_fields);
     // loop over lines
     char c;
     std::string s;
     while (gzread(input, &c, 1) > 0) {
-        if (c == '\n') {
-        // check for newline -> newline
-            // check field counter
-            if (field == n_fields) {
-                // line ok (field 6 ends with comma)
-                // assign to vectors
-                col1_time[cline] = line[0];
-                col4_u[cline] = std::stod(line[3]);
-                col5_v[cline] = std::stod(line[4]);
-                col6_w[cline] = std::stod(line[5]);
-                col7_T[cline] = std::stod(line[6]);
-                // else drop readings
-            }
-            // reset field counter
-            field = 0;
-            // reset s
-            s.clear();
-            // increase line counter
-            cline += 1;
-        // check for comma
-        } else if (c == ',' && field < n_fields) {
+        // check for field
+        if (field < n_fields) {
+            if (c == ',') {
+                // comma => increment field
                 // add s to current line vector
                 line[field] = s;
                 // increase field counter
                 field += 1;
                 // reset s
                 s.clear();
-        } else if (field < n_fields && field != 1 && field != 2) {
-            // append to string or new line
-            s += c;
+            } else if (c == '\n') {
+                // premature newline
+                // reset field counter
+                field = 0;
+                // reset s
+                s.clear();
+                // increase line counter
+                cline += 1;
+            } else {
+                // append to string
+                s += c;
+            }
+        } else if (c == '\n') {
+            // newline => line ok (field 7 ended with comma)
+            // assign to vectors
+            col1_time[cline] = line[0];
+            col4_u[cline] = std::stod(line[3]);
+            col5_v[cline] = std::stod(line[4]);
+            col6_w[cline] = std::stod(line[5]);
+            col7_T[cline] = std::stod(line[6]);
+            // reset field counter
+            field = 0;
+            // reset s
+            s.clear();
+            // increase line counter
+            cline += 1;
         }
         // else ignore all characters up to newline
     }

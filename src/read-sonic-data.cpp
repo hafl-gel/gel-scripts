@@ -24,8 +24,8 @@ Rcpp::List hs_read_cpp(String filename) {
     NumericVector col6_w(max_lines, NA_REAL);
     NumericVector col7_T(max_lines, NA_REAL);
     int cline = 0;
-    int max_field = 7; // we're just interested in up to this field
-    int n_fields = 10; // we need to check for complete lines
+    const int max_field = 7; // we're just interested in up to this field
+    const int n_fields = 10; // we need to check for complete lines
     int field = 0;
     std::vector<std::string> line(n_fields);
     // loop over lines
@@ -103,8 +103,8 @@ Rcpp::List hs_read_cpp_gzip(Rcpp::String filename) {
     NumericVector col6_w(max_lines, NA_REAL);
     NumericVector col7_T(max_lines, NA_REAL);
     int cline = 0;
-    int max_field = 7; // we're just interested in up to this field
-    int n_fields = 10; // we need to check for complete lines
+    const int max_field = 7; // we're just interested in up to this field
+    const int n_fields = 10; // we need to check for complete lines
     int field = 0;
     std::vector<std::string> line(n_fields);
     // loop over lines

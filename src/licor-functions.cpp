@@ -30,8 +30,8 @@ Rcpp::List licor_read_cpp(String filename, const int hertz) {
     NumericVector col14_CO2SS(max_lines, NA_REAL);
     IntegerVector col15_CO2AWO(max_lines, NA_INTEGER);
     int cline = 0;
-    int max_field = 15; // we're just interested in up to this field
-    int n_fields = 17; // we need to check for complete lines
+    const int max_field = 15; // we're just interested in up to this field
+    const int n_fields = 17; // we need to check for complete lines
     int field = 0;
     std::vector<std::string> line(n_fields);
     // loop over lines
@@ -147,7 +147,8 @@ Rcpp::List licor_read_cpp_gzip(Rcpp::String filename, const int hertz) {
     NumericVector col14_CO2SS(max_lines, NA_REAL);
     IntegerVector col15_CO2AWO(max_lines, NA_INTEGER);
     int cline = 0;
-    int n_fields = 17 - 1;
+    const int max_field = 15; // we're just interested in up to this field
+    const int n_fields = 17; // we need to check for complete lines
     int field = 0;
     std::vector<std::string> line(n_fields + 1);
     // loop over lines

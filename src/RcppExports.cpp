@@ -87,24 +87,26 @@ BEGIN_RCPP
 END_RCPP
 }
 // licor_read_cpp
-Rcpp::List licor_read_cpp(String filename);
-RcppExport SEXP _gel_licor_read_cpp(SEXP filenameSEXP) {
+Rcpp::List licor_read_cpp(String filename, const int hertz);
+RcppExport SEXP _gel_licor_read_cpp(SEXP filenameSEXP, SEXP hertzSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< String >::type filename(filenameSEXP);
-    rcpp_result_gen = Rcpp::wrap(licor_read_cpp(filename));
+    Rcpp::traits::input_parameter< const int >::type hertz(hertzSEXP);
+    rcpp_result_gen = Rcpp::wrap(licor_read_cpp(filename, hertz));
     return rcpp_result_gen;
 END_RCPP
 }
 // licor_read_cpp_gzip
-Rcpp::List licor_read_cpp_gzip(Rcpp::String filename);
-RcppExport SEXP _gel_licor_read_cpp_gzip(SEXP filenameSEXP) {
+Rcpp::List licor_read_cpp_gzip(Rcpp::String filename, const int hertz);
+RcppExport SEXP _gel_licor_read_cpp_gzip(SEXP filenameSEXP, SEXP hertzSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::String >::type filename(filenameSEXP);
-    rcpp_result_gen = Rcpp::wrap(licor_read_cpp_gzip(filename));
+    Rcpp::traits::input_parameter< const int >::type hertz(hertzSEXP);
+    rcpp_result_gen = Rcpp::wrap(licor_read_cpp_gzip(filename, hertz));
     return rcpp_result_gen;
 END_RCPP
 }

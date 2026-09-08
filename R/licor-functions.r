@@ -1,9 +1,12 @@
 
 # R wrapper, main function
-read_licor <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
+read_licor <- function(file_path, from = NULL, to = NULL, tz = 'UTC',
+    hz = 10) {
     # parse from/to
     from <- parse_date_time3(from, tz = tz)
     to <- parse_date_time3(to, tz = tz)
+    # fix Hertz
+    hz <- as.integer(hz)
     # check if directory is provided
     if (file.info(file_path)$isdir) {
         files <- dir(file_path)
@@ -33,7 +36,7 @@ read_licor <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
         # loop over files
         if (any(read_me)) {
             out <- lapply(file.path(file_path, files[read_me]), read_licor,
-                from = from, to = to, tz = tz)
+                from = from, to = to, tz = tz, hz = hz)
             # return sorted
             rbindlist(out)[order(Time)]
         } else {
@@ -62,9 +65,9 @@ read_licor <- function(file_path, from = NULL, to = NULL, tz = 'UTC') {
             return(NULL)
         }
         if (grepl('[.]gz$', bn)) {
-            raw_list <- licor_read_cpp_gzip(normalizePath(file_path))
+            raw_list <- licor_read_cpp_gzip(normalizePath(file_path), hz)
         } else {
-            raw_list <- licor_read_cpp(normalizePath(file_path))
+            raw_list <- licor_read_cpp(normalizePath(file_path), hz)
         }
         out <- data.table::as.data.table(raw_list)
         # convert time

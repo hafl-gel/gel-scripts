@@ -25,12 +25,12 @@ decal <- function(x, y) {
     .Call(`_gel_decal`, x, y)
 }
 
-licor_read_cpp <- function(filename) {
-    .Call(`_gel_licor_read_cpp`, filename)
+licor_read_cpp <- function(filename, hertz) {
+    .Call(`_gel_licor_read_cpp`, filename, hertz)
 }
 
-licor_read_cpp_gzip <- function(filename) {
-    .Call(`_gel_licor_read_cpp_gzip`, filename)
+licor_read_cpp_gzip <- function(filename, hertz) {
+    .Call(`_gel_licor_read_cpp_gzip`, filename, hertz)
 }
 
 calc_penalty <- function(mddataIn, weightsIn, startsIn, minimaIn, reftimeIn) {

@@ -69,6 +69,10 @@ check_limits <- function(dat, limits, lim_window = 500,
         out[is.na(out)] <- 2
         out
         }, x = .SD, nm = hl_vars, SIMPLIFY = FALSE), .SDcols = hl_vars]
+    # set to out of bound values to NA
+    for (hlv in hl_vars) {
+        dat[hf == 1, (hlv) := NA_real_, env = list(hf = paste0(hlv, '_flag'))]
+    }
     # check method
     if (!pmatch(lim_method, 'norepl', nomatch = 0)) {
         # re-flag windows which can't be replaced anyway

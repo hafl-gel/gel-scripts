@@ -24,7 +24,8 @@ Rcpp::List hs_read_cpp(String filename) {
     NumericVector col6_w(max_lines, NA_REAL);
     NumericVector col7_T(max_lines, NA_REAL);
     int cline = 0;
-    int n_fields = 7; // we're not interested in the fields after field with index 6
+    int max_field = 7; // we're just interested in up to this field
+    int n_fields = 10; // we need to check for complete lines
     int field = 0;
     std::vector<std::string> line(n_fields);
     // loop over lines
@@ -42,25 +43,30 @@ Rcpp::List hs_read_cpp(String filename) {
                 // reset s
                 s.clear();
             } else if (c == '\n') {
-                // premature newline
+                // check n_fields for complete line
+                if (field == (n_fields - 1)) {
+                    // line ok
+                    // assign to vectors
+                    col1_time[cline] = line[0];
+                    col4_u[cline] = std::stod(line[3]);
+                    col5_v[cline] = std::stod(line[4]);
+                    col6_w[cline] = std::stod(line[5]);
+                    col7_T[cline] = std::stod(line[6]);
+                }
+                // else premature newline
                 // reset field counter
                 field = 0;
                 // reset s
                 s.clear();
                 // increase line counter
                 cline += 1;
-            } else {
+            } else if (field < max_field) {
                 // append to string
                 s += c;
             }
+            // else ignore characters but increase field
         } else if (c == '\n') {
-            // newline => line ok (field 7 ended with comma)
-            // assign to vectors
-            col1_time[cline] = line[0];
-            col4_u[cline] = std::stod(line[3]);
-            col5_v[cline] = std::stod(line[4]);
-            col6_w[cline] = std::stod(line[5]);
-            col7_T[cline] = std::stod(line[6]);
+            // newline => line not ok (field 9 ended with comma)
             // reset field counter
             field = 0;
             // reset s
@@ -97,7 +103,8 @@ Rcpp::List hs_read_cpp_gzip(Rcpp::String filename) {
     NumericVector col6_w(max_lines, NA_REAL);
     NumericVector col7_T(max_lines, NA_REAL);
     int cline = 0;
-    int n_fields = 7; // we're not interested in the fields after field with index 6
+    int max_field = 7; // we're just interested in up to this field
+    int n_fields = 10; // we need to check for complete lines
     int field = 0;
     std::vector<std::string> line(n_fields);
     // loop over lines
@@ -115,25 +122,30 @@ Rcpp::List hs_read_cpp_gzip(Rcpp::String filename) {
                 // reset s
                 s.clear();
             } else if (c == '\n') {
-                // premature newline
+                // check n_fields for complete line
+                if (field == (n_fields - 1)) {
+                    // line ok
+                    // assign to vectors
+                    col1_time[cline] = line[0];
+                    col4_u[cline] = std::stod(line[3]);
+                    col5_v[cline] = std::stod(line[4]);
+                    col6_w[cline] = std::stod(line[5]);
+                    col7_T[cline] = std::stod(line[6]);
+                }
+                // else premature newline
                 // reset field counter
                 field = 0;
                 // reset s
                 s.clear();
                 // increase line counter
                 cline += 1;
-            } else {
+            } else if (field < max_field) {
                 // append to string
                 s += c;
             }
+            // else ignore characters but increase field
         } else if (c == '\n') {
-            // newline => line ok (field 7 ended with comma)
-            // assign to vectors
-            col1_time[cline] = line[0];
-            col4_u[cline] = std::stod(line[3]);
-            col5_v[cline] = std::stod(line[4]);
-            col6_w[cline] = std::stod(line[5]);
-            col7_T[cline] = std::stod(line[6]);
+            // newline => line not ok (field 9 ended with comma)
             // reset field counter
             field = 0;
             // reset s

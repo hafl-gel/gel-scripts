@@ -729,12 +729,24 @@ detrend_sonic_data <- function(x, detr, rhz) {
     wind
 }
 
+# revert na.actions
+na.revert <- function(x) {
+    if (is.null(naa <- na.action(x))) {
+        return(x)
+    }
+    out <- rep(NA, length(x) + length(naa))
+    out[-naa] <- x
+    attr(out, 'na.action') <- structure(naa, class = 'is.na')
+    out
+}
+
+
 # calculate wind statistics and MOST parameters
 wind_statistics <- function(wind, z_canopy, z_sonic, 
     ustar_method = c('neg_sqrt', 'double_sqrt', 'fallback')[1]) {
     ustar_method <- match.arg(ustar_method, 
         c('neg_sqrt', 'double_sqrt', 'fallback'))
-	Cov_sonic <- cov(list2DF(wind[1:4]), use = 'na.or.complete')
+	Cov_sonic <- cov(list2DF(lapply(wind[1:4], na.revert)), use = 'na.or.complete')
 	Var_sonic <- diag(Cov_sonic)
 	names(Var_sonic) <- c('var_u', 'var_v', 'var_w', 'var_T')
 	Cov_sonic <- Cov_sonic[cbind(c("uprot","uprot","uprot","vprot","vprot","wprot"),c("vprot","wprot","Tdet","wprot","Tdet","Tdet"))]
@@ -763,8 +775,8 @@ wind_statistics <- function(wind, z_canopy, z_sonic,
 		d <- NA
 		z0 <- NA
 	}
-	c(Var_sonic, Cov_sonic, Ustar = Ustar, L = L, z_sonic = z_sonic, z_canopy = z_canopy, 
-        d = d, Zo = z0, WD = wind$wd, phi = wind$phi, U_sonic = U, T_sonic = T_K
+	c(Var_sonic, Cov_sonic, Ustar = Ustar, L = L, z_sonic = z_sonic, 
+        z_canopy = z_canopy, d = d, Zo = z0, U_sonic = U, T_sonic = T_K
     )
 }
 

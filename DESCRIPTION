@@ -1,8 +1,8 @@
 Package: gel
 Type: Package
 Title: GEL tools
-Version: 0.10-5
-Date: 2026-09-09
+Version: 0.10-6
+Date: 2026-09-10
 Author: Christoph Haeni
 Maintainer: Christoph Haeni <christoph.haeni@bfh.ch>
 Description: Convenience functions used by the GEL research group

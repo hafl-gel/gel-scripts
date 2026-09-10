@@ -172,6 +172,7 @@ read_ws700 <- function(folder, from = NULL, to = NULL,
         # fix ws_label
         if (is.null(ws_label)) {
             if (length(files)) {
+                stop('needs fixing!')
             } else {
                 ws_label <- sub('.*ws700(-(.))?(?:_.*)?', '\\2', folder, perl = TRUE)
             }
@@ -181,7 +182,7 @@ read_ws700 <- function(folder, from = NULL, to = NULL,
                 stop('argument "ws_label" must be either "A" or "B"')
             }
         }
-        if (length(ws_label)) ws_label <- paste0('-', ws_label)
+        if (length(ws_label) && ws_label != '') ws_label <- paste0('-', ws_label)
         files <- c(files, dir(folder[is_folder], pattern = paste0('ws700', ws_label), full.names = TRUE))
     }
     # remove duplicates

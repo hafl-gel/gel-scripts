@@ -14,7 +14,7 @@ blob <- function(file_path, ref = 'HEAD') {
     # get file name
     file_name <- basename(file_path)
     # update file path
-    git_rel_path <- sub(paste0('^', git_top, '/?'), '', dir_path)
+    git_rel_path <- sub(paste0('^', git_top, '/*'), '', dir_path)
     git_file_path <- file.path(git_rel_path, file_name)
     # fallthrough if file is actually present as is
     # get current blob hash
@@ -26,13 +26,20 @@ blob <- function(file_path, ref = 'HEAD') {
     } else if (is.na(isdir) || current_hash != ref_hash) {
         # use git show to copy file
         gitshow <- paste0("git -C ", git_top, " show ", ref, ":", git_file_path)
-        path_out <- tempfile('blob')
+        # create temporary file name
+        path_out <- paste0(tempdir(), '/blob-', sha1(gitshow))
+        # check if already exists
+        if (file.exists(path_out)) {
+            return(path_out)
+        }
+        # create temporary file
         system(paste0("git -C ", git_top, " show ", ref, ":", git_file_path, ' > ', path_out), intern = TRUE)
         # fix lfs pointers
         file_head <- suppressWarnings(readLines(path_out, n = 1))
         if (file_head == 'version https://git-lfs.github.com/spec/v1') {
-            path_pointer <- path_out
-            path_out <- tempfile('blob')
+            # rename pointer
+            path_pointer <- paste0(path_out, '-pointer')
+            file.rename(path_out, path_pointer)
             system(paste0('git -C ', git_top, ' lfs smudge < ', path_pointer, ' > ', path_out), intern = TRUE)
         }
         # return temporary path

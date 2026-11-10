@@ -5,9 +5,14 @@ blob <- function(file_path, ref = 'HEAD') {
         stop('argument "file_path" must be a file.')
     }
     # get parent directory
-    dir_path <- normalizePath(dirname(file_path))
-    # get top level
-    git_top <- system(paste0('cd ', dir_path, ' && git rev-parse --show-toplevel'), intern = TRUE)
+    current_dir <- dir_path <- dirname(normalizePath(file_path, mustWork = FALSE))
+    # find top level directory even with missing directories
+    while (current_dir != '/') {
+        # try to get top level
+        git_top <- suppressWarnings(try(system(paste0('git -C ', current_dir,' rev-parse --show-toplevel'), intern = TRUE, ignore.stderr = TRUE), silent = TRUE))
+        if (length(git_top) > 0) break
+        current_dir <- normalizePath(dirname(current_dir), mustWork = FALSE)
+    }
     if (length(attr(git_top, 'status')) > 0) {
         stop('file not inside a git repository')
     }
@@ -18,16 +23,16 @@ blob <- function(file_path, ref = 'HEAD') {
     git_file_path <- file.path(git_rel_path, file_name)
     # fallthrough if file is actually present as is
     # get current blob hash
-    current_hash <- suppressWarnings(try(system(paste0('git -C ', git_top, ' hash-object ', git_file_path), intern = TRUE), silent = TRUE))
+    current_hash <- suppressWarnings(try(system(paste0('git -C ', git_top, ' hash-object ', git_file_path), intern = TRUE, ignore.stderr = TRUE), silent = TRUE))
     # reference blob hash
-    ref_hash <- suppressWarnings(try(system(paste0('git -C ', git_top, ' rev-parse ', ref, ':', git_file_path), intern = TRUE), silent = TRUE))
+    ref_hash <- suppressWarnings(try(system(paste0('git -C ', git_top, ' rev-parse ', ref, ':', git_file_path), intern = TRUE, ignore.stderr = TRUE), silent = TRUE))
     if (length(attr(ref_hash, 'status')) > 0) {
         stop('file does not exist in specified reference under specified path!\nProvide a valid path under reference "', ref, '"')
     } else if (is.na(isdir) || current_hash != ref_hash) {
         # use git show to copy file
         gitshow <- paste0("git -C ", git_top, " show ", ref, ":", git_file_path)
         # create temporary file name
-        path_out <- paste0(tempdir(), '/blob-', sha1(gitshow))
+        path_out <- paste0(tempdir(), '/blob-', digest::sha1(gitshow))
         # check if already exists
         if (file.exists(path_out)) {
             return(path_out)

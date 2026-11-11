@@ -4,14 +4,28 @@ blob <- function(file_path, ref = 'HEAD') {
     if (isTRUE(isdir <- file.info(file_path)$isdir)) {
         stop('argument "file_path" must be a file.')
     }
+    # fix Windows path separators
+    file_path <- normalizePath(file_path, winslash = '/', mustWork = FALSE)
+    # fix './' in file path
+    file_path <- gsub('(^|[^.])[.]/', '\\1', file_path)
+    # fix use of '../' in file path
+    # @start
+    file_path <- gsub('^[.]{2}/', paste0(dirname(getwd()), '/'), file_path) 
+    # fix use of '../' in the middle
+    if (grepl('/[.]+$', file_path)) stop('file path not valid')
+    while (grepl('/[.]{2}/', file_path)) {
+        file_path <- normalizePath(gsub('[.]{2}/[.]{2}/(*SKIP)(*FAIL)|(^|/+)[^/]+/[.]{2}/',
+            '\\1', file_path, perl = TRUE), mustWork = FALSE, winslash = '/')
+    }
     # get parent directory
-    current_dir <- dir_path <- dirname(normalizePath(file_path, mustWork = FALSE))
+    current_dir <- dir_path <- dirname(normalizePath(file_path, mustWork = FALSE, winslash = '/'))
     # find top level directory even with missing directories
     while (current_dir != '/') {
         # try to get top level
         git_top <- suppressWarnings(try(system(paste0('git -C ', current_dir,' rev-parse --show-toplevel'), intern = TRUE, ignore.stderr = TRUE), silent = TRUE))
         if (length(git_top) > 0) break
-        current_dir <- normalizePath(dirname(current_dir), mustWork = FALSE)
+        current_dir <- normalizePath(dirname(current_dir), mustWork = FALSE,
+            winslash = '/')
     }
     if (length(attr(git_top, 'status')) > 0) {
         stop('file not inside a git repository')
